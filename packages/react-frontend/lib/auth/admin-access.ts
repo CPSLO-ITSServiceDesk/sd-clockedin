@@ -13,11 +13,15 @@ export interface AdminAccessResult {
 }
 
 function getBackendApiBaseUrl(): string {
-  return (
+  const configuredUrl =
     process.env.AUTH_API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     "http://localhost:8000/api"
-  )
+
+  return configuredUrl
+    .split(",")[0]
+    .trim()
+    .replace(/\/+$/, "")
 }
 
 export async function authorizeAdminAccess(data: {

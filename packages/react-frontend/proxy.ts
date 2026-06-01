@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server"
 import { getSessionSecret } from "@/lib/auth/config"
 import { ADMIN_SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session"
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const sessionToken = request.cookies.get(ADMIN_SESSION_COOKIE_NAME)?.value
 
   if (!sessionToken) {
