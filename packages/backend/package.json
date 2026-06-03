@@ -1,0 +1,14 @@
+{
+  "name": "backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"Backend not implemented\"",
+    "build": "echo \"Backend not implemented\"",
+    "start": "echo \"Backend not implemented\"",
+    "lint": "echo \"Backend not implemented\""
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
