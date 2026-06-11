@@ -1,37 +1,48 @@
-import Link from 'next/link'
+import { KpiCards } from "@/components/admin/kpi-cards"
+import { ShiftsTable } from "@/components/admin/shifts-table"
+import { OverviewChart } from "@/components/admin/overview-chart"
+import { DepartmentChart } from "@/components/admin/department-chart"
 
-export default function AdminPage() {
+export default function AdminDashboard() {
+  // Mock KPI data
+  const kpiData = {
+    late: 1,
+    absent: 1,
+    expected: 4,
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Admin Dashboard</h1>
-      <p className="text-gray-600 mb-4">This is the admin page filler content.</p>
-
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Admin Features</h2>
-        <ul className="space-y-2">
-          <li className="flex items-center p-3 bg-gray-50 rounded">
-            <Link href="/admin/users" className="text-blue-600 hover:text-blue-800">
-              User Management
-            </Link>
-          </li>
-          <li className="flex items-center p-3 bg-gray-50 rounded">
-            <Link href="/admin/settings" className="text-blue-600 hover:text-blue-800">
-              System Settings
-            </Link>
-          </li>
-          <li className="flex items-center p-3 bg-gray-50 rounded">
-            <Link href="/admin/logs" className="text-blue-600 hover:text-blue-800">
-              Activity Logs
-            </Link>
-          </li>
-        </ul>
+    <>
+      <div className="flex-1 space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground text-sm">
+              Overview of today's shift activity
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground uppercase tracking-wider">Today</p>
+            <p className="text-lg font-mono font-medium">
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+              })}
+            </p>
+          </div>
+        </div>
+        <KpiCards
+          late={kpiData.late}
+          absent={kpiData.absent}
+          expected={kpiData.expected}
+        />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <OverviewChart />
+          <DepartmentChart />
+        </div>
+        <ShiftsTable />
       </div>
-
-      <div className="mt-6">
-        <Link href="/" className="text-blue-600 hover:text-blue-800">
-          ← Back to Home
-        </Link>
-      </div>
-    </div>
+    </>
   )
 }
