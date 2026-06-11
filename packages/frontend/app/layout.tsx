@@ -37,7 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-background">
-      <body className="font-sans antialiased bg-background min-h-screen">
+      <body className="font-mono antialiased bg-background min-h-screen">
         <TooltipProvider>
           {children}
         </TooltipProvider>

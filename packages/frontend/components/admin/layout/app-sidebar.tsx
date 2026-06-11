@@ -5,9 +5,13 @@ import { usePathname } from "next/navigation"
 import {
   Clock,
   LayoutDashboard,
-  Users,
   Calendar,
-  Settings,
+  BookOpen,
+  GraduationCap,
+  ShieldCheck,
+  BarChart2,
+  ClipboardList,
+  CalendarRange,
 } from "lucide-react"
 import {
   Sidebar,
@@ -24,27 +28,21 @@ import {
 } from "@/components/ui/sidebar"
 import { NavUser } from "@/components/nav-user"
 
-const navItems = [
-  {
-    title: "Dashboard",
-    href: "/admin",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Shifts",
-    href: "/admin/shifts",
-    icon: Calendar,
-  },
-  {
-    title: "Employees",
-    href: "/admin/employees",
-    icon: Users,
-  },
-  {
-    title: "Settings",
-    href: "/admin/settings",
-    icon: Settings,
-  },
+const navMain = [
+  { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
+]
+
+const navManage = [
+  { title: "Students", href: "/admin/students", icon: GraduationCap },
+  { title: "Terms", href: "/admin/terms", icon: BookOpen },
+  { title: "Schedules", href: "/admin/schedules", icon: Calendar },
+  { title: "Admin Access", href: "/admin/access", icon: ShieldCheck },
+]
+
+const navAnalytics = [
+  { title: "Term Analytics", href: "/admin/analytics/term", icon: BarChart2 },
+  { title: "Student Records", href: "/admin/analytics/students", icon: ClipboardList },
+  { title: "Group Schedule", href: "/admin/analytics/group-schedule", icon: CalendarRange },
 ]
 
 const user = {
@@ -58,7 +56,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="inset" className="bg-sidebar text-sidebar-foreground">
-      <SidebarHeader className="border-b border-sidebar-border">
+      <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
@@ -77,16 +75,48 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="uppercase tracking-widest">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {navMain.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.href}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                    <Link href={item.href}>
+                      <item.icon className="size-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="uppercase tracking-widest">Manage</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navManage.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                    <Link href={item.href}>
+                      <item.icon className="size-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="uppercase tracking-widest">Analytics</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navAnalytics.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
                     <Link href={item.href}>
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
@@ -98,7 +128,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="border-sidebar-border">
         <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />

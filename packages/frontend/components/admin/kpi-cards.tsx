@@ -41,10 +41,10 @@ export function KpiCards({ late, absent, expected }: KpiCardsProps) {
       </Card>
 
       <Card className="bg-card border-border relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-transparent" />
         <CardContent className="flex items-center gap-3 p-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-accent/10 border border-accent/20">
-            <CalendarClock className="size-4 text-accent" />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-muted border border-border">
+            <CalendarClock className="size-4 text-muted-foreground" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Expected</p>
