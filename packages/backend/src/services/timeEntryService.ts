@@ -2,29 +2,27 @@ import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
 
-type Term = Database['public']['Tables']['academic_term']['Row'];
-type TermInsert = Database['public']['Tables']['academic_term']['Insert'];
-type TermUpdate = Database['public']['Tables']['academic_term']['Update'];
+type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
+type TimeEntryInsert = Database['public']['Tables']['time_entry']['Insert'];
+type TimeEntryUpdate = Database['public']['Tables']['time_entry']['Update'];
 
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
 
-export const termService = {
-  // get all terms
-  async getAll(): Promise<Term[]> {
+export const timeEntryService = {
+  async getAll(): Promise<TimeEntry[]> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('time_entry')
       .select('*')
-      .order('start_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw new HttpError(500, error.message);
     return data ?? [];
   },
 
-  // get a single term by id
-  async getById(id: number): Promise<Term | null> {
+  async getById(id: number): Promise<TimeEntry | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('time_entry')
       .select('*')
       .eq('id', id)
       .single();
@@ -36,10 +34,27 @@ export const termService = {
     return data;
   },
 
-  // create a new term
-  async create(payload: TermInsert): Promise<Term> {
+  async getOpenByScheduleAndAssistant(schedule_block_id: number, student_assistant_id: number): Promise<TimeEntry | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('time_entry')
+      .select('*')
+      .eq('schedule_block_id', schedule_block_id)
+      .eq('student_assistant_id', student_assistant_id)
+      .is('clock_out', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === NO_ROWS) return null;
+      throw new HttpError(500, error.message);
+    }
+    return data;
+  },
+
+  async create(payload: TimeEntryInsert): Promise<TimeEntry> {
+    const { data, error } = await supabase
+      .from('time_entry')
       .insert(payload)
       .select()
       .single();
@@ -48,10 +63,9 @@ export const termService = {
     return data;
   },
 
-  // update a term by id
-  async update(id: number, payload: TermUpdate): Promise<Term | null> {
+  async update(id: number, payload: TimeEntryUpdate): Promise<TimeEntry | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('time_entry')
       .update(payload)
       .eq('id', id)
       .select()
@@ -64,10 +78,9 @@ export const termService = {
     return data;
   },
 
-  // delete a term by id
   async remove(id: number): Promise<void> {
     const { error } = await supabase
-      .from('academic_term')
+      .from('time_entry')
       .delete()
       .eq('id', id);
 

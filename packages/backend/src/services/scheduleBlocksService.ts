@@ -2,29 +2,27 @@ import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
 
-type Term = Database['public']['Tables']['academic_term']['Row'];
-type TermInsert = Database['public']['Tables']['academic_term']['Insert'];
-type TermUpdate = Database['public']['Tables']['academic_term']['Update'];
+type ScheduleBlock = Database['public']['Tables']['schedule_blocks']['Row'];
+type ScheduleBlockInsert = Database['public']['Tables']['schedule_blocks']['Insert'];
+type ScheduleBlockUpdate = Database['public']['Tables']['schedule_blocks']['Update'];
 
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
 
-export const termService = {
-  // get all terms
-  async getAll(): Promise<Term[]> {
+export const scheduleBlocksService = {
+  async getAll(): Promise<ScheduleBlock[]> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedule_blocks')
       .select('*')
-      .order('start_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw new HttpError(500, error.message);
     return data ?? [];
   },
 
-  // get a single term by id
-  async getById(id: number): Promise<Term | null> {
+  async getById(id: number): Promise<ScheduleBlock | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedule_blocks')
       .select('*')
       .eq('id', id)
       .single();
@@ -36,10 +34,9 @@ export const termService = {
     return data;
   },
 
-  // create a new term
-  async create(payload: TermInsert): Promise<Term> {
+  async create(payload: ScheduleBlockInsert): Promise<ScheduleBlock> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedule_blocks')
       .insert(payload)
       .select()
       .single();
@@ -48,10 +45,9 @@ export const termService = {
     return data;
   },
 
-  // update a term by id
-  async update(id: number, payload: TermUpdate): Promise<Term | null> {
+  async update(id: number, payload: ScheduleBlockUpdate): Promise<ScheduleBlock | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedule_blocks')
       .update(payload)
       .eq('id', id)
       .select()
@@ -64,13 +60,23 @@ export const termService = {
     return data;
   },
 
-  // delete a term by id
   async remove(id: number): Promise<void> {
     const { error } = await supabase
-      .from('academic_term')
+      .from('schedule_blocks')
       .delete()
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
+  },
+
+  async getByScheduleId(schedule_id: number): Promise<ScheduleBlock[]> {
+    const { data, error } = await supabase
+      .from('schedule_blocks')
+      .select('*')
+      .eq('schedule_id', schedule_id)
+      .order('days', { ascending: true });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
   },
 };

@@ -2,29 +2,27 @@ import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
 
-type Term = Database['public']['Tables']['academic_term']['Row'];
-type TermInsert = Database['public']['Tables']['academic_term']['Insert'];
-type TermUpdate = Database['public']['Tables']['academic_term']['Update'];
+type Schedule = Database['public']['Tables']['schedules']['Row'];
+type ScheduleInsert = Database['public']['Tables']['schedules']['Insert'];
+type ScheduleUpdate = Database['public']['Tables']['schedules']['Update'];
 
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
 
-export const termService = {
-  // get all terms
-  async getAll(): Promise<Term[]> {
+export const schedulesService = {
+  async getAll(): Promise<Schedule[]> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedules')
       .select('*')
-      .order('start_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw new HttpError(500, error.message);
     return data ?? [];
   },
 
-  // get a single term by id
-  async getById(id: number): Promise<Term | null> {
+  async getById(id: number): Promise<Schedule | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedules')
       .select('*')
       .eq('id', id)
       .single();
@@ -36,10 +34,9 @@ export const termService = {
     return data;
   },
 
-  // create a new term
-  async create(payload: TermInsert): Promise<Term> {
+  async create(payload: ScheduleInsert): Promise<Schedule> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedules')
       .insert(payload)
       .select()
       .single();
@@ -48,10 +45,9 @@ export const termService = {
     return data;
   },
 
-  // update a term by id
-  async update(id: number, payload: TermUpdate): Promise<Term | null> {
+  async update(id: number, payload: ScheduleUpdate): Promise<Schedule | null> {
     const { data, error } = await supabase
-      .from('academic_term')
+      .from('schedules')
       .update(payload)
       .eq('id', id)
       .select()
@@ -64,10 +60,9 @@ export const termService = {
     return data;
   },
 
-  // delete a term by id
   async remove(id: number): Promise<void> {
     const { error } = await supabase
-      .from('academic_term')
+      .from('schedules')
       .delete()
       .eq('id', id);
 
