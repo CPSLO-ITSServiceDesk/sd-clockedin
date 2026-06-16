@@ -20,12 +20,14 @@ interface Shift {
   firstName: string
   lastName: string
   role: string
-  startTime: string
-  endTime: string
+  startTime: string          // Scheduled start time (HH:mm)
+  endTime: string            // Scheduled end time (HH:mm)
+  clockInActual: string | null   // Actual clock-in time (HH:mm) or null
+  clockOutActual: string | null  // Actual clock-out time (HH:mm) or null
   status: "scheduled" | "clocked-in" | "late" | "absent"
 }
 
-// Mock data sorted by start time, then first name
+// Mock data with actual clock-in/clock-out times, sorted by start time, then first name
 const mockShifts: Shift[] = [
   {
     id: "1",
@@ -34,6 +36,8 @@ const mockShifts: Shift[] = [
     role: "Engineer",
     startTime: "06:00",
     endTime: "14:00",
+    clockInActual: "05:58",
+    clockOutActual: null,
     status: "clocked-in",
   },
   {
@@ -43,6 +47,8 @@ const mockShifts: Shift[] = [
     role: "Designer",
     startTime: "06:00",
     endTime: "14:00",
+    clockInActual: "05:55",
+    clockOutActual: null,
     status: "clocked-in",
   },
   {
@@ -52,6 +58,8 @@ const mockShifts: Shift[] = [
     role: "Manager",
     startTime: "07:00",
     endTime: "15:00",
+    clockInActual: "06:58",
+    clockOutActual: null,
     status: "clocked-in",
   },
   {
@@ -61,6 +69,8 @@ const mockShifts: Shift[] = [
     role: "Support",
     startTime: "08:00",
     endTime: "16:00",
+    clockInActual: "08:05",
+    clockOutActual: null,
     status: "late",
   },
   {
@@ -70,6 +80,8 @@ const mockShifts: Shift[] = [
     role: "Analyst",
     startTime: "08:00",
     endTime: "16:00",
+    clockInActual: null,
+    clockOutActual: null,
     status: "scheduled",
   },
   {
@@ -79,6 +91,8 @@ const mockShifts: Shift[] = [
     role: "Developer",
     startTime: "09:00",
     endTime: "17:00",
+    clockInActual: null,
+    clockOutActual: null,
     status: "scheduled",
   },
   {
@@ -88,6 +102,8 @@ const mockShifts: Shift[] = [
     role: "QA",
     startTime: "09:00",
     endTime: "17:00",
+    clockInActual: null,
+    clockOutActual: null,
     status: "absent",
   },
   {
@@ -97,6 +113,8 @@ const mockShifts: Shift[] = [
     role: "Engineer",
     startTime: "10:00",
     endTime: "18:00",
+    clockInActual: null,
+    clockOutActual: null,
     status: "scheduled",
   },
   {
@@ -106,6 +124,8 @@ const mockShifts: Shift[] = [
     role: "Designer",
     startTime: "10:00",
     endTime: "18:00",
+    clockInActual: null,
+    clockOutActual: null,
     status: "scheduled",
   },
   {
@@ -115,6 +135,8 @@ const mockShifts: Shift[] = [
     role: "Support",
     startTime: "12:00",
     endTime: "20:00",
+    clockInActual: null,
+    clockOutActual: null,
     status: "scheduled",
   }
 ].sort((a, b) => {
