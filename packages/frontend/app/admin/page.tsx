@@ -1,7 +1,5 @@
 import { KpiCards } from "@/components/admin/kpi-cards"
 import { ShiftsTable } from "@/components/admin/shifts-table"
-import { OverviewChart } from "@/components/admin/overview-chart"
-import { DepartmentChart } from "@/components/admin/department-chart"
 
 export default function AdminDashboard() {
   // Mock KPI data
@@ -37,10 +35,6 @@ export default function AdminDashboard() {
           absent={kpiData.absent}
           expected={kpiData.expected}
         />
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <OverviewChart />
-          <DepartmentChart />
-        </div>
         <ShiftsTable />
       </div>
     </>
