@@ -194,8 +194,13 @@ export function ShiftsTable() {
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
                   Role
                 </TableHead>
+                {/* UPDATED: Changed from "Schedule" to "Expected Shift" */}
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Schedule
+                  Expected Shift
+                </TableHead>
+                {/* ADDED: Actual Shift column */}
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                  Actual Shift
                 </TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
                   Status
@@ -214,8 +219,19 @@ export function ShiftsTable() {
                   <TableCell className="text-muted-foreground">
                     {shift.role}
                   </TableCell>
+                  {/* UPDATED: Expected shift (scheduled times) */}
                   <TableCell className="font-mono text-sm">
                     {shift.startTime} - {shift.endTime}
+                  </TableCell>
+                  {/* ADDED: Actual shift rendering */}
+                  <TableCell className="font-mono text-sm">
+                    {shift.clockInActual && shift.clockOutActual ? (
+                      `${shift.clockInActual} - ${shift.clockOutActual}`
+                    ) : shift.clockInActual ? (
+                      `${shift.clockInActual} - --`
+                    ) : (
+                      `-- --`
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge
