@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a monorepo managed by pnpm containing two packages:
 - `frontend`: A Next.js 16.2.6 application with React 19
-- `backend`: A placeholder TypeScript package (currently not implemented)
+- `backend`: A Node.js Express API with TypeScript, connected to Supabase
 
 The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components via Radix UI primitives.
 
@@ -18,30 +18,32 @@ The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components
    ```
 
 2. Environment variables:
-   - The frontend package includes a `.env` file for environment variables.
-   - The backend package also includes a `.env` file (currently unused).
+   - Frontend (`packages/frontend/.env`):
+     - MICROSOFT_CLIENT_ID, MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI, AUTH_API_BASE_URL
+   - Backend (`packages/backend/.env`):
+     - SUPABASE_URL, SUPABASE_ANON_KEY, PORT
+
+   Note: The backend defaults to port 3001, while the frontend expects the API at `http://localhost:8000/api` (adjust as needed or use a proxy).
 
 ## Development
 
 ### Running the application
 
-To start both frontend and backend (though backend is currently a placeholder):
+To start both frontend and backend:
 ```bash
 pnpm dev
 ```
 
 This runs:
 - `pnpm -r dev`: runs dev script for all packages
-- `pnpm -r dev --filter backend`: runs dev script for backend (currently just echoes)
-
-Since the backend dev script is a placeholder, effectively only the frontend development server starts.
+- `pnpm -r dev --filter backend`: runs dev script for backend (included in the above)
 
 To run only the frontend:
 ```bash
 pnpm --filter frontend dev
 ```
 
-To run only the backend (placeholder):
+To run only the backend:
 ```bash
 pnpm --filter backend dev
 ```
@@ -58,6 +60,11 @@ To build only the frontend:
 pnpm --filter frontend build
 ```
 
+To build only the backend:
+```bash
+pnpm --filter backend build
+```
+
 ### Starting the production build
 
 To start all packages:
@@ -70,6 +77,11 @@ To start only the frontend:
 pnpm --filter frontend start
 ```
 
+To start only the backend:
+```bash
+pnpm --filter backend start
+```
+
 ### Linting
 
 To lint all packages:
@@ -77,16 +89,33 @@ To lint all packages:
 pnpm lint
 ```
 
-This runs `eslint .` in the frontend package (backend has no lint script).
+This runs `eslint .` in both frontend and backend packages.
 
 To lint only the frontend:
 ```bash
 pnpm --filter frontend lint
 ```
 
+To lint only the backend:
+```bash
+pnpm --filter backend lint
+```
+
 ### Testing
 
-Currently, there is no test setup in either package. When adding tests, consider setting up a testing framework (e.g., Vitest or Jest) and updating the test scripts in the respective package.json files.
+The backend has a test setup using Vitest.
+
+To run backend tests:
+```bash
+pnpm --filter backend test
+```
+
+To run backend tests in watch mode:
+```bash
+pnpm --filter backend test:watch
+```
+
+Currently, there are no tests in the frontend package. When adding tests, consider setting up a testing framework (e.g., Vitest or Jest) and updating the test scripts in `packages/frontend/package.json`.
 
 ## Code Structure
 
@@ -110,14 +139,31 @@ Currently, there is no test setup in either package. When adding tests, consider
 
 ### Backend (`packages/backend`)
 
-- Currently a placeholder with:
-  - `package.json`: Basic TypeScript setup
-  - `src/`: Empty source directory
-  - `.env`: Environment variable placeholder
+- `src/index.ts`: Express app entry point (middleware, routes, 404, error handler)
+- `src/config/environment.ts`: Environment validation and configuration object
+- `src/lib/supabase.ts`: Supabase client initialization (reused across services)
+- `src/middleware/`: Custom middleware (errorHandler, validate)
+- `src/routes/`: Route definitions (mounted under `/api`)
+  - `index.ts`: Registers routes and adds `/health` endpoint
+  - `terms.ts`: CRUD endpoints for academic terms (complete)
+  - `schedules.ts`: Stub endpoints for schedules (to be implemented)
+  - `timeEntries.ts`: Stub endpoints for time entries (to be implemented)
+  - `studentAssistants.ts`: Stub endpoints for student assistants (to be implemented)
+- `src/controllers/`: Request handlers (e.g., `termController.ts`, `schedulesController.ts`)
+- `src/services/`: Business logic and Supabase interactions (e.g., `termService.ts`, `schedulesService.ts`)
+- `src/tests/`: Test files (e.g., `timeEntry.service.test.ts`)
+- `src/scripts/`: Utility scripts (e.g., `check-connection.ts` for verifying Supabase connectivity)
+- `src/types/database.types.ts`: Auto-generated Supabase database types
 
 ## Notes
 
-- The backend package is not yet implemented and serves as a scaffold for future development.
-- The frontend is a fully functional Next.js application ready for development.
-- When working on the backend, remember to update its dev/build/start/lint scripts in `package.json`.
-- The root `pnpm dev` command runs both packages concurrently; adjust as needed if backend becomes functional.
+- The backend is a working Express + TypeScript API that talks to Supabase.
+- The backend uses integer IDs (not UUIDs) as per the Supabase schema.
+- The `terms` module serves as a reference implementation for CRUD operations.
+- When implementing new resources (schedules, time entries, student assistants), follow the pattern established in the `terms` module.
+- Error handling: Services throw `HttpError(status, msg)`; the central error handler logs only 5xx errors and returns `{ success: false, error }`.
+- The backend includes helper scripts:
+  - `pnpm --filter backend gen:types`: Regenerate Supabase types
+  - `pnpm --filter backend check`: Verify Supabase connection
+- The frontend expects the backend API at `AUTH_API_BASE_URL` (default: `http://localhost:8000/api`). If the backend runs on a different port, consider setting up a proxy or updating the environment variable.
+- The root `pnpm dev` command runs both packages concurrently; adjust as needed if you need to run only one package.
