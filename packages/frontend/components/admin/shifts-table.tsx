@@ -1,6 +1,4 @@
-"use client"
-
-import { useState } from "react"
+import { Fragment } from "react"
 import {
   Table,
   TableBody,
@@ -11,9 +9,12 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { DoorOpen } from "lucide-react"
-import { ClockModal } from "@/components/clock-modal"
+import {
+  formatActualShift,
+  formatStartTimeHeader,
+  formatTimeRange,
+  normalizeTimeKey,
+} from "@/lib/format-time"
 
 interface Shift {
   id: string
@@ -67,7 +68,7 @@ const mockShifts: Shift[] = [
     firstName: "Emily",
     lastName: "Park",
     role: "Support",
-    startTime: "08:00",
+    startTime: "8:00",
     endTime: "16:00",
     clockInActual: "08:05",
     clockOutActual: null,
@@ -140,10 +141,10 @@ const mockShifts: Shift[] = [
     status: "scheduled",
   }
 ].sort((a, b) => {
-  // Sort by start time first
-  const timeCompare = a.startTime.localeCompare(b.startTime)
+  const timeCompare = normalizeTimeKey(a.startTime).localeCompare(
+    normalizeTimeKey(b.startTime),
+  )
   if (timeCompare !== 0) return timeCompare
-  // Then by first name
   return a.firstName.localeCompare(b.firstName)
 })
 
@@ -161,118 +162,102 @@ const statusLabels: Record<Shift["status"], string> = {
   absent: "Absent",
 }
 
-export function ShiftsTable() {
-  const [clockModalOpen, setClockModalOpen] = useState(false)
-  const [clockModalMode, setClockModalMode] = useState<"in" | "out">("in")
-  const [selectedEmployee, setSelectedEmployee] = useState<string>("")
+function groupShiftsByStartTime(
+  shifts: Shift[],
+): { startTime: string; shifts: Shift[] }[] {
+  const groups: { startTime: string; shifts: Shift[] }[] = []
 
-  const handleClockAction = (shift: Shift) => {
-    setSelectedEmployee(`${shift.firstName} ${shift.lastName}`)
-    if (shift.status === "clocked-in") {
-      setClockModalMode("out")
+  for (const shift of shifts) {
+    const startTimeKey = normalizeTimeKey(shift.startTime)
+    const lastGroup = groups.at(-1)
+
+    if (lastGroup?.startTime === startTimeKey) {
+      lastGroup.shifts.push(shift)
     } else {
-      setClockModalMode("in")
+      groups.push({ startTime: startTimeKey, shifts: [shift] })
     }
-    setClockModalOpen(true)
   }
 
+  return groups
+}
+
+const COLUMN_COUNT = 5
+
+export function ShiftsTable() {
+  const shiftGroups = groupShiftsByStartTime(mockShifts)
+
   return (
-    <>
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold uppercase tracking-wider">
-            All Shifts Today
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Name
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Role
-                </TableHead>
-                {/* UPDATED: Changed from "Schedule" to "Expected Shift" */}
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Expected Shift
-                </TableHead>
-                {/* ADDED: Actual Shift column */}
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Actual Shift
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Status
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs w-[80px]">
-                  Action
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockShifts.map((shift) => (
-                <TableRow key={shift.id} className="border-border">
-                  <TableCell className="font-medium">
-                    {shift.firstName} {shift.lastName}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {shift.role}
-                  </TableCell>
-                  {/* UPDATED: Expected shift (scheduled times) */}
-                  <TableCell className="font-mono text-sm">
-                    {shift.startTime} - {shift.endTime}
-                  </TableCell>
-                  {/* ADDED: Actual shift rendering */}
-                  <TableCell className="font-mono text-sm">
-                    {shift.clockInActual && shift.clockOutActual ? (
-                      `${shift.clockInActual} - ${shift.clockOutActual}`
-                    ) : shift.clockInActual ? (
-                      `${shift.clockInActual} - --`
-                    ) : (
-                      `-- --`
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={statusStyles[shift.status]}
-                    >
-                      {statusLabels[shift.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {shift.status !== "absent" && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={
-                          shift.status === "clocked-in"
-                            ? "text-destructive hover:text-destructive hover:bg-destructive/10"
-                            : "text-accent hover:text-accent hover:bg-accent/10"
-                        }
-                        onClick={() => handleClockAction(shift)}
-                      >
-                        <DoorOpen className="size-4" />
-                        <span className="sr-only">
-                          {shift.status === "clocked-in" ? "Clock Out" : "Clock In"}
-                        </span>
-                      </Button>
-                    )}
+    <Card className="bg-card border-border">
+      <CardHeader>
+        <CardTitle className="text-lg font-semibold uppercase tracking-wider">
+          All Shifts Today
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border hover:bg-transparent">
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                Name
+              </TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                Role
+              </TableHead>
+              {/* UPDATED: Changed from "Schedule" to "Expected Shift" */}
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                Expected Shift
+              </TableHead>
+              {/* ADDED: Actual Shift column */}
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                Actual Shift
+              </TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                Status
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {shiftGroups.map((group) => (
+              <Fragment key={group.startTime}>
+                <TableRow className="border-border hover:bg-transparent bg-muted/30">
+                  <TableCell colSpan={COLUMN_COUNT} className="py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-base font-semibold uppercase tracking-wider text-foreground whitespace-nowrap">
+                        {formatStartTimeHeader(group.startTime)}
+                      </span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <ClockModal
-        open={clockModalOpen}
-        onOpenChange={setClockModalOpen}
-        mode={clockModalMode}
-        prefilledName={selectedEmployee}
-      />
-    </>
+                {group.shifts.map((shift) => (
+                  <TableRow key={shift.id} className="border-border">
+                    <TableCell className="font-medium">
+                      {shift.firstName} {shift.lastName}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {shift.role}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatTimeRange(shift.startTime, shift.endTime)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatActualShift(shift.clockInActual, shift.clockOutActual)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={statusStyles[shift.status]}
+                      >
+                        {statusLabels[shift.status]}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </Fragment>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }
