@@ -20,6 +20,7 @@ router.post(
   body('start_date').optional().isISO8601(),
   body('end_date').optional().isISO8601(),
   body('is_active').optional().isBoolean(),
+  body('off_days').optional().isObject(),
   validate,
   termController.create,
 );
@@ -27,6 +28,11 @@ router.post(
 router.put(
   '/:id',
   param('id').isInt().withMessage('id must be an integer'),
+  body('name').optional().isString(),
+  body('start_date').optional().isISO8601(),
+  body('end_date').optional().isISO8601(),
+  body('is_active').optional().isBoolean(),
+  body('off_days').optional().isObject(),
   validate,
   termController.update,
 );

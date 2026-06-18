@@ -1,5 +1,5 @@
 import { KpiCards } from "@/components/admin/kpi-cards"
-import { ShiftsTable } from "@/components/admin/shifts-table"
+import { ShiftsTable } from "@/components/admin/shifts/shifts-table"
 
 export default function AdminDashboard() {
   // Mock KPI data
