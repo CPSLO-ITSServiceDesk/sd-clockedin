@@ -28,7 +28,7 @@ export function StudentKpiCards({
             </p>
             <p className="text-xs text-muted-foreground">student assistants</p>
           </div>
-          <p className="text-2xl font-bold font-mono tracking-tight shrink-0">
+          <p className="text-2xl font-bold tracking-tight shrink-0">
             {total}
           </p>
         </CardContent>
@@ -46,7 +46,7 @@ export function StudentKpiCards({
             </p>
             <p className="text-xs text-muted-foreground">lead roles assigned</p>
           </div>
-          <p className="text-2xl font-bold font-mono tracking-tight shrink-0">
+          <p className="text-2xl font-bold tracking-tight shrink-0">
             {studentLeads}
           </p>
         </CardContent>
@@ -64,7 +64,7 @@ export function StudentKpiCards({
             </p>
             <p className="text-xs text-muted-foreground">leads & assistants</p>
           </div>
-          <p className="text-2xl font-bold font-mono tracking-tight shrink-0">
+          <p className="text-2xl font-bold tracking-tight shrink-0">
             {combined}
           </p>
         </CardContent>

@@ -86,7 +86,7 @@ export function ClockedInTable() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-online opacity-75"></span>
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-status-online"></span>
               </span>
-              <span className="font-mono text-sm text-status-online">
+              <span className="text-sm text-status-online tabular-nums">
                 {clockedInEmployees.length} ONLINE
               </span>
             </div>
@@ -129,10 +129,10 @@ export function ClockedInTable() {
                 <TableCell className="text-muted-foreground">
                   {employee.role}
                 </TableCell>
-                <TableCell className="font-mono text-muted-foreground">
+                <TableCell className="text-muted-foreground tabular-nums">
                   {employee.clockedInAt}
                 </TableCell>
-                <TableCell className="font-mono text-muted-foreground">
+                <TableCell className="text-muted-foreground tabular-nums">
                   {employee.shiftEnd}
                 </TableCell>
                 <TableCell className="text-right">

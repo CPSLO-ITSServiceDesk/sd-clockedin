@@ -75,7 +75,7 @@ export function ExpectedArrivalsTable() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {expectedArrivals.length} PENDING
               </span>
             </div>
@@ -115,7 +115,7 @@ export function ExpectedArrivalsTable() {
                 <TableCell className="text-muted-foreground">
                   {arrival.role}
                 </TableCell>
-                <TableCell className="font-mono text-muted-foreground">
+                <TableCell className="text-muted-foreground tabular-nums">
                   {arrival.scheduleStart} — {arrival.scheduleEnd}
                 </TableCell>
                 <TableCell className="text-right">

@@ -63,10 +63,10 @@ export default function Home() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-online opacity-75"></span>
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-status-online"></span>
                 </span>
-                <span className="text-status-online font-mono">OPERATIONAL</span>
+                <span className="text-status-online">OPERATIONAL</span>
               </span>
             </div>
-            <div className="flex items-center gap-4 font-mono">
+            <div className="flex items-center gap-4">
               <span>v1.0.0</span>
               <span className="text-border">|</span>
               <span>SD-ClockedIn</span>

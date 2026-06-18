@@ -22,7 +22,7 @@ export function KpiCards({ late, absent, expected }: KpiCardsProps) {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Late</p>
             <p className="text-xs text-muted-foreground">employees running late</p>
           </div>
-          <p className="text-2xl font-bold font-mono tracking-tight shrink-0">{late}</p>
+          <p className="text-2xl font-bold tracking-tight shrink-0">{late}</p>
         </CardContent>
       </Card>
 
@@ -36,7 +36,7 @@ export function KpiCards({ late, absent, expected }: KpiCardsProps) {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Absent</p>
             <p className="text-xs text-muted-foreground">no-shows today</p>
           </div>
-          <p className="text-2xl font-bold font-mono tracking-tight shrink-0">{absent}</p>
+          <p className="text-2xl font-bold tracking-tight shrink-0">{absent}</p>
         </CardContent>
       </Card>
 
@@ -50,7 +50,7 @@ export function KpiCards({ late, absent, expected }: KpiCardsProps) {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Expected</p>
             <p className="text-xs text-muted-foreground">shifts remaining</p>
           </div>
-          <p className="text-2xl font-bold font-mono tracking-tight shrink-0">{expected}</p>
+          <p className="text-2xl font-bold tracking-tight shrink-0">{expected}</p>
         </CardContent>
       </Card>
     </div>

@@ -28,7 +28,7 @@ export function LoginArea() {
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="border-border bg-card hover:bg-secondary hover:text-foreground text-foreground font-mono uppercase tracking-wider text-xs px-6"
+          className="border-border bg-card hover:bg-secondary hover:text-foreground text-foreground uppercase tracking-wider text-xs px-6"
         >
           <svg
             className="h-4 w-4 mr-2"
@@ -70,7 +70,7 @@ export function LoginArea() {
               placeholder="Enter Lead ID..."
               value={leadId}
               onChange={(e) => setLeadId(e.target.value)}
-              className="bg-input border-border text-foreground placeholder:text-muted-foreground font-mono"
+              className="bg-input border-border text-foreground placeholder:text-muted-foreground"
             />
           </div>
           <div className="space-y-2">
@@ -86,7 +86,7 @@ export function LoginArea() {
               placeholder="Enter password..."
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="bg-input border-border text-foreground placeholder:text-muted-foreground font-mono"
+              className="bg-input border-border text-foreground placeholder:text-muted-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   handleLogin()
@@ -96,7 +96,7 @@ export function LoginArea() {
           </div>
           <Button
             onClick={handleLogin}
-            className="w-full bg-accent text-accent-foreground hover:bg-accent/90 font-mono uppercase tracking-wider text-xs"
+            className="w-full bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider text-xs"
           >
             Login
           </Button>

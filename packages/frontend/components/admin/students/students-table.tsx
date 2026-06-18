@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
+  CalendarClock,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -9,6 +11,7 @@ import {
   UserPlus,
   UserX,
 } from "lucide-react"
+import { MOCK_STUDENTS, formatStudentName } from "@/components/admin/mock-students"
 import {
   Table,
   TableBody,
@@ -44,44 +47,7 @@ import {
 } from "@/components/admin/students/student-assistant-form"
 import { StudentKpiCards } from "@/components/admin/students/student-kpi-cards"
 
-const mockStudents: StudentAssistant[] = [
-  {
-    id: 1,
-    first_name: "Alex",
-    last_name: "Chen",
-    role: "Student Lead",
-    polycard_id: 12345,
-    is_active: true,
-  },
-  {
-    id: 2,
-    first_name: "Maya",
-    last_name: "Rodriguez",
-    role: "Student Assistant",
-    polycard_id: 23456,
-    is_active: true,
-  },
-  {
-    id: 3,
-    first_name: "James",
-    last_name: "Wilson",
-    role: "Student Assistant",
-    polycard_id: 34567,
-    is_active: false,
-  },
-  {
-    id: 4,
-    first_name: "Emily",
-    last_name: "Park",
-    role: "Student Lead",
-    polycard_id: 45678,
-    is_active: true,
-  },
-]
-
-function formatStudentName(student: StudentAssistant): string {
-  return `${student.first_name} ${student.last_name}`
-}
+const mockStudents = MOCK_STUDENTS
 
 function toStudentFields(values: StudentAssistantFormValues) {
   const polycardId = values.polycard_id.trim()
@@ -95,6 +61,7 @@ function toStudentFields(values: StudentAssistantFormValues) {
 }
 
 export function StudentsTable() {
+  const router = useRouter()
   const [students, setStudents] = useState<StudentAssistant[]>(mockStudents)
   const [nextId, setNextId] = useState(mockStudents.length + 1)
   const [formOpen, setFormOpen] = useState(false)
@@ -164,6 +131,10 @@ export function StudentsTable() {
   const openEditForm = (student: StudentAssistant) => {
     setEditingStudent(student)
     setFormOpen(true)
+  }
+
+  const openScheduleEditor = (student: StudentAssistant) => {
+    router.push(`/admin/schedules?student=${student.id}`)
   }
 
   const activeCount = students.filter((student) => student.is_active).length
@@ -239,7 +210,7 @@ export function StudentsTable() {
                     <TableCell className="font-medium">
                       {formatStudentName(student)}
                     </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-sm">
+                    <TableCell className="text-muted-foreground text-sm">
                       {student.polycard_id ?? "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -275,6 +246,12 @@ export function StudentsTable() {
                           >
                             <Pencil className="size-4" />
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => openScheduleEditor(student)}
+                          >
+                            <CalendarClock className="size-4" />
+                            Edit schedule
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {student.is_active ? (

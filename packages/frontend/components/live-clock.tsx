@@ -58,14 +58,14 @@ export function LiveClock() {
         <div className="mt-8 flex justify-center gap-3">
           <Button
             onClick={() => setModalMode("in")}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 font-mono uppercase tracking-wider text-sm px-8 py-2"
+            className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider text-sm px-8 py-2"
           >
             Clock In
           </Button>
           <Button
             onClick={() => setModalMode("out")}
             variant="outline"
-            className="border-border hover:bg-secondary font-mono uppercase tracking-wider text-sm px-8 py-2"
+            className="border-border hover:bg-secondary uppercase tracking-wider text-sm px-8 py-2"
           >
             Clock Out
           </Button>

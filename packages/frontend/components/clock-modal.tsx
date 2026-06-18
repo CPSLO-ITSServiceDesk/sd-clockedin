@@ -58,7 +58,7 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="bg-card border-border p-0 gap-0 max-w-md overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <DialogTitle className="font-mono uppercase tracking-[0.2em] text-sm text-muted-foreground">
+          <DialogTitle className="uppercase tracking-[0.2em] text-sm text-muted-foreground">
             {isClockIn ? "Clock In" : "Clock Out"} — Select Employee
           </DialogTitle>
         </DialogHeader>
@@ -72,7 +72,7 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
               placeholder="Search by name or role..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="pl-9 bg-background border-border font-mono text-sm placeholder:text-muted-foreground focus-visible:ring-accent"
+              className="pl-9 bg-background border-border text-sm placeholder:text-muted-foreground focus-visible:ring-accent"
             />
             {query && (
               <button
@@ -88,7 +88,7 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
         {/* Results */}
         <div className="max-h-72 overflow-y-auto">
           {filtered.length === 0 ? (
-            <div className="px-6 py-8 text-center text-muted-foreground font-mono text-sm uppercase tracking-wider">
+            <div className="px-6 py-8 text-center text-muted-foreground text-sm uppercase tracking-wider">
               No employees found
             </div>
           ) : (
@@ -110,7 +110,7 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
                   </div>
                 </div>
                 <span
-                  className={`ml-auto text-xs font-mono uppercase tracking-wider shrink-0 ${
+                  className={`ml-auto text-xs uppercase tracking-wider shrink-0 ${
                     isClockIn ? "text-accent" : "text-destructive"
                   }`}
                 >

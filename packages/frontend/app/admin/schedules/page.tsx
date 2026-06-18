@@ -1,10 +1,20 @@
+import { Suspense } from "react"
+import { SchedulesManager } from "@/components/admin/schedules/schedules-manager"
+
+function SchedulesManagerFallback() {
+  return (
+    <div className="text-muted-foreground flex min-h-[400px] items-center justify-center text-sm">
+      Loading schedules...
+    </div>
+  )
+}
+
 export default function SchedulesPage() {
   return (
     <div className="flex-1 space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Schedules</h1>
-        <p className="text-muted-foreground text-sm">Manage shift schedules</p>
-      </div>
+      <Suspense fallback={<SchedulesManagerFallback />}>
+        <SchedulesManager />
+      </Suspense>
     </div>
   )
 }

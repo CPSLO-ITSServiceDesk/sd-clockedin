@@ -4,8 +4,8 @@ import { Analytics } from '@vercel/analytics/next'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 export const metadata: Metadata = {
   title: 'SD-ClockedIn | Employee Time Management',
@@ -36,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="bg-background">
-      <body className="font-mono antialiased bg-background min-h-screen">
+    <html lang="en" className={`${geist.variable} ${geistMono.variable} bg-background`}>
+      <body className="font-sans antialiased bg-background min-h-screen">
         <TooltipProvider>
           {children}
         </TooltipProvider>
