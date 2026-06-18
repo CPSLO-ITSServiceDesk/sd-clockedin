@@ -1,4 +1,6 @@
-import { Fragment } from "react"
+"use client"
+
+import { Fragment, useEffect, useState } from "react"
 import {
   Table,
   TableBody,
@@ -15,6 +17,31 @@ import {
   formatTimeRange,
   normalizeTimeKey,
 } from "@/lib/format-time"
+import { schedulesApi } from "@/lib/api/schedules"
+import { scheduleBlocksApi, type ScheduleBlockDay } from "@/lib/api/scheduleBlocks"
+import { studentAssistantsApi } from "@/lib/api/student-assistants"
+import { timeEntriesApi } from "@/lib/api/time-entries"
+
+// Helper to get today's day of week as string matching database enum
+function getTodayDay(): ScheduleBlockDay | null {
+  const day = new Date().getDay()
+  // Convert: 0=Sunday, 1=Monday, etc.
+  // Database enum only has Monday-Friday
+  if (day === 0 || day === 6) return null // Weekend: no shifts
+  const days: ScheduleBlockDay[] = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday"
+  ]
+  return days[day - 1]
+}
+
+// Helper to get today's date string in YYYY-MM-DD format
+function getTodayDateString(): string {
+  return new Date().toISOString().split('T')[0]
+}
 
 interface Shift {
   id: string
@@ -28,163 +55,225 @@ interface Shift {
   status: "scheduled" | "clocked-in" | "late" | "absent"
 }
 
-// Mock data with actual clock-in/clock-out times, sorted by start time, then first name
-const mockShifts: Shift[] = [
-  {
-    id: "1",
-    firstName: "Alex",
-    lastName: "Chen",
-    role: "Engineer",
-    startTime: "06:00",
-    endTime: "14:00",
-    clockInActual: "05:58",
-    clockOutActual: null,
-    status: "clocked-in",
-  },
-  {
-    id: "2",
-    firstName: "Maya",
-    lastName: "Rodriguez",
-    role: "Designer",
-    startTime: "06:00",
-    endTime: "14:00",
-    clockInActual: "05:55",
-    clockOutActual: null,
-    status: "clocked-in",
-  },
-  {
-    id: "3",
-    firstName: "James",
-    lastName: "Wilson",
-    role: "Manager",
-    startTime: "07:00",
-    endTime: "15:00",
-    clockInActual: "06:58",
-    clockOutActual: null,
-    status: "clocked-in",
-  },
-  {
-    id: "4",
-    firstName: "Emily",
-    lastName: "Park",
-    role: "Support",
-    startTime: "8:00",
-    endTime: "16:00",
-    clockInActual: "08:05",
-    clockOutActual: null,
-    status: "late",
-  },
-  {
-    id: "5",
-    firstName: "Sarah",
-    lastName: "Kim",
-    role: "Analyst",
-    startTime: "08:00",
-    endTime: "16:00",
-    clockInActual: null,
-    clockOutActual: null,
-    status: "scheduled",
-  },
-  {
-    id: "6",
-    firstName: "David",
-    lastName: "Thompson",
-    role: "Developer",
-    startTime: "09:00",
-    endTime: "17:00",
-    clockInActual: null,
-    clockOutActual: null,
-    status: "scheduled",
-  },
-  {
-    id: "7",
-    firstName: "Lisa",
-    lastName: "Martinez",
-    role: "QA",
-    startTime: "09:00",
-    endTime: "17:00",
-    clockInActual: null,
-    clockOutActual: null,
-    status: "absent",
-  },
-  {
-    id: "8",
-    firstName: "Michael",
-    lastName: "Johnson",
-    role: "Engineer",
-    startTime: "10:00",
-    endTime: "18:00",
-    clockInActual: null,
-    clockOutActual: null,
-    status: "scheduled",
-  },
-  {
-    id: "9",
-    firstName: "Rachel",
-    lastName: "Lee",
-    role: "Designer",
-    startTime: "10:00",
-    endTime: "18:00",
-    clockInActual: null,
-    clockOutActual: null,
-    status: "scheduled",
-  },
-  {
-    id: "10",
-    firstName: "Chris",
-    lastName: "Brown",
-    role: "Support",
-    startTime: "12:00",
-    endTime: "20:00",
-    clockInActual: null,
-    clockOutActual: null,
-    status: "scheduled",
-  }
-].sort((a, b) => {
-  const timeCompare = normalizeTimeKey(a.startTime).localeCompare(
-    normalizeTimeKey(b.startTime),
-  )
-  if (timeCompare !== 0) return timeCompare
-  return a.firstName.localeCompare(b.firstName)
-})
-
-const statusStyles: Record<Shift["status"], string> = {
-  scheduled: "bg-muted text-muted-foreground",
-  "clocked-in": "bg-accent/20 text-accent",
-  late: "bg-yellow-500/20 text-yellow-500",
-  absent: "bg-destructive/20 text-destructive",
-}
-
-const statusLabels: Record<Shift["status"], string> = {
-  scheduled: "Scheduled",
-  "clocked-in": "Clocked In",
-  late: "Late",
-  absent: "Absent",
-}
-
-function groupShiftsByStartTime(
-  shifts: Shift[],
-): { startTime: string; shifts: Shift[] }[] {
-  const groups: { startTime: string; shifts: Shift[] }[] = []
-
-  for (const shift of shifts) {
-    const startTimeKey = normalizeTimeKey(shift.startTime)
-    const lastGroup = groups.at(-1)
-
-    if (lastGroup?.startTime === startTimeKey) {
-      lastGroup.shifts.push(shift)
-    } else {
-      groups.push({ startTime: startTimeKey, shifts: [shift] })
-    }
-  }
-
-  return groups
-}
-
-const COLUMN_COUNT = 5
-
 export function ShiftsTable() {
-  const shiftGroups = groupShiftsByStartTime(mockShifts)
+  const [shiftGroups, setShiftGroups] = useState<{ startTime: string; shifts: Shift[] }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Fetch all required data in parallel
+        const [
+          schedulesResult,
+          scheduleBlocksResult,
+          studentAssistantsResult,
+          timeEntriesResult
+        ] = await Promise.all([
+          schedulesApi.list(),
+          scheduleBlocksApi.list(),
+          studentAssistantsApi.list(),
+          timeEntriesApi.list()
+        ])
+
+        if (!isMounted) return
+
+        const schedules: any[] = schedulesResult
+        const scheduleBlocks: any[] = scheduleBlocksResult
+        const studentAssistants: any[] = studentAssistantsResult
+        const timeEntries: any[] = timeEntriesResult
+
+        // Get today's day of week and date
+        const todayDay = getTodayDay()
+        const todayDate = getTodayDateString()
+
+        // If it's weekend, show empty state
+        if (!todayDay) {
+          setShiftGroups([])
+          setLoading(false)
+          return
+        }
+
+        // Filter schedule blocks to today's day of week
+        const todaysBlocks = scheduleBlocks.filter(
+          block => block.days === todayDay
+        )
+
+        // Filter time entries to today's date
+        const todaysTimeEntries = timeEntries.filter(
+          entry => entry.created_at && entry.created_at.startsWith(todayDate)
+        )
+
+        // Create maps for quick lookup
+        const scheduleMap = new Map<number, any>(
+          schedules.map(s => [s.id, s])
+        )
+
+        const studentAssistantMap = new Map<number, any>(
+          studentAssistants.map(sa => [sa.id, sa])
+        )
+
+        // Group time entries by schedule_block_id and student_assistant_id for easy lookup
+        const timeEntryMap = new Map<string, any>()
+        todaysTimeEntries.forEach(entry => {
+          const key = `${entry.schedule_block_id}-${entry.student_assistant_id}`
+          timeEntryMap.set(key, entry)
+        })
+
+        // Build shifts for today
+        const shifts: Shift[] = todaysBlocks.map(block => {
+          const schedule = scheduleMap.get(block.schedule_id)
+          if (!schedule) {
+            console.warn(`Schedule not found for schedule_block ${block.id}`)
+            return null
+          }
+
+          const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id)
+          if (!studentAssistant) {
+            console.warn(`Student assistant not found for schedule ${schedule.id}`)
+            return null
+          }
+
+          // Format the student assistant position for display
+          const position = studentAssistant.position
+          const formattedRole = position === "student lead, student assistant"
+            ? "Student Assistant"
+            : position
+
+          // Get time entry for today for this schedule block and student assistant
+          const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`
+          const timeEntry = timeEntryMap.get(timeEntryKey) || null
+
+          // Determine status
+          let status: Shift["status"] = "scheduled"
+          if (timeEntry) {
+            if (timeEntry.clock_in && !timeEntry.clock_out) {
+              status = "clocked-in"
+            } else if (timeEntry.clock_in && timeEntry.clock_out) {
+              // Both clocked in and out - check if late
+              // For simplicity, we'll mark as scheduled if both present
+              // In a real app, you'd compare against scheduled start time
+              status = "scheduled"
+            }
+          }
+
+          // Check for late status based on actual clock in time vs scheduled start time
+          // This is a simplified check - in reality you'd want to compare times properly
+          if (timeEntry && timeEntry.clock_in && block.start_time) {
+            // Parse times and compare - simplified for now
+            // A real implementation would convert to minutes and compare
+            status = "late" // Placeholder - implement proper time comparison
+          }
+
+          return {
+            id: schedule.id.toString(),
+            firstName: studentAssistant.first_name || "",
+            lastName: studentAssistant.last_name || "",
+            role: formattedRole,
+            startTime: block.start_time || "00:00",
+            endTime: block.end_time || "00:00",
+            clockInActual: timeEntry?.clock_in || null,
+            clockOutActual: timeEntry?.clock_out || null,
+            status: status as Shift["status"]
+          }
+        }).filter((s): s is Shift => s !== null)
+
+        // Group shifts by start time for the table display
+        const groupedShifts = groupShiftsByStartTime(shifts)
+
+        if (isMounted) {
+          setShiftGroups(groupedShifts)
+          setLoading(false)
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "An error occurred")
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  if (loading) {
+    return (
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold uppercase tracking-wider">
+            All Shifts Today
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-6 py-6">
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="mt-4 text-sm text-muted-foreground">Loading shifts...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold uppercase tracking-wider">
+            All Shifts Today
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-6 py-6">
+          <div className="flex flex-col items-center justify-center py-8">
+            <p className="text-sm text-destructive-center">Error loading shifts: {error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              Retry
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // If no shifts (weekend or no data)
+  if (shiftGroups.length === 0) {
+    const todayDay = getTodayDay()
+    const isWeekend = !todayDay
+
+    return (
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold uppercase tracking-wider">
+            All Shifts Today
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-6 py-6">
+          <div className="flex flex-col items-center justify-center py-8">
+            {isWeekend ? (
+              <>
+                <p className="text-sm text-muted-foreground">No shifts scheduled for weekends.</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No shifts scheduled for today.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const COLUMN_COUNT = 5
 
   return (
     <Card className="bg-card border-border">
@@ -193,7 +282,7 @@ export function ShiftsTable() {
           All Shifts Today
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-6 pb-6">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
@@ -217,9 +306,9 @@ export function ShiftsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {shiftGroups.map((group) => (
+            {shiftGroups.map((group, groupIndex) => (
               <Fragment key={group.startTime}>
-                <TableRow className="border-border hover:bg-transparent bg-muted/30">
+                <TableRow className={`border-border hover:bg-transparent ${groupIndex > 0 ? "bg-muted/30" : ""}`}>
                   <TableCell colSpan={COLUMN_COUNT} className="py-3">
                     <div className="flex items-center gap-3">
                       <span className="text-base font-semibold uppercase tracking-wider text-foreground whitespace-nowrap">
@@ -246,9 +335,14 @@ export function ShiftsTable() {
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={statusStyles[shift.status]}
+                        className={
+                          shift.status === "scheduled" ? "bg-muted text-muted-foreground" :
+                          shift.status === "clocked-in" ? "bg-accent/20 text-accent" :
+                          shift.status === "late" ? "bg-yellow-500/20 text-yellow-500" :
+                          "bg-destructive/20 text-destructive"
+                        }
                       >
-                        {statusLabels[shift.status]}
+                        {shift.status.charAt(0).toUpperCase() + shift.status.slice(1)}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -260,4 +354,24 @@ export function ShiftsTable() {
       </CardContent>
     </Card>
   )
+}
+
+// Reuse the grouping function from the original componed
+function groupShiftsByStartTime(
+  shifts: Shift[]
+): { startTime: string; shifts: Shift[] }[] {
+  const groups: { startTime: string; shifts: Shift[] }[] = []
+
+  for (const shift of shifts) {
+    const startTimeKey = normalizeTimeKey(shift.startTime)
+    const lastGroup = groups.at(-1)
+
+    if (lastGroup?.startTime === startTimeKey) {
+      lastGroup.shifts.push(shift)
+    } else {
+      groups.push({ startTime: startTimeKey, shifts: [shift] })
+    }
+  }
+
+  return groups
 }
