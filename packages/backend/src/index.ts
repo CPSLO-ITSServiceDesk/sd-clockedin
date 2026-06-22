@@ -1,8 +1,8 @@
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import { loadEnvironment, config } from './config/environment';
 import { registerRoutes } from './routes';
+import { createCorsMiddleware } from './middleware/cors';
 import { errorHandler } from './middleware/errorHandler';
 
 // Validate env before doing anything else.
@@ -12,7 +12,7 @@ const app = express();
 
 // Security & parsing middleware
 app.use(helmet());
-app.use(cors({ origin: config.frontendUrl, credentials: true }));
+app.use(createCorsMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -30,4 +30,8 @@ app.use(errorHandler);
 app.listen(config.port, () => {
   console.log(`Server running on port ${config.port}`);
   console.log(`Environment: ${config.nodeEnv}`);
+  console.log(`CORS allowed origins: ${config.allowedOrigins.join(', ')}`);
+  if (config.nodeEnv === 'development') {
+    console.log('CORS also allows http://localhost:* and http://127.0.0.1:*');
+  }
 });
