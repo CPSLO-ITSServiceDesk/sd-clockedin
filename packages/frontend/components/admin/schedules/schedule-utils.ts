@@ -20,6 +20,9 @@ export function minutesToTime(totalMinutes: number): string {
 export function timeToMinutes(value: string): number {
   const normalized = normalizeTimeKey(value)
   const [hours, minutes] = normalized.split(":").map(Number)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return Number.NaN
+  }
   return hours * 60 + minutes
 }
 
@@ -39,13 +42,23 @@ export function blocksToSelectedSlots(
   blocks: Pick<ScheduleBlock, "day" | "start_time" | "end_time">[],
 ): Set<string> {
   const selected = new Set<string>()
+  const timeSlots = generateTimeSlots()
 
   for (const block of blocks) {
     const start = timeToMinutes(block.start_time)
     const end = timeToMinutes(block.end_time)
 
-    for (let minutes = start; minutes < end; minutes += SLOT_MINUTES) {
-      selected.add(slotKey(block.day, minutesToTime(minutes)))
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
+      continue
+    }
+
+    for (const slot of timeSlots) {
+      const slotStart = timeToMinutes(slot)
+      const slotEnd = slotStart + SLOT_MINUTES
+
+      if (slotStart < end && slotEnd > start) {
+        selected.add(slotKey(block.day, slot))
+      }
     }
   }
 
@@ -60,6 +73,7 @@ export function selectedSlotsToDraftBlocks(
   for (const key of selected) {
     const { day, time } = parseSlotKey(key)
     const minutes = timeToMinutes(time)
+    if (Number.isNaN(minutes)) continue
     const list = byDay.get(day) ?? []
     list.push(minutes)
     byDay.set(day, list)
@@ -107,8 +121,26 @@ export function selectedSlotsToDraftBlocks(
   })
 }
 
+export function normalizeDraftBlock(
+  block: DraftScheduleBlock,
+): DraftScheduleBlock {
+  return {
+    day: block.day,
+    start_time: normalizeTimeKey(block.start_time),
+    end_time: normalizeTimeKey(block.end_time),
+  }
+}
+
+export function normalizeDraftBlocks(
+  blocks: DraftScheduleBlock[],
+): DraftScheduleBlock[] {
+  return blocks.map(normalizeDraftBlock)
+}
+
 export function validateDraftBlocks(blocks: DraftScheduleBlock[]): string | null {
-  for (const block of blocks) {
+  const normalizedBlocks = normalizeDraftBlocks(blocks)
+
+  for (const block of normalizedBlocks) {
     const start = timeToMinutes(block.start_time)
     const end = timeToMinutes(block.end_time)
 
@@ -116,13 +148,13 @@ export function validateDraftBlocks(blocks: DraftScheduleBlock[]): string | null
       return "Each block needs a start and end time."
     }
 
-    if (end <= start) {
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
       return "End time must be after start time."
     }
   }
 
   const byDay = new Map<Weekday, DraftScheduleBlock[]>()
-  for (const block of blocks) {
+  for (const block of normalizedBlocks) {
     const list = byDay.get(block.day) ?? []
     list.push(block)
     byDay.set(block.day, list)

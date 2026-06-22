@@ -48,5 +48,5 @@ export const scheduleBlocksApi = {
     }),
 
   getByScheduleId: (scheduleId: number) =>
-    apiFetch<ScheduleBlock[]>(`/schedule-blocks?schedule_id=eq.${scheduleId}`),
+    apiFetch<ScheduleBlock[]>(`/schedules/${scheduleId}/blocks`),
 }

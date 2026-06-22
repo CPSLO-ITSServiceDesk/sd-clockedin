@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import {
   CalendarClock,
   Grid3X3,
@@ -8,47 +8,49 @@ import {
   Star,
   Type,
 } from "lucide-react"
-import type { StudentAssistant } from "@/components/admin/students/student-assistant-form"
 import { ScheduleDayForm } from "@/components/admin/schedules/schedule-day-form"
 import { ScheduleGrid } from "@/components/admin/schedules/schedule-grid"
-import { useScheduleStore } from "@/components/admin/schedules/mock-schedule-store"
 import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-types"
 import {
   blocksToSelectedSlots,
   formatWeeklyHours,
+  normalizeDraftBlocks,
   selectedSlotsToDraftBlocks,
   summarizeScheduleBlocks,
   totalWeeklyHours,
   validateDraftBlocks,
 } from "@/components/admin/schedules/schedule-utils"
+import type { ScheduleStudent } from "@/lib/api/schedule-mappers"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 interface ScheduleEditorPanelProps {
-  student: StudentAssistant
-  termId: number
+  student: ScheduleStudent
+  initialBlocks: DraftScheduleBlock[]
+  onSave: (_blocks: DraftScheduleBlock[]) => Promise<void>
 }
 
-export function ScheduleEditorPanel({ student, termId }: ScheduleEditorPanelProps) {
-  const { getScheduleForStudentTerm, saveScheduleBlocks } = useScheduleStore()
-  const [draftBlocks, setDraftBlocks] = useState<DraftScheduleBlock[]>([])
+export function ScheduleEditorPanel({
+  student,
+  initialBlocks,
+  onSave,
+}: ScheduleEditorPanelProps) {
+  const normalizedInitialBlocks = useMemo(
+    () => normalizeDraftBlocks(initialBlocks),
+    [initialBlocks],
+  )
+  const [draftBlocks, setDraftBlocks] = useState(normalizedInitialBlocks)
+  const [loadedBlocks, setLoadedBlocks] = useState(normalizedInitialBlocks)
+
+  if (normalizedInitialBlocks !== loadedBlocks) {
+    setLoadedBlocks(normalizedInitialBlocks)
+    setDraftBlocks(normalizedInitialBlocks)
+  }
   const [inputMode, setInputMode] = useState<"grid" | "manual">("grid")
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-
-  useEffect(() => {
-    const { blocks } = getScheduleForStudentTerm(student.id, termId)
-    setDraftBlocks(
-      blocks.map(({ day, start_time, end_time }) => ({
-        day,
-        start_time,
-        end_time,
-      })),
-    )
-    setError(null)
-  }, [getScheduleForStudentTerm, student.id, termId])
 
   const selectedSlots = useMemo(
     () => blocksToSelectedSlots(draftBlocks),
@@ -62,20 +64,34 @@ export function ScheduleEditorPanel({ student, termId }: ScheduleEditorPanelProp
   )
 
   const handleSelectedSlotsChange = (slots: Set<string>) => {
-    setDraftBlocks(selectedSlotsToDraftBlocks(slots))
+    setDraftBlocks(normalizeDraftBlocks(selectedSlotsToDraftBlocks(slots)))
     setError(null)
   }
 
-  const handleSave = () => {
-    const validationError = validateDraftBlocks(draftBlocks)
+  const handleManualChange = (blocks: DraftScheduleBlock[]) => {
+    setDraftBlocks(normalizeDraftBlocks(blocks))
+    setError(null)
+  }
+
+  const handleSave = async () => {
+    const normalizedBlocks = normalizeDraftBlocks(draftBlocks)
+    const validationError = validateDraftBlocks(normalizedBlocks)
     if (validationError) {
       setError(validationError)
       return
     }
 
     setIsSaving(true)
-    saveScheduleBlocks(student.id, termId, draftBlocks)
-    setIsSaving(false)
+    try {
+      await onSave(normalizedBlocks)
+      setDraftBlocks(normalizedBlocks)
+      setError(null)
+    } catch (err) {
+      console.error("Save schedule failed:", err)
+      setError("Failed to save schedule. Please try again.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -124,21 +140,18 @@ export function ScheduleEditorPanel({ student, termId }: ScheduleEditorPanelProp
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="grid">
+        <TabsContent value="grid" forceMount className="data-[state=inactive]:hidden">
           <ScheduleGrid
             selectedSlots={selectedSlots}
             onSelectedSlotsChange={handleSelectedSlotsChange}
           />
         </TabsContent>
 
-        <TabsContent value="manual">
+        <TabsContent value="manual" forceMount className="data-[state=inactive]:hidden">
           <ScheduleDayForm
             variant="compact"
             blocks={draftBlocks}
-            onChange={(blocks) => {
-              setDraftBlocks(blocks)
-              setError(null)
-            }}
+            onChange={handleManualChange}
           />
         </TabsContent>
       </Tabs>
@@ -152,7 +165,13 @@ export function ScheduleEditorPanel({ student, termId }: ScheduleEditorPanelProp
   )
 }
 
-export function ScheduleEditorEmptyState({ className }: { className?: string }) {
+export function ScheduleEditorEmptyState({
+  className,
+  message = "Select a term above, then choose a student from the list to view and edit their weekly schedule.",
+}: {
+  className?: string
+  message?: string
+}) {
   return (
     <div
       className={cn(
@@ -166,9 +185,7 @@ export function ScheduleEditorEmptyState({ className }: { className?: string }) 
       <h3 className="text-sm font-semibold uppercase tracking-wider">
         Select a student
       </h3>
-      <p className="text-muted-foreground mt-2 max-w-sm text-sm">
-        Choose a student from the list to view and edit their weekly schedule.
-      </p>
+      <p className="text-muted-foreground mt-2 max-w-sm text-sm">{message}</p>
     </div>
   )
 }

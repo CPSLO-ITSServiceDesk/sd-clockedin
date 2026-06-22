@@ -32,10 +32,22 @@ export const SLOT_MINUTES = 60
 export const SCHEDULE_WEEKDAYS = WEEKDAY_OPTIONS
 
 export function slotKey(day: Weekday, time: string): string {
-  return `${day}:${time}`
+  return `${day}|${time}`
 }
 
 export function parseSlotKey(key: string): { day: Weekday; time: string } {
-  const [day, time] = key.split(":") as [Weekday, string]
-  return { day, time }
+  const separatorIndex = key.indexOf("|")
+  if (separatorIndex === -1) {
+    // Backward compatibility for legacy "day:HH:mm" keys.
+    const legacySeparatorIndex = key.indexOf(":")
+    return {
+      day: key.slice(0, legacySeparatorIndex) as Weekday,
+      time: key.slice(legacySeparatorIndex + 1),
+    }
+  }
+
+  return {
+    day: key.slice(0, separatorIndex) as Weekday,
+    time: key.slice(separatorIndex + 1),
+  }
 }

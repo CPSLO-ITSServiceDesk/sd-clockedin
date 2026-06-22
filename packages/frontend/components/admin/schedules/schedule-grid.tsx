@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useState, type PointerEvent } from "react"
 import { cn } from "@/lib/utils"
 import { formatStartTimeHeader } from "@/lib/format-time"
 import {
@@ -25,7 +25,7 @@ export function ScheduleGrid({
   const [dragDay, setDragDay] = useState<Weekday | null>(null)
   const [dragStartIndex, setDragStartIndex] = useState<number | null>(null)
   const [dragEndIndex, setDragEndIndex] = useState<number | null>(null)
-  const dragModeRef = useRef<"select" | "deselect">("select")
+  const [dragMode, setDragMode] = useState<"select" | "deselect">("select")
 
   const applyRange = useCallback(
     (
@@ -52,9 +52,37 @@ export function ScheduleGrid({
     [onSelectedSlotsChange, selectedSlots, timeSlots],
   )
 
-  const handlePointerDown = (day: Weekday, slotIndex: number) => {
+  const finishDrag = useCallback(() => {
+    if (dragDay !== null && dragStartIndex !== null && dragEndIndex !== null) {
+      applyRange(dragDay, dragStartIndex, dragEndIndex, dragMode)
+    }
+    setDragDay(null)
+    setDragStartIndex(null)
+    setDragEndIndex(null)
+  }, [applyRange, dragDay, dragEndIndex, dragMode, dragStartIndex])
+
+  useEffect(() => {
+    if (dragDay === null) return
+
+    window.addEventListener("pointerup", finishDrag)
+    window.addEventListener("pointercancel", finishDrag)
+
+    return () => {
+      window.removeEventListener("pointerup", finishDrag)
+      window.removeEventListener("pointercancel", finishDrag)
+    }
+  }, [dragDay, finishDrag])
+
+  const handlePointerDown = (
+    event: PointerEvent<HTMLButtonElement>,
+    day: Weekday,
+    slotIndex: number,
+  ) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+
     const isSelected = selectedSlots.has(slotKey(day, timeSlots[slotIndex]))
-    dragModeRef.current = isSelected ? "deselect" : "select"
+    setDragMode(isSelected ? "deselect" : "select")
     setDragDay(day)
     setDragStartIndex(slotIndex)
     setDragEndIndex(slotIndex)
@@ -65,21 +93,12 @@ export function ScheduleGrid({
     setDragEndIndex(slotIndex)
   }
 
-  const handlePointerUp = () => {
-    if (dragDay !== null && dragStartIndex !== null && dragEndIndex !== null) {
-      applyRange(dragDay, dragStartIndex, dragEndIndex, dragModeRef.current)
-    }
-    setDragDay(null)
-    setDragStartIndex(null)
-    setDragEndIndex(null)
-  }
-
   const isPreviewSelected = (day: Weekday, slotIndex: number) => {
     if (dragDay === day && dragStartIndex !== null && dragEndIndex !== null) {
       const low = Math.min(dragStartIndex, dragEndIndex)
       const high = Math.max(dragStartIndex, dragEndIndex)
       if (slotIndex >= low && slotIndex <= high) {
-        return dragModeRef.current === "select"
+        return dragMode === "select"
       }
     }
 
@@ -87,17 +106,13 @@ export function ScheduleGrid({
   }
 
   return (
-    <div className="select-none">
+    <div className="select-none touch-none">
       <p className="text-muted-foreground mb-3 text-xs uppercase tracking-wider">
         Click or drag within a day column to select available hours
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <div
-          className="min-w-[560px] px-1 pt-1"
-          onMouseLeave={handlePointerUp}
-          onMouseUp={handlePointerUp}
-        >
+        <div className="min-w-[560px] px-1 pt-1">
           <div className="mb-1 grid grid-cols-[60px_repeat(5,minmax(0,1fr))] gap-1">
             <div />
             {SCHEDULE_WEEKDAYS.map((weekday) => (
@@ -133,12 +148,13 @@ export function ScheduleGrid({
                         ? "border-accent/50 bg-accent/80 hover:bg-accent"
                         : "border-border bg-muted/50 hover:bg-muted",
                     )}
-                    onMouseDown={() =>
-                      handlePointerDown(weekday.value, slotIndex)
+                    onPointerDown={(event) =>
+                      handlePointerDown(event, weekday.value, slotIndex)
                     }
-                    onMouseEnter={() =>
+                    onPointerEnter={() =>
                       handlePointerEnter(weekday.value, slotIndex)
                     }
+                    onPointerUp={finishDrag}
                   />
                 )
               })}

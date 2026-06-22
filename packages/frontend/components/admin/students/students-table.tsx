@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import {
   CalendarClock,
@@ -11,7 +12,7 @@ import {
   UserPlus,
   UserX,
 } from "lucide-react"
-import { MOCK_STUDENTS, formatStudentName } from "@/components/admin/mock-students"
+import { formatStudentName } from "@/components/admin/mock-students"
 import {
   Table,
   TableBody,
@@ -42,108 +43,134 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   StudentAssistantForm,
-  type StudentAssistant,
   type StudentAssistantFormValues,
 } from "@/components/admin/students/student-assistant-form"
 import { StudentKpiCards } from "@/components/admin/students/student-kpi-cards"
+import { studentAssistantsApi, type StudentAssistant as ApiStudent } from "@/lib/api/student-assistants"
+import { queryKeys } from "@/lib/query-keys"
 
-const mockStudents = MOCK_STUDENTS
+const mapRoleToBackend = (_role: StudentAssistantFormValues["role"]) => {
+  // The DB only has one possible position value
+  return "student lead, student assistant"
+}
 
 function toStudentFields(values: StudentAssistantFormValues) {
   const polycardId = values.polycard_id.trim()
-
-  return {
+  const result: any = {
     first_name: values.first_name.trim(),
     last_name: values.last_name.trim(),
-    role: values.role,
-    polycard_id: polycardId ? Number(polycardId) : null,
+    position: mapRoleToBackend(values.role),
+  }
+  if (polycardId !== "") {
+    result.polycardId = Number(polycardId)
+  }
+  // Note: is_active is not part of the form; it's handled separately via toggle
+  return result
+}
+
+// Convert API student (with position) to form shape (with role)
+function apiStudentToForm(student: ApiStudent): StudentAssistantFormValues {
+  // We cannot distinguish lead vs assistant from position; default to Assistant
+  return {
+    first_name: student.first_name ?? "",
+    last_name: student.last_name ?? "",
+    role: "Student Assistant", // fallback
+    polycard_id: student.polycard_id != null ? String(student.polycard_id) : "",
   }
 }
 
 export function StudentsTable() {
   const router = useRouter()
-  const [students, setStudents] = useState<StudentAssistant[]>(mockStudents)
-  const [nextId, setNextId] = useState(mockStudents.length + 1)
+  const queryClient = useQueryClient()
+  const { data: apiStudents = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.students.all,
+    queryFn: studentAssistantsApi.list,
+  })
   const [formOpen, setFormOpen] = useState(false)
-  const [editingStudent, setEditingStudent] = useState<StudentAssistant | null>(
-    null,
-  )
-  const [deactivateTarget, setDeactivateTarget] =
-    useState<StudentAssistant | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<StudentAssistant | null>(
-    null,
-  )
+  // Editing state: store the id of the student being edited and the form values
+  const [editingStudentId, setEditingStudentId] = useState<number | null>(null)
+  const [editingFormValues, setEditingFormValues] = useState<StudentAssistantFormValues | null>(null)
+  const [deactivateTarget, setDeactivateTarget] = useState<ApiStudent | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ApiStudent | null>(null)
 
-  const handleAdd = (values: StudentAssistantFormValues) => {
-    setStudents((current) => [
-      {
-        id: nextId,
-        ...toStudentFields(values),
-        is_active: true,
-      },
-      ...current,
+  const invalidateStudents = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.students.all })
+
+  const invalidateStudentRelatedData = async () => {
+    await Promise.all([
+      invalidateStudents(),
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduleBlocks.all }),
     ])
-    setNextId((current) => current + 1)
   }
 
-  const handleEdit = (values: StudentAssistantFormValues) => {
-    if (!editingStudent) return
+  const handleAdd = async (values: StudentAssistantFormValues) => {
+    try {
+      await studentAssistantsApi.create(toStudentFields(values))
+      await invalidateStudents()
+    } catch (err) {
+      console.error("Create student failed:", err)
+    }
+  }
 
-    const editId = editingStudent.id
-
-    setStudents((current) =>
-      current.map((student) =>
-        student.id === editId
-          ? { ...student, ...toStudentFields(values) }
-          : student,
-      ),
-    )
+  const handleEdit = async (values: StudentAssistantFormValues) => {
+    if (editingStudentId === null) return
+    try {
+      await studentAssistantsApi.update(editingStudentId, toStudentFields(values))
+      await invalidateStudents()
+    } catch (err) {
+      console.error("Update student failed:", err)
+    }
   }
 
   const handleFormOpenChange = (open: boolean) => {
     setFormOpen(open)
     if (!open) {
-      setEditingStudent(null)
+      setEditingStudentId(null)
+      setEditingFormValues(null)
     }
   }
 
-  const handleToggleActive = (student: StudentAssistant) => {
-    setStudents((current) =>
-      current.map((entry) =>
-        entry.id === student.id
-          ? { ...entry, is_active: !entry.is_active }
-          : entry,
-      ),
-    )
+  const handleToggleActive = async (student: ApiStudent) => {
+    try {
+      await studentAssistantsApi.update(student.id, { is_active: !student.is_active })
+      await invalidateStudents()
+    } catch (err) {
+      console.error("Toggle student active failed:", err)
+    }
     setDeactivateTarget(null)
   }
 
-  const handleDelete = (student: StudentAssistant) => {
-    setStudents((current) => current.filter((entry) => entry.id !== student.id))
-    setDeleteTarget(null)
+  const handleDelete = async (student: ApiStudent) => {
+    try {
+      await studentAssistantsApi.remove(student.id)
+      await invalidateStudentRelatedData()
+    } catch (err) {
+      console.error("Delete student failed:", err)
+    }
   }
 
   const openCreateForm = () => {
-    setEditingStudent(null)
+    setEditingStudentId(null)
+    setEditingFormValues(null)
     setFormOpen(true)
   }
 
-  const openEditForm = (student: StudentAssistant) => {
-    setEditingStudent(student)
+  const openEditForm = (student: ApiStudent) => {
+    setEditingStudentId(student.id)
+    setEditingFormValues(apiStudentToForm(student))
     setFormOpen(true)
   }
 
-  const openScheduleEditor = (student: StudentAssistant) => {
+  const openScheduleEditor = (student: ApiStudent) => {
     router.push(`/admin/schedules?student=${student.id}`)
   }
 
-  const activeCount = students.filter((student) => student.is_active).length
-  const studentLeadCount = students.filter(
-    (student) => student.role === "Student Lead",
-  ).length
-  const studentAssistantCount = students.filter(
-    (student) => student.role === "Student Assistant",
-  ).length
+  // For KPI cards: we cannot differentiate leads vs assistants, so we set leads = 0
+  const activeCount = apiStudents.filter((s) => s.is_active).length
+  const studentLeadCount = 0
+  const studentAssistantCount = activeCount
+  const combined = activeCount
 
   return (
     <div className="space-y-6">
@@ -161,9 +188,9 @@ export function StudentsTable() {
       </div>
 
       <StudentKpiCards
-        total={students.length}
+        total={apiStudents.length}
         studentLeads={studentLeadCount}
-        combined={studentLeadCount + studentAssistantCount}
+        combined={combined}
       />
 
       <Card className="bg-card border-border">
@@ -173,128 +200,135 @@ export function StudentsTable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Name
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Polycard ID
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Role
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Status
-                </TableHead>
-                <TableHead className="w-[52px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.length === 0 ? (
-                <TableRow className="border-border">
-                  <TableCell
-                    colSpan={5}
-                    className="text-muted-foreground py-10 text-center"
-                  >
-                    No students yet. Add your first student assistant.
-                  </TableCell>
+          {loading ? (
+            <div className="text-center py-8">
+              Loading students...
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Name
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Polycard ID
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Role
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Status
+                  </TableHead>
+                  <TableHead className="w-[52px]" />
                 </TableRow>
-              ) : (
-                students.map((student) => (
-                  <TableRow
-                    key={student.id}
-                    className={`border-border ${student.is_active ? "" : "opacity-60"}`}
-                  >
-                    <TableCell className="font-medium">
-                      {formatStudentName(student)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {student.polycard_id ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {student.role}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          student.is_active
-                            ? "bg-accent/20 text-accent"
-                            : "bg-muted text-muted-foreground"
-                        }
-                      >
-                        {student.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground"
-                          >
-                            <MoreHorizontal className="size-4" />
-                            <span className="sr-only">Open menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem
-                            onClick={() => openEditForm(student)}
-                          >
-                            <Pencil className="size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => openScheduleEditor(student)}
-                          >
-                            <CalendarClock className="size-4" />
-                            Edit schedule
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {student.is_active ? (
-                            <DropdownMenuItem
-                              onClick={() => setDeactivateTarget(student)}
-                            >
-                              <UserX className="size-4" />
-                              Deactivate
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => handleToggleActive(student)}
-                            >
-                              <UserCheck className="size-4" />
-                              Reactivate
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => setDeleteTarget(student)}
-                          >
-                            <Trash2 className="size-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              </TableHeader>
+              <TableBody>
+                {apiStudents.length === 0 ? (
+                  <TableRow className="border-border">
+                    <TableCell
+                      colSpan={5}
+                      className="text-muted-foreground py-10 text-center"
+                    >
+                      No students yet. Add your first student assistant.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  apiStudents.map((student) => (
+                    <TableRow
+                      key={student.id}
+                      className={`border-border ${student.is_active ? "" : "opacity-60"}`}
+                    >
+                      <TableCell className="font-medium">
+                        {formatStudentName(student)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {student.polycard_id ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {/* Since we cannot distinguish lead vs assistant, show a generic label */}
+                        Student
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            student.is_active
+                              ? "bg-accent/20 text-accent"
+                              : "bg-muted text-muted-foreground"
+                          }
+                        >
+                          {student.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground"
+                            >
+                              <MoreHorizontal className="size-4" />
+                              <span className="sr-only">Open menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                              onClick={() => openEditForm(student)}
+                            >
+                              <Pencil className="size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openScheduleEditor(student)}
+                            >
+                              <CalendarClock className="size-4" />
+                              Edit schedule
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {student.is_active ? (
+                              <DropdownMenuItem
+                                onClick={() => setDeactivateTarget(student)}
+                              >
+                                <UserX className="size-4" />
+                                Deactivate
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => handleToggleActive(student)}
+                              >
+                                <UserCheck className="size-4" />
+                                Reactivate
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => setDeleteTarget(student)}
+                            >
+                              <Trash2 className="size-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <StudentAssistantForm
-        key={editingStudent?.id ?? "new"}
+        key={editingFormValues ? editingFormValues.first_name + editingFormValues.last_name : "new"}
         open={formOpen}
         onOpenChange={handleFormOpenChange}
-        student={editingStudent}
-        existingStudents={students}
-        onSubmit={editingStudent ? handleEdit : handleAdd}
+        student={editingFormValues ?? undefined}
+        existingStudents={apiStudents.map(s => ({ id: s.id, polycard_id: s.polycard_id }))}
+        onSubmit={editingFormValues ? handleEdit : handleAdd}
       />
 
       <AlertDialog

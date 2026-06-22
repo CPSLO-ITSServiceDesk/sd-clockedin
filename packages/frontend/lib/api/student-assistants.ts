@@ -23,12 +23,12 @@ export type StudentAssistantInput = {
 }
 
 export const studentAssistantsApi = {
-  list: () => apiFetch<StudentAssistant[]>("student-assistants"),
+  list: () => apiFetch<StudentAssistant[]>("/student-assistants"),
 
-  getById: (id: number) => apiFetch<StudentAssistant>(`student-assistants/${id}`),
+  getById: (id: number) => apiFetch<StudentAssistant>(`/student-assistants/${id}`),
 
   create: (payload: StudentAssistantInput) =>
-    apiFetch<StudentAssistant>("student-assistants", {
+    apiFetch<StudentAssistant>("/student-assistants", {
       method: "POST",
       body: JSON.stringify({
         ...payload,
@@ -36,13 +36,13 @@ export const studentAssistantsApi = {
     }),
 
   update: (id: number, payload: Partial<StudentAssistantInput>) =>
-    apiFetch<StudentAssistant>(`student-assistants/${id}`, {
+    apiFetch<StudentAssistant>(`/student-assistants/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
   remove: (id: number) =>
-    apiFetch<void>(`student-assistants/${id}`, {
+    apiFetch<void>(`/student-assistants/${id}`, {
       method: "DELETE",
     }),
 }

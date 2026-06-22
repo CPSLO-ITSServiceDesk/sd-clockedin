@@ -15,7 +15,7 @@ import {
   type DraftScheduleBlock,
   type Weekday,
 } from "@/components/admin/schedules/schedule-types"
-import { formatTimeRange } from "@/lib/format-time"
+import { formatTimeRange, normalizeTimeKey } from "@/lib/format-time"
 import { cn } from "@/lib/utils"
 
 interface ScheduleDayFormProps {
@@ -41,9 +41,17 @@ export function ScheduleDayForm({
     index: number,
     patch: Partial<DraftScheduleBlock>,
   ) => {
+    const normalizedPatch = {
+      ...patch,
+      ...(patch.start_time
+        ? { start_time: normalizeTimeKey(patch.start_time) }
+        : {}),
+      ...(patch.end_time ? { end_time: normalizeTimeKey(patch.end_time) } : {}),
+    }
+
     onChange(
       blocks.map((block, blockIndex) =>
-        blockIndex === index ? { ...block, ...patch } : block,
+        blockIndex === index ? { ...block, ...normalizedPatch } : block,
       ),
     )
   }

@@ -105,7 +105,7 @@ pnpm --filter backend lint
 
 The backend has a test setup using Vitest.
 
-To run backend tests:
+To run all backend tests:
 ```bash
 pnpm --filter backend test
 ```
@@ -115,7 +115,46 @@ To run backend tests in watch mode:
 pnpm --filter backend test:watch
 ```
 
+To run a specific test file:
+```bash
+pnpm --filter backend test:run -- packages/backend/src/tests/<filename>.test.ts
+```
+
+Alternatively, using vitest directly:
+```bash
+pnpm --filter backend exec vitest run src/tests/<filename>.test.ts
+```
+
 Currently, there are no tests in the frontend package. When adding tests, consider setting up a testing framework (e.g., Vitest or Jest) and updating the test scripts in `packages/frontend/package.json`.
+
+### Type Generation
+
+Regenerate Supabase TypeScript types for the backend:
+```bash
+pnpm --filter backend gen:types
+```
+
+This updates `src/types/database.types.ts` based on the Supabase schema.
+
+### Supabase Connection Check
+
+Verify the backend can connect to Supabase:
+```bash
+pnpm --filter backend check
+```
+
+This runs `tsx src/scripts/check-connection.ts`.
+
+### Debugging
+
+Backend runs with `tsx watch src/index.ts` for hot reload during development.
+Frontend runs with `next dev` with fast refresh.
+
+### Environment Variables
+
+If you need to change the backend port, update `PORT` in `packages/backend/.env` and ensure the frontend’s `AUTH_API_BASE_URL` matches (e.g., `http://localhost:3001/api`).
+
+You can also use a proxy in development to avoid CORS; see Next.js documentation for rewrites.
 
 ## Code Structure
 
@@ -152,7 +191,7 @@ Currently, there are no tests in the frontend package. When adding tests, consid
 - `src/controllers/`: Request handlers (e.g., `termController.ts`, `schedulesController.ts`)
 - `src/services/`: Business logic and Supabase interactions (e.g., `termService.ts`, `schedulesService.ts`)
 - `src/tests/`: Test files (e.g., `timeEntry.service.test.ts`)
-- `src/scripts/`: Utility scripts (e.g., `check-connection.ts` for verifying Supabase connectivity)
+- `src/scripts/`: Utility scripts (e.g., `check-connection.ts` for verifying Supabase connection)
 - `src/types/database.types.ts`: Auto-generated Supabase database types
 
 ## Notes
@@ -167,3 +206,8 @@ Currently, there are no tests in the frontend package. When adding tests, consid
   - `pnpm --filter backend check`: Verify Supabase connection
 - The frontend expects the backend API at `AUTH_API_BASE_URL` (default: `http://localhost:8000/api`). If the backend runs on a different port, consider setting up a proxy or updating the environment variable.
 - The root `pnpm dev` command runs both packages concurrently; adjust as needed if you need to run only one package.
+
+## Additional Resources
+
+- Cursor IDE rules can be added or modified in `.cursor/rules/` (currently empty).
+- Migration and planning notes are available in `postgres-plan.md`.

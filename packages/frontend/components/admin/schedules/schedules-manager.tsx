@@ -1,24 +1,32 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   Calendar,
   Search,
   Star,
 } from "lucide-react"
-import {
-  MOCK_STUDENTS,
-  formatStudentName,
-} from "@/components/admin/mock-students"
-import type { StudentAssistant } from "@/components/admin/students/student-assistant-form"
+import { formatStudentName } from "@/components/admin/mock-students"
 import {
   ScheduleEditorEmptyState,
   ScheduleEditorPanel,
 } from "@/components/admin/schedules/schedule-editor-panel"
 import { ScheduleKpiCards } from "@/components/admin/schedules/schedule-kpi-cards"
-import { useScheduleStore } from "@/components/admin/schedules/mock-schedule-store"
+import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-types"
 import { totalWeeklyHours } from "@/components/admin/schedules/schedule-utils"
+import {
+  apiBlockToDraft,
+  apiStudentToScheduleStudent,
+  type ScheduleStudent,
+} from "@/lib/api/schedule-mappers"
+import { scheduleBlocksApi } from "@/lib/api/scheduleBlocks"
+import { schedulesApi } from "@/lib/api/schedules"
+import { studentAssistantsApi } from "@/lib/api/student-assistants"
+import { termsApi } from "@/lib/api/terms"
+import { queryKeys } from "@/lib/query-keys"
+import { saveStudentTermSchedule } from "@/lib/schedules/persistence"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,19 +45,51 @@ type RoleFilter = "all" | "lead" | "assistant"
 export function SchedulesManager() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { terms, getScheduleForStudentTerm } = useScheduleStore()
+  const queryClient = useQueryClient()
 
-  const defaultTermId =
-    terms.find((term) => term.is_active)?.id ?? terms[0]?.id ?? 1
+  const { data: terms = [], isLoading: termsLoading } = useQuery({
+    queryKey: queryKeys.terms.all,
+    queryFn: termsApi.list,
+  })
 
-  const [termId, setTermId] = useState(defaultTermId)
-  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
+  const { data: apiStudents = [], isLoading: studentsLoading } = useQuery({
+    queryKey: queryKeys.students.all,
+    queryFn: studentAssistantsApi.list,
+  })
+
+  const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
+    queryKey: queryKeys.schedules.all,
+    queryFn: schedulesApi.list,
+  })
+
+  const { data: allBlocks = [], isLoading: blocksLoading } = useQuery({
+    queryKey: queryKeys.scheduleBlocks.all,
+    queryFn: scheduleBlocksApi.list,
+  })
+
+  const defaultTermId = useMemo(
+    () => terms.find((term) => term.is_active)?.id ?? terms[0]?.id ?? null,
+    [terms],
+  )
+
+  const [termId, setTermId] = useState<number | null>(null)
+  const activeTermId = termId ?? defaultTermId
+
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(() => {
+    const studentParam = searchParams.get("student")
+    if (!studentParam) return null
+    const parsed = Number(studentParam)
+    return Number.isNaN(parsed) ? null : parsed
+  })
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all")
 
   const activeStudents = useMemo(
-    () => MOCK_STUDENTS.filter((student) => student.is_active),
-    [],
+    () =>
+      apiStudents
+        .filter((student) => student.is_active)
+        .map(apiStudentToScheduleStudent),
+    [apiStudents],
   )
 
   const selectedStudent = useMemo(
@@ -58,20 +98,30 @@ export function SchedulesManager() {
     [activeStudents, selectedStudentId],
   )
 
-  useEffect(() => {
-    const studentParam = searchParams.get("student")
-    if (!studentParam) return
+  const getScheduleForStudentTerm = useCallback(
+    (studentId: number, term: number) => {
+      const schedule =
+        schedules.find(
+          (entry) =>
+            entry.student_assistant_id === studentId &&
+            entry.academic_term_id === term,
+        ) ?? null
 
-    const parsed = Number(studentParam)
-    if (Number.isNaN(parsed)) return
+      if (!schedule) {
+        return { schedule: null, blocks: [] as DraftScheduleBlock[] }
+      }
 
-    const exists = activeStudents.some((student) => student.id === parsed)
-    if (exists) {
-      setSelectedStudentId(parsed)
-    }
-  }, [activeStudents, searchParams])
+      const blocks = allBlocks
+        .filter((block) => block.schedule_id === schedule.id)
+        .map(apiBlockToDraft)
+        .filter((block): block is DraftScheduleBlock => block !== null)
 
-  const selectStudent = (student: StudentAssistant | null) => {
+      return { schedule, blocks }
+    },
+    [allBlocks, schedules],
+  )
+
+  const selectStudent = (student: ScheduleStudent | null) => {
     setSelectedStudentId(student?.id ?? null)
 
     const params = new URLSearchParams(searchParams.toString())
@@ -85,6 +135,30 @@ export function SchedulesManager() {
     router.replace(query ? `/admin/schedules?${query}` : "/admin/schedules", {
       scroll: false,
     })
+  }
+
+  const handleSaveSchedule = async (draftBlocks: DraftScheduleBlock[]) => {
+    if (!selectedStudent || !activeTermId) return
+
+    const { schedule } = getScheduleForStudentTerm(
+      selectedStudent.id,
+      activeTermId,
+    )
+
+    await saveStudentTermSchedule(
+      selectedStudent.id,
+      activeTermId,
+      draftBlocks,
+      schedule,
+      allBlocks.filter((block) =>
+        schedule ? block.schedule_id === schedule.id : false,
+      ),
+    )
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduleBlocks.all }),
+    ])
   }
 
   const filteredStudents = useMemo(() => {
@@ -112,21 +186,42 @@ export function SchedulesManager() {
     )
   }, [activeStudents, roleFilter, searchQuery])
 
-  const hasSchedule = (student: StudentAssistant) => {
-    const { blocks } = getScheduleForStudentTerm(student.id, termId)
+  const hasSchedule = (student: ScheduleStudent) => {
+    if (!activeTermId) return false
+    const { blocks } = getScheduleForStudentTerm(student.id, activeTermId)
     return blocks.length > 0
   }
 
-  const scheduledCount = activeStudents.filter((student) =>
-    hasSchedule(student),
-  ).length
+  const scheduledCount = activeTermId
+    ? activeStudents.filter((student) => hasSchedule(student)).length
+    : 0
 
-  const combinedWeeklyHours = activeStudents.reduce((sum, student) => {
-    const { blocks } = getScheduleForStudentTerm(student.id, termId)
-    return sum + totalWeeklyHours(blocks)
-  }, 0)
+  const combinedWeeklyHours = activeTermId
+    ? activeStudents.reduce((sum, student) => {
+        const { blocks } = getScheduleForStudentTerm(student.id, activeTermId)
+        return sum + totalWeeklyHours(blocks)
+      }, 0)
+    : 0
 
-  const selectedTerm = terms.find((term) => term.id === termId)
+  const selectedTerm = terms.find((term) => term.id === activeTermId)
+  const selectedScheduleData =
+    selectedStudent && activeTermId
+      ? getScheduleForStudentTerm(selectedStudent.id, activeTermId)
+      : null
+
+  const isLoading =
+    termsLoading || studentsLoading || schedulesLoading || blocksLoading
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Schedules</h1>
+          <p className="text-muted-foreground text-sm">Loading schedules...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -134,15 +229,19 @@ export function SchedulesManager() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Schedules</h1>
           <p className="text-muted-foreground text-sm">
-            Manage weekly shifts by academic term · {scheduledCount} of{" "}
-            {activeStudents.length} scheduled
+            Select a term, then a student to edit their weekly schedule ·{" "}
+            {scheduledCount} of {activeStudents.length} scheduled
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Calendar className="text-muted-foreground size-4" />
           <Select
-            value={String(termId)}
-            onValueChange={(value) => setTermId(Number(value))}
+            value={activeTermId ? String(activeTermId) : undefined}
+            onValueChange={(value) => {
+              setTermId(Number(value))
+              setSelectedStudentId(null)
+              router.replace("/admin/schedules", { scroll: false })
+            }}
           >
             <SelectTrigger className="w-[200px] border-border bg-input">
               <SelectValue placeholder="Select term" />
@@ -174,94 +273,102 @@ export function SchedulesManager() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="relative">
-              <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                placeholder="Search students..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className="border-border bg-input pl-10"
-              />
-            </div>
-
-            <div className="inline-flex w-full rounded-lg border border-border bg-muted/40 p-[3px]">
-              {(
-                [
-                  ["all", "All"],
-                  ["lead", "Lead"],
-                  ["assistant", "Assistant"],
-                ] as const
-              ).map(([filter, label]) => (
-                <Button
-                  key={filter}
-                  type="button"
-                  size="sm"
-                  variant={roleFilter === filter ? "default" : "ghost"}
-                  className={cn(
-                    "h-7 flex-1 px-2 text-xs",
-                    roleFilter !== filter && "text-muted-foreground",
-                  )}
-                  onClick={() => setRoleFilter(filter)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-
-            <p className="text-muted-foreground text-xs uppercase tracking-wider">
-              {filteredStudents.length} students
-            </p>
-
-            <div className="max-h-[560px] space-y-1 overflow-y-auto pr-1">
-              {filteredStudents.length === 0 ? (
-                <div className="text-muted-foreground py-10 text-center text-sm">
-                  No students found
+            {!activeTermId ? (
+              <div className="text-muted-foreground py-10 text-center text-sm">
+                Add a term before managing schedules.
+              </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search students..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="border-border bg-input pl-10"
+                  />
                 </div>
-              ) : (
-                filteredStudents.map((student) => {
-                  const isSelected = selectedStudentId === student.id
 
-                  return (
-                    <button
-                      key={student.id}
+                <div className="inline-flex w-full rounded-lg border border-border bg-muted/40 p-[3px]">
+                  {(
+                    [
+                      ["all", "All"],
+                      ["lead", "Lead"],
+                      ["assistant", "Assistant"],
+                    ] as const
+                  ).map(([filter, label]) => (
+                    <Button
+                      key={filter}
                       type="button"
-                      onClick={() => selectStudent(student)}
+                      size="sm"
+                      variant={roleFilter === filter ? "default" : "ghost"}
                       className={cn(
-                        "w-full rounded-sm border px-3 py-2.5 text-left transition-colors",
-                        isSelected
-                          ? "border-accent/30 bg-accent/10"
-                          : "border-transparent hover:border-border hover:bg-muted/40",
+                        "h-7 flex-1 px-2 text-xs",
+                        roleFilter !== filter && "text-muted-foreground",
                       )}
+                      onClick={() => setRoleFilter(filter)}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {formatStudentName(student)}
-                          </p>
-                          <p className="text-muted-foreground truncate text-xs">
-                            {student.role}
-                            {student.polycard_id
-                              ? ` · ${student.polycard_id}`
-                              : ""}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {student.role === "Student Lead" ? (
-                            <Star className="size-3 text-yellow-500" />
-                          ) : null}
-                          {hasSchedule(student) ? (
-                            <span
-                              className="size-2 rounded-full bg-accent ring-2 ring-accent/20"
-                              title="Has schedule"
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })
-              )}
-            </div>
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+
+                <p className="text-muted-foreground text-xs uppercase tracking-wider">
+                  {filteredStudents.length} students
+                </p>
+
+                <div className="max-h-[560px] space-y-1 overflow-y-auto pr-1">
+                  {filteredStudents.length === 0 ? (
+                    <div className="text-muted-foreground py-10 text-center text-sm">
+                      No students found
+                    </div>
+                  ) : (
+                    filteredStudents.map((student) => {
+                      const isSelected = selectedStudentId === student.id
+
+                      return (
+                        <button
+                          key={student.id}
+                          type="button"
+                          onClick={() => selectStudent(student)}
+                          className={cn(
+                            "w-full rounded-sm border px-3 py-2.5 text-left transition-colors",
+                            isSelected
+                              ? "border-accent/30 bg-accent/10"
+                              : "border-transparent hover:border-border hover:bg-muted/40",
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {formatStudentName(student)}
+                              </p>
+                              <p className="text-muted-foreground truncate text-xs">
+                                {student.role}
+                                {student.polycard_id
+                                  ? ` · ${student.polycard_id}`
+                                  : ""}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              {student.role === "Student Lead" ? (
+                                <Star className="size-3 text-yellow-500" />
+                              ) : null}
+                              {hasSchedule(student) ? (
+                                <span
+                                  className="size-2 rounded-full bg-accent ring-2 ring-accent/20"
+                                  title="Has schedule"
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -288,13 +395,16 @@ export function SchedulesManager() {
             </div>
           </CardHeader>
           <CardContent className="p-6">
-            {!selectedStudent ? (
+            {!activeTermId ? (
+              <ScheduleEditorEmptyState message="Select a term above to begin managing schedules." />
+            ) : !selectedStudent ? (
               <ScheduleEditorEmptyState />
             ) : (
               <ScheduleEditorPanel
-                key={`${selectedStudent.id}-${termId}`}
+                key={`${selectedStudent.id}-${activeTermId}`}
                 student={selectedStudent}
-                termId={termId}
+                initialBlocks={selectedScheduleData?.blocks ?? []}
+                onSave={handleSaveSchedule}
               />
             )}
           </CardContent>

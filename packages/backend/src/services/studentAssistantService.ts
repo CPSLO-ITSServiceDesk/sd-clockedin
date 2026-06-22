@@ -64,8 +64,67 @@ export const studentAssistantService = {
     return data;
   },
 
-  // delete a student assistant by id
+  // delete a student assistant by id, including related schedules and time entries
   async remove(id: number): Promise<void> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      throw new HttpError(404, 'Student assistant not found');
+    }
+
+    const { data: schedules, error: schedulesError } = await supabase
+      .from('schedules')
+      .select('id')
+      .eq('student_assistant_id', id);
+
+    if (schedulesError) throw new HttpError(500, schedulesError.message);
+
+    const scheduleIds = (schedules ?? []).map((schedule) => schedule.id);
+
+    let blockIds: number[] = [];
+    if (scheduleIds.length > 0) {
+      const { data: blocks, error: blocksError } = await supabase
+        .from('schedule_blocks')
+        .select('id')
+        .in('schedule_id', scheduleIds);
+
+      if (blocksError) throw new HttpError(500, blocksError.message);
+      blockIds = (blocks ?? []).map((block) => block.id);
+    }
+
+    const { error: timeByStudentError } = await supabase
+      .from('time_entry')
+      .delete()
+      .eq('student_assistant_id', id);
+
+    if (timeByStudentError) throw new HttpError(500, timeByStudentError.message);
+
+    if (blockIds.length > 0) {
+      const { error: timeByBlockError } = await supabase
+        .from('time_entry')
+        .delete()
+        .in('schedule_block_id', blockIds);
+
+      if (timeByBlockError) throw new HttpError(500, timeByBlockError.message);
+
+      const { error: blocksDeleteError } = await supabase
+        .from('schedule_blocks')
+        .delete()
+        .in('id', blockIds);
+
+      if (blocksDeleteError) throw new HttpError(500, blocksDeleteError.message);
+    }
+
+    if (scheduleIds.length > 0) {
+      const { error: schedulesDeleteError } = await supabase
+        .from('schedules')
+        .delete()
+        .in('id', scheduleIds);
+
+      if (schedulesDeleteError) {
+        throw new HttpError(500, schedulesDeleteError.message);
+      }
+    }
+
     const { error } = await supabase
       .from('student_assistant')
       .delete()

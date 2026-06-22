@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   CalendarPlus,
   MoreHorizontal,
@@ -17,6 +18,7 @@ import {
 import {
   countOffDays,
   formatTermDate,
+  parseTermOffDays,
   summarizeOffDays,
   type AcademicTerm,
 } from "@/components/admin/terms/term-types"
@@ -32,7 +34,12 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,40 +55,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
-const mockTerms: AcademicTerm[] = [
-  {
-    id: 1,
-    name: "Fall 2025",
-    start_date: "2025-08-25",
-    end_date: "2025-12-12",
-    is_active: true,
-    off_days: {
-      vacations: [
-        { date: "2025-11-27", label: "Thanksgiving" },
-        { date: "2025-11-28", label: "Day after Thanksgiving" },
-      ],
-      special_schedules: [
-        {
-          date: "2025-10-13",
-          swap_to_day: "friday",
-          label: "Columbus Day follows Friday schedule",
-        },
-      ],
-    },
-  },
-  {
-    id: 2,
-    name: "Spring 2026",
-    start_date: "2026-01-20",
-    end_date: "2026-05-15",
-    is_active: false,
-    off_days: {
-      vacations: [{ date: "2026-03-16", label: "Spring break week start" }],
-      special_schedules: [],
-    },
-  },
-]
+import { termsApi } from "@/lib/api/terms"
+import { queryKeys } from "@/lib/query-keys"
 
 function toTermFields(values: TermFormValues) {
   return {
@@ -93,8 +68,11 @@ function toTermFields(values: TermFormValues) {
 }
 
 export function TermsTable() {
-  const [terms, setTerms] = useState<AcademicTerm[]>(mockTerms)
-  const [nextId, setNextId] = useState(mockTerms.length + 1)
+  const queryClient = useQueryClient()
+  const { data: terms = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.terms.all,
+    queryFn: termsApi.list,
+  })
   const [formOpen, setFormOpen] = useState(false)
   const [editingTerm, setEditingTerm] = useState<AcademicTerm | null>(null)
   const [deactivateTarget, setDeactivateTarget] = useState<AcademicTerm | null>(
@@ -102,30 +80,26 @@ export function TermsTable() {
   )
   const [deleteTarget, setDeleteTarget] = useState<AcademicTerm | null>(null)
 
-  const handleAdd = (values: TermFormValues) => {
-    setTerms((current) => [
-      {
-        id: nextId,
-        ...toTermFields(values),
-        is_active: true,
-      },
-      ...current,
-    ])
-    setNextId((current) => current + 1)
+  const invalidateTerms = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.terms.all })
+
+  const handleAdd = async (values: TermFormValues) => {
+    try {
+      await termsApi.create(toTermFields(values))
+      await invalidateTerms()
+    } catch (err) {
+      console.error("Create term failed:", err)
+    }
   }
 
-  const handleEdit = (values: TermFormValues) => {
+  const handleEdit = async (values: TermFormValues) => {
     if (!editingTerm) return
-
-    const editId = editingTerm.id
-
-    setTerms((current) =>
-      current.map((term) =>
-        term.id === editId
-          ? { ...term, ...toTermFields(values) }
-          : term,
-      ),
-    )
+    try {
+      await termsApi.update(editingTerm.id, toTermFields(values))
+      await invalidateTerms()
+    } catch (err) {
+      console.error("Update term failed:", err)
+    }
   }
 
   const handleFormOpenChange = (open: boolean) => {
@@ -135,20 +109,23 @@ export function TermsTable() {
     }
   }
 
-  const handleToggleActive = (term: AcademicTerm) => {
-    setTerms((current) =>
-      current.map((entry) =>
-        entry.id === term.id
-          ? { ...entry, is_active: !entry.is_active }
-          : entry,
-      ),
-    )
+  const handleToggleActive = async (term: AcademicTerm) => {
+    try {
+      await termsApi.update(term.id, { is_active: !term.is_active })
+      await invalidateTerms()
+    } catch (err) {
+      console.error("Toggle term active failed:", err)
+    }
     setDeactivateTarget(null)
   }
 
-  const handleDelete = (term: AcademicTerm) => {
-    setTerms((current) => current.filter((entry) => entry.id !== term.id))
-    setDeleteTarget(null)
+  const handleDelete = async (term: AcademicTerm) => {
+    try {
+      await termsApi.remove(term.id)
+      await invalidateTerms()
+    } catch (err) {
+      console.error("Delete term failed:", err)
+    }
   }
 
   const openCreateForm = () => {
@@ -185,115 +162,121 @@ export function TermsTable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Name
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Dates
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Exceptions
-                </TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
-                  Status
-                </TableHead>
-                <TableHead className="w-[52px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {terms.length === 0 ? (
-                <TableRow className="border-border">
-                  <TableCell
-                    colSpan={5}
-                    className="text-muted-foreground py-10 text-center"
-                  >
-                    No terms yet. Add your first academic term.
-                  </TableCell>
+          {loading ? (
+            <div className="text-center py-8">
+              Loading terms...
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Name
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Dates
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Exceptions
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Status
+                  </TableHead>
+                  <TableHead className="w-[52px]" />
                 </TableRow>
-              ) : (
-                terms.map((term) => (
-                  <TableRow
-                    key={term.id}
-                    className={`border-border ${term.is_active ? "" : "opacity-60"}`}
-                  >
-                    <TableCell className="font-medium">{term.name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {formatTermDate(term.start_date)} –{" "}
-                      {formatTermDate(term.end_date)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      <div>{summarizeOffDays(term.off_days)}</div>
-                      {countOffDays(term.off_days) > 0 ? (
-                        <div className="text-muted-foreground/80 text-xs">
-                          {term.off_days?.vacations.length ?? 0} off ·{" "}
-                          {term.off_days?.special_schedules.length ?? 0} overrides
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          term.is_active
-                            ? "bg-accent/20 text-accent"
-                            : "bg-muted text-muted-foreground"
-                        }
-                      >
-                        {term.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground"
-                          >
-                            <MoreHorizontal className="size-4" />
-                            <span className="sr-only">Open menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem onClick={() => openEditForm(term)}>
-                            <Pencil className="size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {term.is_active ? (
-                            <DropdownMenuItem
-                              onClick={() => setDeactivateTarget(term)}
-                            >
-                              <UserX className="size-4" />
-                              Deactivate
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => handleToggleActive(term)}
-                            >
-                              <UserCheck className="size-4" />
-                              Reactivate
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => setDeleteTarget(term)}
-                          >
-                            <Trash2 className="size-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              </TableHeader>
+              <TableBody>
+                {terms.length === 0 ? (
+                  <TableRow className="border-border">
+                    <TableCell
+                      colSpan={5}
+                      className="text-muted-foreground py-10 text-center"
+                    >
+                      No terms yet. Add your first academic term.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  terms.map((term) => (
+                    <TableRow
+                      key={term.id}
+                      className={`border-border ${term.is_active ? "" : "opacity-60"}`}
+                    >
+                      <TableCell className="font-medium">{term.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {formatTermDate(term.start_date)} –{" "}
+                        {formatTermDate(term.end_date)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        <div>{summarizeOffDays(parseTermOffDays(term.off_days))}</div>
+                        {countOffDays(parseTermOffDays(term.off_days)) > 0 ? (
+                          <div className="text-muted-foreground/80 text-xs">
+                            {parseTermOffDays(term.off_days).vacations.length ?? 0} off ·{" "}
+                            {parseTermOffDays(term.off_days).special_schedules.length ?? 0} overrides
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            term.is_active
+                              ? "bg-accent/20 text-accent"
+                              : "bg-muted text-muted-foreground"
+                          }
+                        >
+                          {term.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground"
+                            >
+                              <MoreHorizontal className="size-4" />
+                              <span className="sr-only">Open menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => openEditForm(term)}>
+                              <Pencil className="size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {term.is_active ? (
+                              <DropdownMenuItem
+                                onClick={() => setDeactivateTarget(term)}
+                              >
+                                <UserX className="size-4" />
+                                Deactivate
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => handleToggleActive(term)}
+                              >
+                                <UserCheck className="size-4" />
+                                Reactivate
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => setDeleteTarget(term)}
+                            >
+                              <Trash2 className="size-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -326,6 +309,7 @@ export function TermsTable() {
             <AlertDialogAction
               onClick={() => {
                 if (deactivateTarget) {
+                  // Note: handleToggleActive is async; we don't await here because UI will close and refetch
                   handleToggleActive(deactivateTarget)
                 }
               }}

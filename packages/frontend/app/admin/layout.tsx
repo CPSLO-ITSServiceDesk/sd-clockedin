@@ -11,18 +11,17 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { ScheduleStoreProvider } from "@/components/admin/schedules/mock-schedule-store"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { usePathname } from "next/navigation"
+import type { ReactNode } from "react"
 
 export default function AdminLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   const pathname = usePathname()
 
-  // Generate breadcrumbs based on pathname
   const getBreadcrumbs = () => {
     const paths = pathname.split("/").filter(Boolean)
 
@@ -64,10 +63,9 @@ export default function AdminLayout({
   }
 
   return (
-    <ScheduleStoreProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset className="overflow-x-hidden">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="overflow-x-hidden">
         <header className="flex h-auto sm:h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4 py-2 sm:py-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 overflow-x-hidden">
           <SidebarTrigger className="-ml-1 flex-shrink-0" />
           <Separator orientation="vertical" className="mr-2 h-4 hidden sm:block" />
@@ -85,8 +83,7 @@ export default function AdminLayout({
             {children}
           </div>
         </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </ScheduleStoreProvider>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
