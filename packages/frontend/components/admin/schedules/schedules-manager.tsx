@@ -7,6 +7,7 @@ import {
   Calendar,
   Search,
   Star,
+  Upload,
 } from "lucide-react"
 import { formatStudentName } from "@/components/admin/mock-students"
 import {
@@ -14,6 +15,7 @@ import {
   ScheduleEditorPanel,
 } from "@/components/admin/schedules/schedule-editor-panel"
 import { ScheduleKpiCards } from "@/components/admin/schedules/schedule-kpi-cards"
+import { ScheduleImportDialog } from "@/components/admin/schedules/schedule-import-dialog"
 import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-types"
 import { totalWeeklyHours } from "@/components/admin/schedules/schedule-utils"
 import {
@@ -83,6 +85,7 @@ export function SchedulesManager() {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all")
+  const [importOpen, setImportOpen] = useState(false)
 
   const activeStudents = useMemo(
     () =>
@@ -233,7 +236,16 @@ export function SchedulesManager() {
             {scheduledCount} of {activeStudents.length} scheduled
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!activeTermId}
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="size-4" />
+            Import schedule
+          </Button>
           <Calendar className="text-muted-foreground size-4" />
           <Select
             value={activeTermId ? String(activeTermId) : undefined}
@@ -257,6 +269,15 @@ export function SchedulesManager() {
           </Select>
         </div>
       </div>
+
+      {activeTermId && selectedTerm ? (
+        <ScheduleImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          termId={activeTermId}
+          termName={selectedTerm.name ?? "Selected term"}
+        />
+      ) : null}
 
       <ScheduleKpiCards
         termName={selectedTerm?.name ?? "—"}

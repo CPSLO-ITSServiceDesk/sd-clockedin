@@ -10,6 +10,7 @@ export interface StudentAssistant {
   last_name: string | null
   polycard_id: number | null
   position: StudentRole
+  work_email: string | null
 }
 
 export type StudentAssistantInput = {
@@ -20,6 +21,7 @@ export type StudentAssistantInput = {
   last_name?: string | null
   polycard_id?: number | null
   position?: StudentRole
+  work_email?: string | null
 }
 
 export const studentAssistantsApi = {

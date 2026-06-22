@@ -56,26 +56,27 @@ const mapRoleToBackend = (_role: StudentAssistantFormValues["role"]) => {
 
 function toStudentFields(values: StudentAssistantFormValues) {
   const polycardId = values.polycard_id.trim()
-  const result: any = {
+  const workEmail = values.work_email.trim()
+  const result: Record<string, unknown> = {
     first_name: values.first_name.trim(),
     last_name: values.last_name.trim(),
     position: mapRoleToBackend(values.role),
+    work_email: workEmail === "" ? null : workEmail,
   }
   if (polycardId !== "") {
-    result.polycardId = Number(polycardId)
+    result.polycard_id = Number(polycardId)
   }
-  // Note: is_active is not part of the form; it's handled separately via toggle
   return result
 }
 
 // Convert API student (with position) to form shape (with role)
 function apiStudentToForm(student: ApiStudent): StudentAssistantFormValues {
-  // We cannot distinguish lead vs assistant from position; default to Assistant
   return {
     first_name: student.first_name ?? "",
     last_name: student.last_name ?? "",
-    role: "Student Assistant", // fallback
+    role: "Student Assistant",
     polycard_id: student.polycard_id != null ? String(student.polycard_id) : "",
+    work_email: student.work_email ?? "",
   }
 }
 
@@ -212,6 +213,9 @@ export function StudentsTable() {
                     Name
                   </TableHead>
                   <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                    Email
+                  </TableHead>
+                  <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
                     Polycard ID
                   </TableHead>
                   <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
@@ -227,7 +231,7 @@ export function StudentsTable() {
                 {apiStudents.length === 0 ? (
                   <TableRow className="border-border">
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="text-muted-foreground py-10 text-center"
                     >
                       No students yet. Add your first student assistant.
@@ -241,6 +245,9 @@ export function StudentsTable() {
                     >
                       <TableCell className="font-medium">
                         {formatStudentName(student)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {student.work_email ?? "—"}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {student.polycard_id ?? "—"}

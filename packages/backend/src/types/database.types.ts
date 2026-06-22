@@ -154,6 +154,7 @@ export type Database = {
           last_name: string | null
           polycard_id: number | null
           position: Database["public"]["Enums"]["student_role"]
+          work_email: string | null
         }
         Insert: {
           created_at?: string
@@ -163,6 +164,7 @@ export type Database = {
           last_name?: string | null
           polycard_id?: number | null
           position: Database["public"]["Enums"]["student_role"]
+          work_email?: string | null
         }
         Update: {
           created_at?: string
@@ -172,6 +174,7 @@ export type Database = {
           last_name?: string | null
           polycard_id?: number | null
           position?: Database["public"]["Enums"]["student_role"]
+          work_email?: string | null
         }
         Relationships: []
       }

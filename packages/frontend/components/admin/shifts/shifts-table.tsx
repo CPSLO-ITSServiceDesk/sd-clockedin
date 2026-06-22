@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { GRID_START_HOUR } from "@/components/admin/schedules/schedule-types"
+import { timeToMinutes } from "@/components/admin/schedules/schedule-utils"
 import {
   formatActualShift,
   formatStartTimeHeader,
@@ -171,7 +173,7 @@ export function ShiftsTable() {
           }
 
           return {
-            id: schedule.id.toString(),
+            id: block.id.toString(),
             firstName: studentAssistant.first_name || "",
             lastName: studentAssistant.last_name || "",
             role: formattedRole,
@@ -356,22 +358,27 @@ export function ShiftsTable() {
   )
 }
 
-// Reuse the grouping function from the original componed
 function groupShiftsByStartTime(
   shifts: Shift[]
 ): { startTime: string; shifts: Shift[] }[] {
-  const groups: { startTime: string; shifts: Shift[] }[] = []
+  const gridStartMinutes = GRID_START_HOUR * 60
 
-  for (const shift of shifts) {
+  const sorted = [...shifts]
+    .filter((shift) => timeToMinutes(shift.startTime) >= gridStartMinutes)
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+
+  const groups = new Map<string, Shift[]>()
+  for (const shift of sorted) {
     const startTimeKey = normalizeTimeKey(shift.startTime)
-    const lastGroup = groups.at(-1)
-
-    if (lastGroup?.startTime === startTimeKey) {
-      lastGroup.shifts.push(shift)
-    } else {
-      groups.push({ startTime: startTimeKey, shifts: [shift] })
-    }
+    const group = groups.get(startTimeKey) ?? []
+    group.push(shift)
+    groups.set(startTimeKey, group)
   }
 
-  return groups
+  return Array.from(groups.entries()).map(([startTime, groupShifts]) => ({
+    startTime,
+    shifts: [...groupShifts].sort((a, b) =>
+      a.firstName.localeCompare(b.firstName, undefined, { sensitivity: "base" }),
+    ),
+  }))
 }

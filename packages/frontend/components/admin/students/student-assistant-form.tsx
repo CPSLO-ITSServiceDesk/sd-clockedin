@@ -38,6 +38,7 @@ export interface StudentAssistant {
   last_name: string
   role: StudentRole
   polycard_id: number | null
+  work_email: string | null
   is_active: boolean
 }
 
@@ -73,6 +74,13 @@ const studentAssistantFormSchema = z.object({
         (Number(value) > 0 && Number(value) <= Number.MAX_SAFE_INTEGER),
       "Polycard ID must be a positive number",
     ),
+  work_email: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || z.string().email().safeParse(value).success,
+      "Enter a valid email address",
+    ),
 })
 
 export type StudentAssistantFormValues = z.infer<typeof studentAssistantFormSchema>
@@ -82,6 +90,7 @@ const emptyValues: StudentAssistantFormValues = {
   last_name: "",
   role: "Student Assistant",
   polycard_id: "",
+  work_email: "",
 }
 
 function valuesFromStudent(student: StudentAssistant): StudentAssistantFormValues {
@@ -91,6 +100,7 @@ function valuesFromStudent(student: StudentAssistant): StudentAssistantFormValue
     role: student.role,
     polycard_id:
       student.polycard_id != null ? String(student.polycard_id) : "",
+    work_email: student.work_email ?? "",
   }
 }
 
@@ -205,6 +215,24 @@ export function StudentAssistantForm({
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="work_email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Work email</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      autoComplete="email"
+                      placeholder="name@calpoly.edu"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="polycard_id"

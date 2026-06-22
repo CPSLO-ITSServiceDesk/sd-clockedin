@@ -7,6 +7,7 @@ export const MOCK_STUDENTS: StudentAssistant[] = [
     last_name: "Chen",
     role: "Student Lead",
     polycard_id: 12345,
+    work_email: null,
     is_active: true,
   },
   {
@@ -15,6 +16,7 @@ export const MOCK_STUDENTS: StudentAssistant[] = [
     last_name: "Rodriguez",
     role: "Student Assistant",
     polycard_id: 23456,
+    work_email: null,
     is_active: true,
   },
   {
@@ -23,6 +25,7 @@ export const MOCK_STUDENTS: StudentAssistant[] = [
     last_name: "Wilson",
     role: "Student Assistant",
     polycard_id: 34567,
+    work_email: null,
     is_active: false,
   },
   {
@@ -31,6 +34,7 @@ export const MOCK_STUDENTS: StudentAssistant[] = [
     last_name: "Park",
     role: "Student Lead",
     polycard_id: 45678,
+    work_email: null,
     is_active: true,
   },
 ]
