@@ -42,6 +42,21 @@ export const WEEKDAY_OPTIONS: { value: Weekday; label: string }[] = [
 
 export const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
+export const ACADEMIC_CALENDAR_URL = "https://registrar.calpoly.edu/acad_cal"
+
+export function sortTermsByActiveStatus<
+  T extends { is_active: boolean | null; start_date: string | null },
+>(terms: T[]): T[] {
+  return [...terms].sort((a, b) => {
+    const activeDiff = Number(Boolean(b.is_active)) - Number(Boolean(a.is_active))
+    if (activeDiff !== 0) return activeDiff
+
+    const aStart = a.start_date ?? ""
+    const bStart = b.start_date ?? ""
+    return bStart.localeCompare(aStart)
+  })
+}
+
 export function createClientId(): string {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
 }

@@ -2,6 +2,7 @@ import { LiveClock } from "@/components/live-clock"
 import { ClockedInTable } from "@/components/clocked-in-table"
 import { ExpectedArrivalsTable } from "@/components/expected-arrivals-table"
 import { LoginArea } from "@/components/login-area"
+import { SystemStatus } from "@/components/system-status"
 
 export default function Home() {
   return (
@@ -56,16 +57,7 @@ export default function Home() {
         {/* Footer Info */}
         <footer className="border-t border-border pt-6 pb-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <span className="uppercase tracking-wider">System Status:</span>
-              <span className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-online opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-status-online"></span>
-                </span>
-                <span className="text-status-online">OPERATIONAL</span>
-              </span>
-            </div>
+            <SystemStatus />
             <div className="flex items-center gap-4">
               <span>v1.0.0</span>
               <span className="text-border">|</span>

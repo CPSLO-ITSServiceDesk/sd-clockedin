@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { GRID_START_HOUR } from "@/components/admin/schedules/schedule-types"
 import { timeToMinutes } from "@/components/admin/schedules/schedule-utils"
+import { countWorkingDuringHour } from "@/lib/shifts/dashboard-stats"
 import {
   formatActualShift,
   formatStartTimeHeader,
@@ -161,9 +162,10 @@ export function ShiftsTable() {
           <TableBody>
             {shiftGroups.map((group, groupIndex) => {
               const scheduledCount = group.shifts.length
-              const onShiftCount = group.shifts.filter(
-                (shift) => shift.clockInActual && !shift.clockOutActual,
-              ).length
+              const hour = Number.parseInt(group.startTime.split(":")[0] ?? "", 10)
+              const onShiftCount = Number.isNaN(hour)
+                ? 0
+                : countWorkingDuringHour(shifts, hour)
 
               return (
               <Fragment key={group.startTime}>
@@ -189,13 +191,14 @@ export function ShiftsTable() {
                           variant="secondary"
                           className="rounded-sm px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider shadow-none"
                         >
-                          {scheduledCount} {scheduledCount === 1 ? "person" : "people"}
+                          {scheduledCount} expected
                         </Badge>
-                        {onShiftCount > 0 && (
-                          <span className="text-xs font-medium uppercase tracking-wider text-accent">
-                            {onShiftCount} on shift
-                          </span>
-                        )}
+                        <Badge
+                          variant="outline"
+                          className="rounded-sm px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider shadow-none border-accent/30 text-accent"
+                        >
+                          {onShiftCount} on shift
+                        </Badge>
                       </div>
                       <div className="h-px flex-1 bg-border" />
                     </div>

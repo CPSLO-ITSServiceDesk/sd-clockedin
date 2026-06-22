@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useState } from "react"
 import {
   Clock,
   LayoutDashboard,
@@ -12,6 +13,7 @@ import {
   BarChart2,
   ClipboardList,
   CalendarRange,
+  Sparkles,
 } from "lucide-react"
 import {
   Sidebar,
@@ -27,6 +29,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { NavUser } from "@/components/nav-user"
+import { SetupTermWizard } from "@/components/admin/terms/setup-term-wizard"
 
 const navMain = [
   { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -53,8 +56,10 @@ const user = {
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const [setupOpen, setSetupOpen] = useState(false)
 
   return (
+    <>
     <Sidebar collapsible="icon" variant="inset" className="bg-sidebar text-sidebar-foreground">
       <SidebarHeader>
         <SidebarMenu>
@@ -129,9 +134,23 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Set up working term"
+              className="bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent"
+              onClick={() => setSetupOpen(true)}
+            >
+              <Sparkles className="size-4" />
+              <span>Set up working term</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+    <SetupTermWizard open={setupOpen} onOpenChange={setSetupOpen} />
+    </>
   )
 }

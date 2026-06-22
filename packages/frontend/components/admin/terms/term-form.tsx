@@ -10,6 +10,7 @@ import {
   createClientId,
   ISO_DATE_PATTERN,
   parseTermOffDays,
+  ACADEMIC_CALENDAR_URL,
   WEEKDAY_OPTIONS,
   type AcademicTerm,
   type TermOffDays,
@@ -307,7 +308,17 @@ export function TermForm({
           <DialogDescription>
             {isEditing
               ? "Update term dates, vacation days, and special schedules."
-              : "Create an academic term with its calendar and schedule exceptions."}
+              : "Create an academic term with its calendar and schedule exceptions."}{" "}
+            Find official dates on the{" "}
+            <a
+              href={ACADEMIC_CALENDAR_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent underline-offset-4 hover:underline"
+            >
+              Cal Poly academic calendar
+            </a>
+            .
           </DialogDescription>
         </DialogHeader>
 

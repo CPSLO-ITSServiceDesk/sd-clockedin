@@ -39,6 +39,11 @@ export const MOCK_STUDENTS: StudentAssistant[] = [
   },
 ]
 
-export function formatStudentName(student: Pick<StudentAssistant, "first_name" | "last_name">): string {
-  return `${student.first_name} ${student.last_name}`
+export function formatStudentName(
+  student: Pick<StudentAssistant, "first_name" | "last_name"> | {
+    first_name: string | null
+    last_name: string | null
+  },
+): string {
+  return `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim()
 }

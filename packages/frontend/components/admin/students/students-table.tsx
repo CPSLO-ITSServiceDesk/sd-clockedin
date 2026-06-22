@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import {
   CalendarClock,
   MoreHorizontal,
   Pencil,
+  Search,
+  Star,
   Trash2,
   UserCheck,
   UserPlus,
@@ -24,6 +26,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +51,15 @@ import {
 import { StudentKpiCards } from "@/components/admin/students/student-kpi-cards"
 import { studentAssistantsApi, type StudentAssistant as ApiStudent } from "@/lib/api/student-assistants"
 import { queryKeys } from "@/lib/query-keys"
+import {
+  compareStudentsByRoleThenName,
+  getStudentInitials,
+  getStudentRole,
+} from "@/lib/students/student-utils"
+import { cn } from "@/lib/utils"
+
+type RoleFilter = "all" | "lead" | "assistant"
+type StatusFilter = "all" | "active" | "inactive"
 
 const mapRoleToBackend = (_role: StudentAssistantFormValues["role"]) => {
   // The DB only has one possible position value
@@ -93,6 +105,39 @@ export function StudentsTable() {
   const [editingFormValues, setEditingFormValues] = useState<StudentAssistantFormValues | null>(null)
   const [deactivateTarget, setDeactivateTarget] = useState<ApiStudent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ApiStudent | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+
+  const filteredStudents = useMemo(() => {
+    let eligible = [...apiStudents]
+
+    if (statusFilter === "active") {
+      eligible = eligible.filter((student) => student.is_active)
+    } else if (statusFilter === "inactive") {
+      eligible = eligible.filter((student) => !student.is_active)
+    }
+
+    if (roleFilter === "lead") {
+      eligible = eligible.filter((student) => getStudentRole(student) === "Student Lead")
+    } else if (roleFilter === "assistant") {
+      eligible = eligible.filter(
+        (student) => getStudentRole(student) === "Student Assistant",
+      )
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      eligible = eligible.filter((student) => {
+        const name = formatStudentName(student).toLowerCase()
+        const email = student.work_email?.toLowerCase() ?? ""
+        const cardId = student.polycard_id?.toString() ?? ""
+        return name.includes(query) || email.includes(query) || cardId.includes(query)
+      })
+    }
+
+    return eligible.sort(compareStudentsByRoleThenName)
+  }, [apiStudents, roleFilter, searchQuery, statusFilter])
 
   const invalidateStudents = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.students.all })
@@ -167,10 +212,10 @@ export function StudentsTable() {
     router.push(`/admin/schedules?student=${student.id}`)
   }
 
-  // For KPI cards: we cannot differentiate leads vs assistants, so we set leads = 0
   const activeCount = apiStudents.filter((s) => s.is_active).length
-  const studentLeadCount = 0
-  const studentAssistantCount = activeCount
+  const studentLeadCount = apiStudents.filter(
+    (student) => student.is_active && getStudentRole(student) === "Student Lead",
+  ).length
   const combined = activeCount
 
   return (
@@ -200,13 +245,80 @@ export function StudentsTable() {
             All Students
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {loading ? (
             <div className="text-center py-8">
               Loading students...
             </div>
           ) : (
-            <Table>
+            <>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search by name, email, or polycard ID..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="border-border bg-input pl-10"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="inline-flex w-full rounded-lg border border-border bg-muted/40 p-[3px] sm:max-w-xs">
+                    {(
+                      [
+                        ["all", "All"],
+                        ["lead", "Lead"],
+                        ["assistant", "Assistant"],
+                      ] as const
+                    ).map(([filter, label]) => (
+                      <Button
+                        key={filter}
+                        type="button"
+                        size="sm"
+                        variant={roleFilter === filter ? "default" : "ghost"}
+                        className={cn(
+                          "h-7 flex-1 px-2 text-xs",
+                          roleFilter !== filter && "text-muted-foreground",
+                        )}
+                        onClick={() => setRoleFilter(filter)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div className="inline-flex w-full rounded-lg border border-border bg-muted/40 p-[3px] sm:max-w-xs">
+                    {(
+                      [
+                        ["all", "All"],
+                        ["active", "Active"],
+                        ["inactive", "Inactive"],
+                      ] as const
+                    ).map(([filter, label]) => (
+                      <Button
+                        key={filter}
+                        type="button"
+                        size="sm"
+                        variant={statusFilter === filter ? "default" : "ghost"}
+                        className={cn(
+                          "h-7 flex-1 px-2 text-xs",
+                          statusFilter !== filter && "text-muted-foreground",
+                        )}
+                        onClick={() => setStatusFilter(filter)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-muted-foreground text-xs uppercase tracking-wider">
+                  {filteredStudents.length} students
+                </p>
+              </div>
+
+              <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
@@ -228,23 +340,33 @@ export function StudentsTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {apiStudents.length === 0 ? (
+                {filteredStudents.length === 0 ? (
                   <TableRow className="border-border">
                     <TableCell
                       colSpan={6}
                       className="text-muted-foreground py-10 text-center"
                     >
-                      No students yet. Add your first student assistant.
+                      {apiStudents.length === 0
+                        ? "No students yet. Add your first student assistant."
+                        : "No students match your filters."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  apiStudents.map((student) => (
+                  filteredStudents.map((student) => {
+                    const role = getStudentRole(student)
+
+                    return (
                     <TableRow
                       key={student.id}
                       className={`border-border ${student.is_active ? "" : "opacity-60"}`}
                     >
                       <TableCell className="font-medium">
-                        {formatStudentName(student)}
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-secondary text-xs font-bold text-secondary-foreground">
+                            {getStudentInitials(student)}
+                          </div>
+                          {formatStudentName(student)}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {student.work_email ?? "—"}
@@ -253,8 +375,12 @@ export function StudentsTable() {
                         {student.polycard_id ?? "—"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {/* Since we cannot distinguish lead vs assistant, show a generic label */}
-                        Student
+                        <div className="flex items-center gap-1.5">
+                          {role === "Student Lead" ? (
+                            <Star className="size-3 shrink-0 text-yellow-500" />
+                          ) : null}
+                          {role}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -321,10 +447,12 @@ export function StudentsTable() {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
+            </>
           )}
         </CardContent>
       </Card>

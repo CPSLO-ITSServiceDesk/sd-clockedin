@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   CalendarPlus,
@@ -19,7 +19,9 @@ import {
   countOffDays,
   formatTermDate,
   parseTermOffDays,
+  sortTermsByActiveStatus,
   summarizeOffDays,
+  ACADEMIC_CALENDAR_URL,
   type AcademicTerm,
 } from "@/components/admin/terms/term-types"
 import {
@@ -80,6 +82,8 @@ export function TermsTable() {
   )
   const [deleteTarget, setDeleteTarget] = useState<AcademicTerm | null>(null)
 
+  const sortedTerms = useMemo(() => sortTermsByActiveStatus(terms), [terms])
+
   const invalidateTerms = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.terms.all })
 
@@ -138,15 +142,21 @@ export function TermsTable() {
     setFormOpen(true)
   }
 
-  const activeCount = terms.filter((term) => term.is_active).length
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Terms</h1>
           <p className="text-muted-foreground text-sm">
-            Manage academic terms · {activeCount} active
+            Manage academic terms ·{" "}
+            <a
+              href={ACADEMIC_CALENDAR_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent underline-offset-4 hover:underline"
+            >
+              Cal Poly academic calendar
+            </a>
           </p>
         </div>
         <Button onClick={openCreateForm}>
@@ -186,7 +196,7 @@ export function TermsTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {terms.length === 0 ? (
+                {sortedTerms.length === 0 ? (
                   <TableRow className="border-border">
                     <TableCell
                       colSpan={5}
@@ -196,7 +206,7 @@ export function TermsTable() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  terms.map((term) => (
+                  sortedTerms.map((term) => (
                     <TableRow
                       key={term.id}
                       className={`border-border ${term.is_active ? "" : "opacity-60"}`}

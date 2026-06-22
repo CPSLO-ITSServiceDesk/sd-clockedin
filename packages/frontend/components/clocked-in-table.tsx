@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { DoorOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import { useTodayShifts } from "@/hooks/use-today-shifts"
 import { timeEntriesApi } from "@/lib/api/time-entries"
 import { formatTime } from "@/lib/format-time"
 import { queryKeys } from "@/lib/query-keys"
+import { isDuringLastWorkingHour } from "@/lib/shifts/dashboard-stats"
 import {
   formatShiftName,
   getClockedInShifts,
@@ -37,9 +38,17 @@ export function ClockedInTable() {
   const queryClient = useQueryClient()
   const { data: shifts = [], isLoading, error } = useTodayShifts()
   const clockedIn = getClockedInShifts(shifts)
+  const [now, setNow] = useState(() => new Date())
   const [confirmTarget, setConfirmTarget] = useState<TodayShift | null>(null)
+  const [clockOutAllOpen, setClockOutAllOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const showClockOutAll = isDuringLastWorkingHour(now)
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleConfirmClockOut = async () => {
     if (!confirmTarget || submitting) return
@@ -64,6 +73,30 @@ export function ClockedInTable() {
     }
   }
 
+  const handleClockOutAll = async () => {
+    if (submitting || clockedIn.length === 0) return
+
+    setSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      await Promise.all(
+        clockedIn.map((shift) =>
+          timeEntriesApi.closeOpen(shift.scheduleBlockId, shift.studentAssistantId),
+        ),
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
+      ])
+      setClockOutAllOpen(false)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const todayDay = getTodayDay()
 
   return (
@@ -79,14 +112,32 @@ export function ClockedInTable() {
                 Active employees on shift
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-online opacity-75"></span>
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-status-online"></span>
-              </span>
-              <span className="text-sm text-status-online tabular-nums">
-                {clockedIn.length} ONLINE
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-online opacity-75"></span>
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-status-online"></span>
+                </span>
+                <span className="text-sm text-status-online tabular-nums">
+                  {clockedIn.length} clocked in
+                </span>
+              </div>
+              {showClockOutAll && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={clockedIn.length === 0 || submitting}
+                  onClick={() => {
+                    setSubmitError(null)
+                    setClockOutAllOpen(true)
+                  }}
+                  className="uppercase tracking-wider text-xs"
+                >
+                  <DoorOpen className="h-3.5 w-3.5" />
+                  Clock Out All
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -199,7 +250,7 @@ export function ClockedInTable() {
               {confirmTarget ? ` ${formatShiftName(confirmTarget)}` : ""}?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {submitError && (
+          {submitError && confirmTarget !== null && (
             <p className="text-sm text-destructive">{submitError}</p>
           )}
           <AlertDialogFooter>
@@ -210,6 +261,39 @@ export function ClockedInTable() {
               onClick={handleConfirmClockOut}
             >
               {submitting ? "Clocking out..." : "Clock Out"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={clockOutAllOpen}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setClockOutAllOpen(false)
+            setSubmitError(null)
+          }
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clock out everyone?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clock out all {clockedIn.length} employee
+              {clockedIn.length === 1 ? "" : "s"} still on shift for today.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {submitError && clockOutAllOpen && (
+            <p className="text-sm text-destructive">{submitError}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={submitting}
+              onClick={handleClockOutAll}
+            >
+              {submitting ? "Clocking out..." : "Clock Out All"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

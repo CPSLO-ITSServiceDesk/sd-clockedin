@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { sortTermsByActiveStatus } from "@/components/admin/terms/term-types"
 
 type RoleFilter = "all" | "lead" | "assistant"
 
@@ -73,6 +74,8 @@ export function StudentRecordsManager() {
     () => terms.find((term) => term.is_active)?.id ?? terms[0]?.id ?? null,
     [terms],
   )
+
+  const sortedTerms = useMemo(() => sortTermsByActiveStatus(terms), [terms])
 
   const [termId, setTermId] = useState<number | null>(null)
   const activeTermId = termId ?? defaultTermId
@@ -239,7 +242,7 @@ export function StudentRecordsManager() {
               <SelectValue placeholder="Select term" />
             </SelectTrigger>
             <SelectContent>
-              {terms.map((term) => (
+              {sortedTerms.map((term) => (
                 <SelectItem key={term.id} value={String(term.id)}>
                   {term.name}
                   {term.is_active ? " (Active)" : ""}

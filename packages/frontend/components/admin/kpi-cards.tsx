@@ -1,17 +1,53 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
-import { AlertTriangle, UserX, CalendarClock } from "lucide-react"
+import { AlertTriangle, CalendarClock, UserCheck, UserX } from "lucide-react"
 
-interface KpiCardsProps {
-  late: number
-  absent: number
-  expected: number
+import { Card, CardContent } from "@/components/ui/card"
+import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { computeDashboardKpis } from "@/lib/shifts/dashboard-stats"
+
+function KpiValue({ value, isLoading }: Readonly<{ value: number; isLoading: boolean }>) {
+  if (isLoading) {
+    return <p className="text-2xl font-bold tracking-tight shrink-0 text-muted-foreground">—</p>
+  }
+
+  return <p className="text-2xl font-bold tracking-tight shrink-0">{value}</p>
 }
 
-export function KpiCards({ late, absent, expected }: KpiCardsProps) {
+export function KpiCards() {
+  const { data: shifts = [], isLoading } = useTodayShifts()
+  const { late, absent, onShift, incomingNextTwoHours } = computeDashboardKpis(shifts)
+
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Card className="bg-card border-border relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent" />
+        <CardContent className="flex items-center gap-3 p-3">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-accent/10 border border-accent/20">
+            <UserCheck className="size-4 text-accent" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">On Shift</p>
+            <p className="text-xs text-muted-foreground">currently clocked in</p>
+          </div>
+          <KpiValue value={onShift} isLoading={isLoading} />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-transparent" />
+        <CardContent className="flex items-center gap-3 p-3">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-muted border border-border">
+            <CalendarClock className="size-4 text-muted-foreground" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Incoming</p>
+            <p className="text-xs text-muted-foreground">next 2 hours</p>
+          </div>
+          <KpiValue value={incomingNextTwoHours} isLoading={isLoading} />
+        </CardContent>
+      </Card>
+
       <Card className="bg-card border-border relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent" />
         <CardContent className="flex items-center gap-3 p-3">
@@ -20,9 +56,9 @@ export function KpiCards({ late, absent, expected }: KpiCardsProps) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Late</p>
-            <p className="text-xs text-muted-foreground">employees running late</p>
+            <p className="text-xs text-muted-foreground">clocked in after start</p>
           </div>
-          <p className="text-2xl font-bold tracking-tight shrink-0">{late}</p>
+          <KpiValue value={late} isLoading={isLoading} />
         </CardContent>
       </Card>
 
@@ -34,23 +70,9 @@ export function KpiCards({ late, absent, expected }: KpiCardsProps) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Absent</p>
-            <p className="text-xs text-muted-foreground">no-shows today</p>
+            <p className="text-xs text-muted-foreground">no clock-in today</p>
           </div>
-          <p className="text-2xl font-bold tracking-tight shrink-0">{absent}</p>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-transparent" />
-        <CardContent className="flex items-center gap-3 p-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-muted border border-border">
-            <CalendarClock className="size-4 text-muted-foreground" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Expected</p>
-            <p className="text-xs text-muted-foreground">shifts remaining</p>
-          </div>
-          <p className="text-2xl font-bold tracking-tight shrink-0">{expected}</p>
+          <KpiValue value={absent} isLoading={isLoading} />
         </CardContent>
       </Card>
     </div>
