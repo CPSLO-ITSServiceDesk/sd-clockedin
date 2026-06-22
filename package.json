@@ -1,37 +1,16 @@
 {
   "name": "sd-clockin",
-  "version": "1.0.0",
-  "description": "",
-  "homepage": "https://github.com/darryljamescruz/its-checkin#readme",
-  "bugs": {
-    "url": "https://github.com/darryljamescruz/its-checkin/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/darryljamescruz/its-checkin.git"
-  },
-  "workspaces": [
-    "packages/*"
-  ],
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
-  "main": "index.js",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently \"npm --workspace packages/react-frontend run dev\" \"npm --workspace packages/express-backend run dev\"",
-    "lint": "npm --workspace packages/react-frontend run lint && npm --workspace packages/express-backend run lint",
-    "lint:fix": "npm --workspace packages/react-frontend run lint:fix && npm --workspace packages/express-backend run lint:fix",
-    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx,js,jsx,json,css,md}\""
-  },
-  "dependencies": {
-    "concurrently": "^9.1.2"
+    "dev": "concurrently \"pnpm -r dev\" \"pnpm -r dev --filter backend\"",
+    "build": "pnpm -r build",
+    "start": "pnpm -r start",
+    "lint": "pnpm -r lint"
   },
   "devDependencies": {
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.3",
-    "prettier": "^3.6.2"
+    "typescript": "^5.7.3",
+    "concurrently": "^9.0.0"
   },
-  "packageManager": "pnpm@10.22.0+sha512.bf049efe995b28f527fd2b41ae0474ce29186f7edcb3bf545087bd61fbbebb2bf75362d1307fda09c2d288e1e499787ac12d4fcb617a974718a6051f2eee741c"
+  "packageManager": "pnpm@10.29.2+sha512.bef43fa759d91fd2da4b319a5a0d13ef7a45bb985a3d7342058470f9d2051a3ba8674e629672654686ef9443ad13a82da2beb9eeb3e0221c87b8154fff9d74b8"
 }
