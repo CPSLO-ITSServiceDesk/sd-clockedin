@@ -1,14 +1,7 @@
-import type { ScheduleBlock, ScheduleBlockDay } from "@/lib/api/scheduleBlocks"
-import { scheduleBlocksApi } from "@/lib/api/scheduleBlocks"
-import type { Schedule } from "@/lib/api/schedules"
-import { schedulesApi } from "@/lib/api/schedules"
-import type { StudentAssistant } from "@/lib/api/student-assistants"
-import { formatStudentRole, studentAssistantsApi } from "@/lib/api/student-assistants"
-import type { TimeEntry } from "@/lib/api/time-entries"
-import { timeEntriesApi } from "@/lib/api/time-entries"
+import { todayShiftsApi } from "@/lib/api/today-shifts"
 import { timeToMinutes } from "@/lib/format-time"
 
-export type TodayShiftStatus = "scheduled" | "clocked-in" | "late" | "absent"
+export type TodayShiftStatus = "incoming" | "on-time" | "late" | "early" | "absent"
 
 export interface TodayShift {
   scheduleBlockId: number
@@ -24,109 +17,27 @@ export interface TodayShift {
   status: TodayShiftStatus
 }
 
-export function getTodayDay(): ScheduleBlockDay | null {
+export function getTodayDay(): "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | null {
   const day = new Date().getDay()
   if (day === 0 || day === 6) return null
 
-  const days: ScheduleBlockDay[] = [
+  const days = [
     "monday",
     "tuesday",
     "wednesday",
     "thursday",
     "friday",
-  ]
+  ] as const
   return days[day - 1]
 }
 
-export function getTodayDateString(): string {
-  return new Date().toISOString().split("T")[0]
-}
-
-export function buildTodayShifts(
-  schedules: Schedule[],
-  scheduleBlocks: ScheduleBlock[],
-  studentAssistants: StudentAssistant[],
-  timeEntries: TimeEntry[],
-  todayDay: ScheduleBlockDay | null,
-  todayDate: string,
-): TodayShift[] {
-  if (!todayDay) return []
-
-  const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay)
-  const todaysTimeEntries = timeEntries.filter((entry) =>
-    entry.created_at?.startsWith(todayDate),
-  )
-
-  const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]))
-  const studentAssistantMap = new Map(
-    studentAssistants.map((assistant) => [assistant.id, assistant]),
-  )
-
-  const timeEntryMap = new Map<string, TimeEntry>()
-  for (const entry of todaysTimeEntries) {
-    const key = `${entry.schedule_block_id}-${entry.student_assistant_id}`
-    timeEntryMap.set(key, entry)
-  }
-
-  return todaysBlocks
-    .map((block) => {
-      const schedule =
-        block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined
-      if (!schedule?.student_assistant_id) return null
-
-      const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id)
-      if (!studentAssistant || studentAssistant.is_active === false) return null
-
-      const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`
-      const timeEntry = timeEntryMap.get(timeEntryKey) ?? null
-
-      let status: TodayShiftStatus = "scheduled"
-      if (timeEntry?.clock_in && !timeEntry.clock_out) {
-        status = "clocked-in"
-      }
-
-      return {
-        scheduleBlockId: block.id,
-        studentAssistantId: schedule.student_assistant_id,
-        firstName: studentAssistant.first_name ?? "",
-        lastName: studentAssistant.last_name ?? "",
-        role: formatStudentRole(studentAssistant.position),
-        startTime: block.start_time ?? "00:00",
-        endTime: block.end_time ?? "00:00",
-        clockInActual: timeEntry?.clock_in ?? null,
-        clockOutActual: timeEntry?.clock_out ?? null,
-        timeEntryId: timeEntry?.id ?? null,
-        status,
-      }
-    })
-    .filter((shift): shift is TodayShift => shift !== null)
-}
-
 export async function fetchTodayShifts(): Promise<TodayShift[]> {
-  const todayDay = getTodayDay()
-  const todayDate = getTodayDateString()
-
-  const [schedules, scheduleBlocks, studentAssistants, timeEntries] =
-    await Promise.all([
-      schedulesApi.list(),
-      scheduleBlocksApi.list(),
-      studentAssistantsApi.list(),
-      timeEntriesApi.list(),
-    ])
-
-  return buildTodayShifts(
-    schedules,
-    scheduleBlocks,
-    studentAssistants,
-    timeEntries,
-    todayDay,
-    todayDate,
-  )
+  return todayShiftsApi.listToday()
 }
 
 export function getClockedInShifts(shifts: TodayShift[]): TodayShift[] {
   return shifts
-    .filter((shift) => shift.status === "clocked-in")
+    .filter((shift) => shift.clockInActual && !shift.clockOutActual)
     .sort((a, b) =>
       (a.clockInActual ?? "").localeCompare(b.clockInActual ?? ""),
     )
@@ -134,7 +45,7 @@ export function getClockedInShifts(shifts: TodayShift[]): TodayShift[] {
 
 export function getPendingClockInShifts(shifts: TodayShift[]): TodayShift[] {
   return shifts
-    .filter((shift) => shift.status === "scheduled" && !shift.clockInActual)
+    .filter((shift) => !shift.clockInActual)
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
 }
 
@@ -164,4 +75,34 @@ export function getShiftInitials(shift: Pick<TodayShift, "firstName" | "lastName
     .filter(Boolean)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
+}
+
+export function formatShiftStatusLabel(status: TodayShiftStatus): string {
+  switch (status) {
+    case "incoming":
+      return "Incoming"
+    case "on-time":
+      return "On Time"
+    case "late":
+      return "Late"
+    case "early":
+      return "Early"
+    case "absent":
+      return "Absent"
+  }
+}
+
+export function getShiftStatusBadgeClassName(status: TodayShiftStatus): string {
+  switch (status) {
+    case "incoming":
+      return "border-border/80 bg-muted/40 text-muted-foreground shadow-none"
+    case "on-time":
+      return "border-transparent bg-accent/20 text-accent shadow-none"
+    case "late":
+      return "border-transparent bg-yellow-500/20 text-yellow-500 shadow-none"
+    case "early":
+      return "border-transparent bg-sky-500/20 text-sky-500 shadow-none"
+    case "absent":
+      return "border-transparent bg-destructive/20 text-destructive shadow-none"
+  }
 }

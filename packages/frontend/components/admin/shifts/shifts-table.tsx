@@ -1,6 +1,7 @@
 "use client"
 
-import { Fragment } from "react"
+import { Fragment, useCallback, useRef } from "react"
+import { Clock } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -11,6 +12,8 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { GRID_START_HOUR } from "@/components/admin/schedules/schedule-types"
 import { timeToMinutes } from "@/components/admin/schedules/schedule-utils"
 import {
@@ -20,11 +23,30 @@ import {
   normalizeTimeKey,
 } from "@/lib/format-time"
 import { useTodayShifts } from "@/hooks/use-today-shifts"
-import { formatShiftName, getTodayDay, type TodayShift } from "@/lib/shifts/today-shifts"
+import {
+  formatShiftName,
+  formatShiftStatusLabel,
+  getShiftInitials,
+  getShiftStatusBadgeClassName,
+  getTodayDay,
+  type TodayShift,
+} from "@/lib/shifts/today-shifts"
 
 export function ShiftsTable() {
   const { data: shifts = [], isLoading, error, refetch } = useTodayShifts()
   const shiftGroups = groupShiftsByStartTime(shifts)
+  const groupRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const currentGroupIndex = findCurrentGroupIndex(shiftGroups)
+
+  const scrollToNow = useCallback(() => {
+    const group = shiftGroups[currentGroupIndex]
+    if (!group) return
+
+    groupRefs.current[group.startTime]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    })
+  }, [shiftGroups, currentGroupIndex])
 
   if (isLoading) {
     return (
@@ -95,10 +117,25 @@ export function ShiftsTable() {
 
   return (
     <Card className="bg-card border-border">
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold uppercase tracking-wider">
-          All Shifts Today
-        </CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div className="space-y-1">
+          <CardTitle className="text-lg font-semibold uppercase tracking-wider">
+            All Shifts Today
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Grouped by clock-in hour
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={scrollToNow}
+          className="uppercase tracking-wider text-xs"
+        >
+          <Clock className="h-3.5 w-3.5" />
+          Go to Now
+        </Button>
       </CardHeader>
       <CardContent className="px-6 pb-6">
         <Table>
@@ -116,31 +153,69 @@ export function ShiftsTable() {
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
                 Actual Shift
               </TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs text-right">
                 Status
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {shiftGroups.map((group, groupIndex) => (
+            {shiftGroups.map((group, groupIndex) => {
+              const scheduledCount = group.shifts.length
+              const onShiftCount = group.shifts.filter(
+                (shift) => shift.clockInActual && !shift.clockOutActual,
+              ).length
+
+              return (
               <Fragment key={group.startTime}>
-                <TableRow className={`border-border hover:bg-transparent ${groupIndex > 0 ? "bg-muted/30" : ""}`}>
-                  <TableCell colSpan={COLUMN_COUNT} className="py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-base font-semibold uppercase tracking-wider text-foreground whitespace-nowrap">
+                <TableRow
+                  ref={(element) => {
+                    groupRefs.current[group.startTime] = element
+                  }}
+                  className={cn(
+                    "border-border hover:bg-transparent scroll-mt-24 bg-muted/25",
+                    groupIndex > 0 && "border-t-2",
+                  )}
+                >
+                  <TableCell
+                    colSpan={COLUMN_COUNT}
+                    className={cn("py-4", groupIndex > 0 && "pt-8")}
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="text-2xl font-bold uppercase tracking-wide text-foreground whitespace-nowrap">
                         {formatStartTimeHeader(group.startTime)}
                       </span>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className="rounded-sm px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider shadow-none"
+                        >
+                          {scheduledCount} {scheduledCount === 1 ? "person" : "people"}
+                        </Badge>
+                        {onShiftCount > 0 && (
+                          <span className="text-xs font-medium uppercase tracking-wider text-accent">
+                            {onShiftCount} on shift
+                          </span>
+                        )}
+                      </div>
                       <div className="h-px flex-1 bg-border" />
                     </div>
                   </TableCell>
                 </TableRow>
-                {group.shifts.map((shift) => (
+                {group.shifts.map((shift, shiftIndex) => (
                   <TableRow
                     key={`${shift.scheduleBlockId}-${shift.studentAssistantId}`}
-                    className="border-border"
+                    className={cn(
+                      "border-border",
+                      shiftIndex === group.shifts.length - 1 && groupIndex < shiftGroups.length - 1 && "border-b-0",
+                    )}
                   >
-                    <TableCell className="font-medium">
-                      {formatShiftName(shift)}
+                    <TableCell className="font-medium text-card-foreground">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-secondary text-xs font-bold text-secondary-foreground">
+                          {getShiftInitials(shift)}
+                        </div>
+                        {formatShiftName(shift)}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {shift.role}
@@ -151,28 +226,47 @@ export function ShiftsTable() {
                     <TableCell className="text-sm">
                       {formatActualShift(shift.clockInActual, shift.clockOutActual)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <Badge
-                        variant="secondary"
-                        className={
-                          shift.status === "scheduled" ? "bg-muted text-muted-foreground" :
-                          shift.status === "clocked-in" ? "bg-accent/20 text-accent" :
-                          shift.status === "late" ? "bg-yellow-500/20 text-yellow-500" :
-                          "bg-destructive/20 text-destructive"
-                        }
+                        variant={shift.status === "incoming" ? "outline" : "secondary"}
+                        className={getShiftStatusBadgeClassName(shift.status)}
                       >
-                        {shift.status.charAt(0).toUpperCase() + shift.status.slice(1)}
+                        {formatShiftStatusLabel(shift.status)}
                       </Badge>
                     </TableCell>
                   </TableRow>
                 ))}
               </Fragment>
-            ))}
+              )
+            })}
           </TableBody>
         </Table>
       </CardContent>
     </Card>
   )
+}
+
+function findCurrentGroupIndex(
+  groups: { startTime: string }[],
+  now: Date = new Date(),
+): number {
+  if (groups.length === 0) return -1
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  let bestIndex = 0
+
+  for (let i = 0; i < groups.length; i++) {
+    const groupMinutes = timeToMinutes(groups[i].startTime)
+    if (Number.isNaN(groupMinutes)) continue
+
+    if (groupMinutes <= nowMinutes) {
+      bestIndex = i
+    } else {
+      break
+    }
+  }
+
+  return bestIndex
 }
 
 function groupShiftsByStartTime(

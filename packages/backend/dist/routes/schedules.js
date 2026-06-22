@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const express_validator_1 = require("express-validator");
+const schedulesController_1 = require("../controllers/schedulesController");
+const scheduleBlocksController_1 = require("../controllers/scheduleBlocksController");
+const validate_1 = require("../middleware/validate");
+const router = (0, express_1.Router)();
+router.get('/', schedulesController_1.schedulesController.getAll);
+router.get('/:id', (0, express_validator_1.param)('id').isInt().withMessage('id must be an integer'), validate_1.validate, schedulesController_1.schedulesController.getById);
+router.get('/:id/blocks', (0, express_validator_1.param)('id').isInt().withMessage('schedule_id must be an integer'), validate_1.validate, scheduleBlocksController_1.scheduleBlocksController.getByScheduleId);
+router.post('/', (0, express_validator_1.body)('academic_term_id').optional().isInt(), (0, express_validator_1.body)('student_assistant_id').optional().isInt(), (0, express_validator_1.body)('created_at').optional().isString(), validate_1.validate, schedulesController_1.schedulesController.create);
+router.put('/:id', (0, express_validator_1.param)('id').isInt().withMessage('id must be an integer'), (0, express_validator_1.body)('academic_term_id').optional().isInt(), (0, express_validator_1.body)('student_assistant_id').optional().isInt(), (0, express_validator_1.body)('created_at').optional().isString(), validate_1.validate, schedulesController_1.schedulesController.update);
+router.delete('/:id', (0, express_validator_1.param)('id').isInt().withMessage('id must be an integer'), validate_1.validate, schedulesController_1.schedulesController.remove);
+exports.default = router;
