@@ -34,6 +34,21 @@ export const schedulesService = {
     return data;
   },
 
+  async getByStudentAndTerm(
+    studentAssistantId: number,
+    academicTermId: number,
+  ): Promise<Schedule | null> {
+    const { data, error } = await supabase
+      .from('schedules')
+      .select('*')
+      .eq('student_assistant_id', studentAssistantId)
+      .eq('academic_term_id', academicTermId)
+      .maybeSingle();
+
+    if (error) throw new HttpError(500, error.message);
+    return data;
+  },
+
   async create(payload: ScheduleInsert): Promise<Schedule> {
     const { data, error } = await supabase
       .from('schedules')
