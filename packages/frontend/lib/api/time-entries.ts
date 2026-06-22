@@ -47,4 +47,10 @@ export const timeEntriesApi = {
     apiFetch<void>(`/time-entries/${id}`, {
       method: "DELETE",
     }),
+
+  closeOpen: (schedule_block_id: number, student_assistant_id: number) =>
+    apiFetch<TimeEntry>("/time-entries/close-open", {
+      method: "PATCH",
+      body: JSON.stringify({ schedule_block_id, student_assistant_id }),
+    }),
 }

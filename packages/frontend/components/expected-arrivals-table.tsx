@@ -12,47 +12,18 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ClockModal } from "@/components/clock-modal"
-
-interface ExpectedArrival {
-  id: string
-  name: string
-  role: string
-  scheduleStart: string
-  scheduleEnd: string
-}
-
-const expectedArrivals: ExpectedArrival[] = [
-  {
-    id: "1",
-    name: "David Kim",
-    role: "Senior Engineer",
-    scheduleStart: "13:00",
-    scheduleEnd: "22:00",
-  },
-  {
-    id: "2",
-    name: "Lisa Thompson",
-    role: "Marketing Manager",
-    scheduleStart: "13:30",
-    scheduleEnd: "22:30",
-  },
-  {
-    id: "3",
-    name: "Robert Garcia",
-    role: "Sales Representative",
-    scheduleStart: "14:00",
-    scheduleEnd: "23:00",
-  },
-  {
-    id: "4",
-    name: "Amanda Lee",
-    role: "HR Coordinator",
-    scheduleStart: "14:30",
-    scheduleEnd: "23:30",
-  },
-]
+import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { formatTimeRange } from "@/lib/format-time"
+import {
+  formatShiftName,
+  getExpectedArrivalShifts,
+  getShiftInitials,
+  getTodayDay,
+} from "@/lib/shifts/today-shifts"
 
 export function ExpectedArrivalsTable() {
+  const { data: shifts = [], isLoading, error } = useTodayShifts()
+  const expectedArrivals = getExpectedArrivalShifts(shifts)
   const [modalOpen, setModalOpen] = useState(false)
   const [prefillName, setPrefillName] = useState("")
 
@@ -60,6 +31,8 @@ export function ExpectedArrivalsTable() {
     setPrefillName(name)
     setModalOpen(true)
   }
+
+  const todayDay = getTodayDay()
 
   return (
     <>
@@ -99,38 +72,67 @@ export function ExpectedArrivalsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {expectedArrivals.map((arrival) => (
-              <TableRow
-                key={arrival.id}
-                className="border-border hover:bg-secondary/50 transition-colors"
-              >
-                <TableCell className="font-medium text-card-foreground">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
-                      {arrival.name.split(" ").map((n) => n[0]).join("")}
-                    </div>
-                    {arrival.name}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {arrival.role}
-                </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
-                  {arrival.scheduleStart} — {arrival.scheduleEnd}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleClockInClick(arrival.name)}
-                    className="text-accent hover:bg-accent/10 hover:text-accent"
-                    aria-label={`Clock in ${arrival.name}`}
-                  >
-                    <DoorOpen className="h-4 w-4" />
-                  </Button>
+            {isLoading ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                  Loading...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : error ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={4} className="py-8 text-center text-sm text-destructive">
+                  Failed to load expected arrivals
+                </TableCell>
+              </TableRow>
+            ) : !todayDay ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                  No shifts scheduled for weekends
+                </TableCell>
+              </TableRow>
+            ) : expectedArrivals.length === 0 ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                  No pending arrivals for today
+                </TableCell>
+              </TableRow>
+            ) : (
+              expectedArrivals.map((shift) => {
+                const name = formatShiftName(shift)
+                return (
+                  <TableRow
+                    key={`${shift.scheduleBlockId}-${shift.studentAssistantId}`}
+                    className="border-border hover:bg-secondary/50 transition-colors"
+                  >
+                    <TableCell className="font-medium text-card-foreground">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
+                          {getShiftInitials(shift)}
+                        </div>
+                        {name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {shift.role}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatTimeRange(shift.startTime, shift.endTime)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleClockInClick(name)}
+                        className="text-accent hover:bg-accent/10 hover:text-accent"
+                        aria-label={`Clock in ${name}`}
+                      >
+                        <DoorOpen className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
           </TableBody>
         </Table>
       </div>
@@ -139,7 +141,10 @@ export function ExpectedArrivalsTable() {
         open={modalOpen}
         mode="in"
         prefillName={prefillName}
-        onClose={() => { setModalOpen(false); setPrefillName("") }}
+        onClose={() => {
+          setModalOpen(false)
+          setPrefillName("")
+        }}
       />
     </>
   )

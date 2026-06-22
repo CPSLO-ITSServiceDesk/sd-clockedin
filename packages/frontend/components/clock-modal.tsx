@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Search, X } from "lucide-react"
 import {
   Dialog,
@@ -9,6 +10,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { timeEntriesApi } from "@/lib/api/time-entries"
+import { queryKeys } from "@/lib/query-keys"
+import {
+  formatShiftName,
+  getClockedInShifts,
+  getPendingClockInShifts,
+  getShiftInitials,
+  type TodayShift,
+} from "@/lib/shifts/today-shifts"
 
 interface ClockModalProps {
   open: boolean
@@ -17,37 +28,80 @@ interface ClockModalProps {
   prefillName?: string
 }
 
-const allEmployees = [
-  { id: "1", name: "Alex Chen", role: "Software Engineer" },
-  { id: "2", name: "Sarah Martinez", role: "UI Designer" },
-  { id: "3", name: "James Wilson", role: "Operations Lead" },
-  { id: "4", name: "Emily Zhang", role: "Backend Developer" },
-  { id: "5", name: "Michael Ross", role: "Support Specialist" },
-  { id: "6", name: "David Kim", role: "Senior Engineer" },
-  { id: "7", name: "Lisa Thompson", role: "Marketing Manager" },
-  { id: "8", name: "Robert Garcia", role: "Sales Representative" },
-  { id: "9", name: "Amanda Lee", role: "HR Coordinator" },
-]
-
 export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModalProps) {
+  const queryClient = useQueryClient()
+  const { data: shifts = [], isLoading } = useTodayShifts()
   const [query, setQuery] = useState(prefillName)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setQuery(prefillName)
+      setSubmitError(null)
+    }
+  }, [open, prefillName])
+
+  const eligibleShifts =
+    mode === "in" ? getPendingClockInShifts(shifts) : getClockedInShifts(shifts)
 
   const filtered = query.trim().length === 0
-    ? allEmployees
-    : allEmployees.filter((e) =>
-        e.name.toLowerCase().includes(query.toLowerCase()) ||
-        e.role.toLowerCase().includes(query.toLowerCase())
-      )
+    ? eligibleShifts
+    : eligibleShifts.filter((shift) => {
+        const search = query.toLowerCase()
+        const name = formatShiftName(shift).toLowerCase()
+        const role = shift.role.toLowerCase()
+        const firstName = shift.firstName.toLowerCase()
+        const lastName = shift.lastName.toLowerCase()
+        return (
+          name.includes(search) ||
+          role.includes(search) ||
+          firstName.includes(search) ||
+          lastName.includes(search)
+        )
+      })
 
-  const handleSelect = (employee: typeof allEmployees[0]) => {
-    console.log(`Clock ${mode}:`, employee.name)
-    setQuery("")
-    onClose()
+  const invalidateShiftData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
+    ])
+  }
+
+  const handleSelect = async (shift: TodayShift) => {
+    if (submitting) return
+
+    setSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      if (mode === "in") {
+        await timeEntriesApi.create({
+          schedule_block_id: shift.scheduleBlockId,
+          student_assistant_id: shift.studentAssistantId,
+          clock_in: new Date().toISOString(),
+        })
+      } else {
+        await timeEntriesApi.closeOpen(
+          shift.scheduleBlockId,
+          shift.studentAssistantId,
+        )
+      }
+
+      await invalidateShiftData()
+      setQuery("")
+      onClose()
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleOpenChange = (val: boolean) => {
     if (!val) {
       setQuery("")
+      setSubmitError(null)
       onClose()
     }
   }
@@ -63,7 +117,6 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
           </DialogTitle>
         </DialogHeader>
 
-        {/* Search */}
         <div className="px-4 py-3 border-b border-border">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -85,41 +138,54 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
           </div>
         </div>
 
-        {/* Results */}
         <div className="max-h-72 overflow-y-auto">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="px-6 py-8 text-center text-muted-foreground text-sm uppercase tracking-wider">
+              Loading...
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="px-6 py-8 text-center text-muted-foreground text-sm uppercase tracking-wider">
               No employees found
             </div>
           ) : (
-            filtered.map((employee) => (
-              <button
-                key={employee.id}
-                onClick={() => handleSelect(employee)}
-                className="w-full flex items-center gap-3 px-6 py-3 hover:bg-secondary/60 transition-colors border-b border-border/50 last:border-0 text-left group"
-              >
-                <div className="h-9 w-9 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground shrink-0 group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
-                  {employee.name.split(" ").map((n) => n[0]).join("")}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-medium text-card-foreground text-sm truncate">
-                    {employee.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {employee.role}
-                  </div>
-                </div>
-                <span
-                  className={`ml-auto text-xs uppercase tracking-wider shrink-0 ${
-                    isClockIn ? "text-accent" : "text-destructive"
-                  }`}
+            filtered.map((shift) => {
+              const name = formatShiftName(shift)
+              return (
+                <button
+                  key={`${shift.scheduleBlockId}-${shift.studentAssistantId}`}
+                  onClick={() => handleSelect(shift)}
+                  disabled={submitting}
+                  className="w-full flex items-center gap-3 px-6 py-3 hover:bg-secondary/60 transition-colors border-b border-border/50 last:border-0 text-left group disabled:opacity-50"
                 >
-                  {isClockIn ? "In" : "Out"}
-                </span>
-              </button>
-            ))
+                  <div className="h-9 w-9 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground shrink-0 group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
+                    {getShiftInitials(shift)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium text-card-foreground text-sm truncate">
+                      {name}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {shift.role}
+                    </div>
+                  </div>
+                  <span
+                    className={`ml-auto text-xs uppercase tracking-wider shrink-0 ${
+                      isClockIn ? "text-accent" : "text-destructive"
+                    }`}
+                  >
+                    {isClockIn ? "In" : "Out"}
+                  </span>
+                </button>
+              )
+            })
           )}
         </div>
+
+        {submitError && (
+          <div className="px-6 py-3 border-t border-border text-sm text-destructive">
+            {submitError}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

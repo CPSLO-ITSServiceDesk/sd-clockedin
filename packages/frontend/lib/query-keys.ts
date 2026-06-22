@@ -13,4 +13,10 @@ export const queryKeys = {
     bySchedule: (scheduleId: number) =>
       ["schedule-blocks", scheduleId] as const,
   },
+  timeEntries: {
+    all: ["time-entries"] as const,
+  },
+  todayShifts: {
+    all: ["today-shifts"] as const,
+  },
 } as const

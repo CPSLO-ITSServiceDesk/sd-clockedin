@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { ClockModal } from "@/components/clock-modal"
+import { formatLiveClockParts } from "@/lib/format-time"
 
 export function LiveClock() {
   const [time, setTime] = useState<Date | null>(null)
@@ -29,9 +30,7 @@ export function LiveClock() {
     )
   }
 
-  const hours = time.getHours().toString().padStart(2, "0")
-  const minutes = time.getMinutes().toString().padStart(2, "0")
-  const seconds = time.getSeconds().toString().padStart(2, "0")
+  const { hours, minutes, seconds, period } = formatLiveClockParts(time)
 
   const dateStr = time.toLocaleDateString("en-US", {
     weekday: "long",
@@ -49,6 +48,9 @@ export function LiveClock() {
           <span>{minutes}</span>
           <span className="text-accent animate-pulse">:</span>
           <span className="text-muted-foreground">{seconds}</span>
+          <span className="ml-3 text-4xl md:text-5xl lg:text-6xl text-muted-foreground">
+            {period}
+          </span>
         </div>
         <div className="mt-4 text-muted-foreground uppercase tracking-[0.3em] text-sm">
           {dateStr}

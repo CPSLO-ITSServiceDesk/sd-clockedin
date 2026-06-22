@@ -1,8 +1,18 @@
 "use client"
 
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { DoorOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Table,
   TableBody,
@@ -11,62 +21,50 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ClockModal } from "@/components/clock-modal"
-
-interface ClockedInEmployee {
-  id: string
-  name: string
-  role: string
-  clockedInAt: string
-  shiftEnd: string
-}
-
-const clockedInEmployees: ClockedInEmployee[] = [
-  {
-    id: "1",
-    name: "Alex Chen",
-    role: "Software Engineer",
-    clockedInAt: "08:00",
-    shiftEnd: "17:00",
-  },
-  {
-    id: "2",
-    name: "Sarah Martinez",
-    role: "UI Designer",
-    clockedInAt: "08:15",
-    shiftEnd: "17:15",
-  },
-  {
-    id: "3",
-    name: "James Wilson",
-    role: "Operations Lead",
-    clockedInAt: "08:30",
-    shiftEnd: "17:30",
-  },
-  {
-    id: "4",
-    name: "Emily Zhang",
-    role: "Backend Developer",
-    clockedInAt: "09:00",
-    shiftEnd: "18:00",
-  },
-  {
-    id: "5",
-    name: "Michael Ross",
-    role: "Support Specialist",
-    clockedInAt: "09:15",
-    shiftEnd: "18:15",
-  },
-]
+import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { timeEntriesApi } from "@/lib/api/time-entries"
+import { formatTime } from "@/lib/format-time"
+import { queryKeys } from "@/lib/query-keys"
+import {
+  formatShiftName,
+  getClockedInShifts,
+  getShiftInitials,
+  getTodayDay,
+  type TodayShift,
+} from "@/lib/shifts/today-shifts"
 
 export function ClockedInTable() {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [prefillName, setPrefillName] = useState("")
+  const queryClient = useQueryClient()
+  const { data: shifts = [], isLoading, error } = useTodayShifts()
+  const clockedIn = getClockedInShifts(shifts)
+  const [confirmTarget, setConfirmTarget] = useState<TodayShift | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const handleClockOutClick = (name: string) => {
-    setPrefillName(name)
-    setModalOpen(true)
+  const handleConfirmClockOut = async () => {
+    if (!confirmTarget || submitting) return
+
+    setSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      await timeEntriesApi.closeOpen(
+        confirmTarget.scheduleBlockId,
+        confirmTarget.studentAssistantId,
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
+      ])
+      setConfirmTarget(null)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setSubmitting(false)
+    }
   }
+
+  const todayDay = getTodayDay()
 
   return (
     <>
@@ -87,7 +85,7 @@ export function ClockedInTable() {
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-status-online"></span>
               </span>
               <span className="text-sm text-status-online tabular-nums">
-                {clockedInEmployees.length} ONLINE
+                {clockedIn.length} ONLINE
               </span>
             </div>
           </div>
@@ -113,51 +111,109 @@ export function ClockedInTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {clockedInEmployees.map((employee) => (
-              <TableRow
-                key={employee.id}
-                className="border-border hover:bg-secondary/50 transition-colors"
-              >
-                <TableCell className="font-medium text-card-foreground">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
-                      {employee.name.split(" ").map((n) => n[0]).join("")}
-                    </div>
-                    {employee.name}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {employee.role}
-                </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
-                  {employee.clockedInAt}
-                </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
-                  {employee.shiftEnd}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleClockOutClick(employee.name)}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    aria-label={`Clock out ${employee.name}`}
-                  >
-                    <DoorOpen className="h-4 w-4" />
-                  </Button>
+            {isLoading ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                  Loading...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : error ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-destructive">
+                  Failed to load clocked-in employees
+                </TableCell>
+              </TableRow>
+            ) : !todayDay ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                  No shifts scheduled for weekends
+                </TableCell>
+              </TableRow>
+            ) : clockedIn.length === 0 ? (
+              <TableRow className="border-border">
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                  No one is currently clocked in
+                </TableCell>
+              </TableRow>
+            ) : (
+              clockedIn.map((shift) => {
+                const name = formatShiftName(shift)
+                return (
+                  <TableRow
+                    key={`${shift.scheduleBlockId}-${shift.studentAssistantId}`}
+                    className="border-border hover:bg-secondary/50 transition-colors"
+                  >
+                    <TableCell className="font-medium text-card-foreground">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
+                          {getShiftInitials(shift)}
+                        </div>
+                        {name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {shift.role}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {shift.clockInActual ? formatTime(shift.clockInActual) : "--"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatTime(shift.endTime)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSubmitError(null)
+                          setConfirmTarget(shift)
+                        }}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={`Clock out ${name}`}
+                      >
+                        <DoorOpen className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
           </TableBody>
         </Table>
       </div>
 
-      <ClockModal
-        open={modalOpen}
-        mode="out"
-        prefillName={prefillName}
-        onClose={() => { setModalOpen(false); setPrefillName("") }}
-      />
+      <AlertDialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setConfirmTarget(null)
+            setSubmitError(null)
+          }
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clock out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to clock out
+              {confirmTarget ? ` ${formatShiftName(confirmTarget)}` : ""}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {submitError && (
+            <p className="text-sm text-destructive">{submitError}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={submitting}
+              onClick={handleConfirmClockOut}
+            >
+              {submitting ? "Clocking out..." : "Clock Out"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

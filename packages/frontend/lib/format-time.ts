@@ -31,6 +31,16 @@ function parseTimeValue(value: string): Date | null {
   return new Date(2000, 0, 1, hours, minutes)
 }
 
+/** Convert a time-of-day or ISO timestamp to minutes since midnight. */
+export function timeToMinutes(value: string): number {
+  const normalized = normalizeTimeKey(value)
+  const [hours, minutes] = normalized.split(":").map(Number)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return Number.NaN
+  }
+  return hours * 60 + minutes
+}
+
 /** Normalize time strings to HH:mm for sorting and grouping. */
 export function normalizeTimeKey(value: string): string {
   const date = parseTimeValue(value)
@@ -41,6 +51,35 @@ export function normalizeTimeKey(value: string): string {
   const hours = date.getHours().toString().padStart(2, "0")
   const minutes = date.getMinutes().toString().padStart(2, "0")
   return `${hours}:${minutes}`
+}
+
+const LIVE_CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+}
+
+export interface LiveClockParts {
+  hours: string
+  minutes: string
+  period: string
+  seconds: string
+}
+
+/** Split a Date into 12-hour clock parts for the live clock display. */
+export function formatLiveClockParts(date: Date): LiveClockParts {
+  const parts = new Intl.DateTimeFormat("en-US", LIVE_CLOCK_FORMAT).formatToParts(date)
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ""
+
+  return {
+    hours: get("hour"),
+    minutes: get("minute"),
+    seconds: get("second"),
+    period: get("dayPeriod"),
+  }
 }
 
 /** Format a time-of-day or ISO timestamp as "8:00 AM". */
