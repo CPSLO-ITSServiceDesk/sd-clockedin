@@ -18,6 +18,17 @@ export type TimeEntryInput = {
   student_assistant_id?: number | null
 }
 
+export interface MatchedBlock {
+  id: number
+  startTime: string
+  endTime: string
+}
+
+export interface ClockInResult {
+  timeEntry: TimeEntry
+  matchedBlock: MatchedBlock | null
+}
+
 export const timeEntriesApi = {
   list: () => apiFetch<TimeEntry[]>("/time-entries"),
 
@@ -37,6 +48,12 @@ export const timeEntriesApi = {
       body: JSON.stringify(payload),
     }),
 
+  clockIn: (payload: { student_assistant_id: number; clock_in?: string }) =>
+    apiFetch<ClockInResult>("/time-entries/clock-in", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   update: (id: number, payload: Partial<TimeEntryInput>) =>
     apiFetch<TimeEntry>(`/time-entries/${id}`, {
       method: "PUT",
@@ -52,5 +69,11 @@ export const timeEntriesApi = {
     apiFetch<TimeEntry>("/time-entries/close-open", {
       method: "PATCH",
       body: JSON.stringify({ schedule_block_id, student_assistant_id }),
+    }),
+
+  closeOpenByAssistant: (student_assistant_id: number) =>
+    apiFetch<TimeEntry>("/time-entries/close-open-by-assistant", {
+      method: "PATCH",
+      body: JSON.stringify({ student_assistant_id }),
     }),
 }

@@ -1,10 +1,24 @@
+import { resolveNearestBlock } from '../lib/resolveNearestBlock';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
+import { scheduleBlocksService } from './scheduleBlocksService';
+import { schedulesService } from './schedulesService';
+import { studentAssistantService } from './studentAssistantService';
+import { getTodayDateString, getTodayDay } from './todayShiftsService';
 
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
 type TimeEntryInsert = Database['public']['Tables']['time_entry']['Insert'];
 type TimeEntryUpdate = Database['public']['Tables']['time_entry']['Update'];
+
+export interface ClockInResult {
+  timeEntry: TimeEntry;
+  matchedBlock: {
+    id: number;
+    startTime: string;
+    endTime: string;
+  } | null;
+}
 
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
@@ -52,6 +66,23 @@ export const timeEntryService = {
     return data;
   },
 
+  async getOpenByAssistant(student_assistant_id: number): Promise<TimeEntry | null> {
+    const { data, error } = await supabase
+      .from('time_entry')
+      .select('*')
+      .eq('student_assistant_id', student_assistant_id)
+      .is('clock_out', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === NO_ROWS) return null;
+      throw new HttpError(500, error.message);
+    }
+    return data;
+  },
+
   async create(payload: TimeEntryInsert): Promise<TimeEntry> {
     const { data, error } = await supabase
       .from('time_entry')
@@ -85,5 +116,104 @@ export const timeEntryService = {
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
+  },
+
+  async clockIn(
+    params: { student_assistant_id: number; clock_in?: string },
+    now: Date = new Date(),
+  ): Promise<ClockInResult> {
+    const { student_assistant_id, clock_in } = params;
+
+    const studentAssistant = await studentAssistantService.getById(student_assistant_id);
+    if (!studentAssistant || studentAssistant.is_active === false) {
+      throw new HttpError(404, 'Student assistant not found or inactive');
+    }
+
+    const openEntry = await this.getOpenByAssistant(student_assistant_id);
+    if (openEntry) {
+      throw new HttpError(409, 'Student is already clocked in');
+    }
+
+    const todayDay = getTodayDay(now);
+    const todayDate = getTodayDateString(now);
+    const [schedules, scheduleBlocks, timeEntries] = await Promise.all([
+      schedulesService.getAll(),
+      scheduleBlocksService.getAll(),
+      this.getAll(),
+    ]);
+
+    const studentScheduleIds = new Set(
+      schedules
+        .filter((schedule) => schedule.student_assistant_id === student_assistant_id)
+        .map((schedule) => schedule.id),
+    );
+
+    const todaysBlocks = todayDay
+      ? scheduleBlocks.filter(
+          (block) =>
+            block.days === todayDay &&
+            block.schedule_id != null &&
+            studentScheduleIds.has(block.schedule_id),
+        )
+      : [];
+
+    const todaysTimeEntries = timeEntries.filter(
+      (entry) =>
+        entry.created_at?.startsWith(todayDate) &&
+        entry.student_assistant_id === student_assistant_id,
+    );
+
+    const timeEntryMap = new Map<string, TimeEntry>();
+    for (const entry of todaysTimeEntries) {
+      const key = `${entry.schedule_block_id}-${entry.student_assistant_id}`;
+      timeEntryMap.set(key, entry);
+    }
+
+    const candidates = todaysBlocks.map((block) => {
+      const timeEntryKey = `${block.id}-${student_assistant_id}`;
+      const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
+      return {
+        scheduleBlockId: block.id,
+        startTime: block.start_time ?? '00:00',
+        endTime: block.end_time ?? '00:00',
+        clockInActual: timeEntry?.clock_in ?? null,
+      };
+    });
+
+    const matched = resolveNearestBlock(candidates, now);
+    const clockInTime = clock_in ?? new Date().toISOString();
+
+    const timeEntry = await this.create({
+      schedule_block_id: matched?.scheduleBlockId ?? null,
+      student_assistant_id,
+      clock_in: clockInTime,
+    });
+
+    return {
+      timeEntry,
+      matchedBlock: matched
+        ? {
+            id: matched.scheduleBlockId,
+            startTime: matched.startTime,
+            endTime: matched.endTime,
+          }
+        : null,
+    };
+  },
+
+  async closeOpenByAssistant(student_assistant_id: number): Promise<TimeEntry> {
+    const openEntry = await this.getOpenByAssistant(student_assistant_id);
+    if (!openEntry) {
+      throw new HttpError(404, 'No open time entry found for this student');
+    }
+
+    const updated = await this.update(openEntry.id, {
+      clock_out: new Date().toISOString(),
+    });
+    if (!updated) {
+      throw new HttpError(500, 'Failed to update time entry');
+    }
+
+    return updated;
   },
 };

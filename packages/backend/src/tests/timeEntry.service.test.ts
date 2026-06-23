@@ -10,5 +10,8 @@ describe('timeEntryService - basic existence', () => {
     expect(typeof timeEntryService.update).toBe('function');
     expect(typeof timeEntryService.remove).toBe('function');
     expect(typeof timeEntryService.getOpenByScheduleAndAssistant).toBe('function');
+    expect(typeof timeEntryService.getOpenByAssistant).toBe('function');
+    expect(typeof timeEntryService.clockIn).toBe('function');
+    expect(typeof timeEntryService.closeOpenByAssistant).toBe('function');
   });
 });

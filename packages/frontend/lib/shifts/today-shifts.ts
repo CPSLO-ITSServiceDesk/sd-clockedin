@@ -1,10 +1,11 @@
 import { todayShiftsApi } from "@/lib/api/today-shifts"
+import { formatStudentRole, type StudentAssistant } from "@/lib/api/student-assistants"
 import { timeToMinutes } from "@/lib/format-time"
 
 export type TodayShiftStatus = "incoming" | "on-time" | "late" | "early" | "absent"
 
 export interface TodayShift {
-  scheduleBlockId: number
+  scheduleBlockId: number | null
   studentAssistantId: number
   firstName: string
   lastName: string
@@ -15,6 +16,13 @@ export interface TodayShift {
   clockOutActual: string | null
   timeEntryId: number | null
   status: TodayShiftStatus
+}
+
+export interface ClockInStudentOption {
+  studentAssistantId: number
+  firstName: string
+  lastName: string
+  role: string
 }
 
 export function getTodayDay(): "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | null {
@@ -43,9 +51,102 @@ export function getClockedInShifts(shifts: TodayShift[]): TodayShift[] {
     )
 }
 
+export function getClockedInStudents(shifts: TodayShift[]): TodayShift[] {
+  const byStudent = new Map<number, TodayShift>()
+
+  for (const shift of getClockedInShifts(shifts)) {
+    if (!byStudent.has(shift.studentAssistantId)) {
+      byStudent.set(shift.studentAssistantId, shift)
+    }
+  }
+
+  return Array.from(byStudent.values()).sort((a, b) =>
+    (a.clockInActual ?? "").localeCompare(b.clockInActual ?? ""),
+  )
+}
+
+export function getClockedInStudentIds(shifts: TodayShift[]): Set<number> {
+  return new Set(getClockedInStudents(shifts).map((shift) => shift.studentAssistantId))
+}
+
+export function getClockInStudentOptions(
+  students: StudentAssistant[],
+  shifts: TodayShift[],
+): ClockInStudentOption[] {
+  const clockedInIds = getClockedInStudentIds(shifts)
+  const roleOrder = (role: string) => (role === "Student Lead" ? 0 : 1)
+
+  return students
+    .filter((student) => student.is_active !== false && !clockedInIds.has(student.id))
+    .map((student) => ({
+      studentAssistantId: student.id,
+      firstName: student.first_name ?? "",
+      lastName: student.last_name ?? "",
+      role: formatStudentRole(student.position),
+    }))
+    .sort((a, b) => {
+      const roleDiff = roleOrder(a.role) - roleOrder(b.role)
+      if (roleDiff !== 0) return roleDiff
+      return formatShiftName(a).localeCompare(formatShiftName(b))
+    })
+}
+
 export function getPendingClockInShifts(shifts: TodayShift[]): TodayShift[] {
   return shifts
     .filter((shift) => !shift.clockInActual)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+}
+
+function pickNearestPendingShift(
+  shifts: TodayShift[],
+  now: Date = new Date(),
+): TodayShift | null {
+  if (shifts.length === 0) return null
+
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const pending = shifts.filter((shift) => !shift.clockInActual)
+  if (pending.length === 0) return null
+
+  const inWindow = pending.filter((shift) => {
+    const start = timeToMinutes(shift.startTime)
+    const end = timeToMinutes(shift.endTime)
+    if (Number.isNaN(start) || Number.isNaN(end)) return false
+    return nowMin >= start && nowMin <= end
+  })
+
+  const pool = inWindow.length > 0 ? inWindow : pending
+  const useStartTieBreak = inWindow.length > 0
+
+  return pool.reduce<TodayShift | null>((best, shift) => {
+    const start = timeToMinutes(shift.startTime)
+    if (Number.isNaN(start)) return best
+
+    const dist = useStartTieBreak ? start : Math.abs(nowMin - start)
+    if (best === null) return shift
+
+    const bestStart = timeToMinutes(best.startTime)
+    const bestDist = useStartTieBreak ? bestStart : Math.abs(nowMin - bestStart)
+
+    return dist < bestDist ? shift : best
+  }, null)
+}
+
+export function getPendingClockInStudents(
+  shifts: TodayShift[],
+  now: Date = new Date(),
+): TodayShift[] {
+  const pending = getPendingClockInShifts(shifts)
+  const byStudent = new Map<number, TodayShift[]>()
+
+  for (const shift of pending) {
+    const list = byStudent.get(shift.studentAssistantId) ?? []
+    list.push(shift)
+    byStudent.set(shift.studentAssistantId, list)
+  }
+
+  return Array.from(byStudent.values())
+    .map((studentShifts) => pickNearestPendingShift(studentShifts, now))
+    .filter((shift): shift is TodayShift => shift !== null)
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
 }
 
@@ -64,6 +165,25 @@ export function getExpectedArrivalShifts(
 
     return startMinutes >= nowMinutes && startMinutes <= windowEndMinutes
   })
+}
+
+export function getExpectedArrivalStudents(
+  shifts: TodayShift[],
+  now: Date = new Date(),
+): TodayShift[] {
+  const expected = getExpectedArrivalShifts(shifts, now)
+  const byStudent = new Map<number, TodayShift[]>()
+
+  for (const shift of expected) {
+    const list = byStudent.get(shift.studentAssistantId) ?? []
+    list.push(shift)
+    byStudent.set(shift.studentAssistantId, list)
+  }
+
+  return Array.from(byStudent.values())
+    .map((studentShifts) => pickNearestPendingShift(studentShifts, now))
+    .filter((shift): shift is TodayShift => shift !== null)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
 }
 
 export function formatShiftName(shift: Pick<TodayShift, "firstName" | "lastName">): string {

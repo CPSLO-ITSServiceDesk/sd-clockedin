@@ -28,7 +28,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { isDuringLastWorkingHour } from "@/lib/shifts/dashboard-stats"
 import {
   formatShiftName,
-  getClockedInShifts,
+  getClockedInStudents,
   getShiftInitials,
   getTodayDay,
   type TodayShift,
@@ -37,7 +37,7 @@ import {
 export function ClockedInTable() {
   const queryClient = useQueryClient()
   const { data: shifts = [], isLoading, error } = useTodayShifts()
-  const clockedIn = getClockedInShifts(shifts)
+  const clockedIn = getClockedInStudents(shifts)
   const [now, setNow] = useState(() => new Date())
   const [confirmTarget, setConfirmTarget] = useState<TodayShift | null>(null)
   const [clockOutAllOpen, setClockOutAllOpen] = useState(false)
@@ -57,10 +57,7 @@ export function ClockedInTable() {
     setSubmitError(null)
 
     try {
-      await timeEntriesApi.closeOpen(
-        confirmTarget.scheduleBlockId,
-        confirmTarget.studentAssistantId,
-      )
+      await timeEntriesApi.closeOpenByAssistant(confirmTarget.studentAssistantId)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
@@ -82,7 +79,7 @@ export function ClockedInTable() {
     try {
       await Promise.all(
         clockedIn.map((shift) =>
-          timeEntriesApi.closeOpen(shift.scheduleBlockId, shift.studentAssistantId),
+          timeEntriesApi.closeOpenByAssistant(shift.studentAssistantId),
         ),
       )
       await Promise.all([
@@ -191,7 +188,7 @@ export function ClockedInTable() {
                 const name = formatShiftName(shift)
                 return (
                   <TableRow
-                    key={`${shift.scheduleBlockId}-${shift.studentAssistantId}`}
+                    key={shift.studentAssistantId}
                     className="border-border hover:bg-secondary/50 transition-colors"
                   >
                     <TableCell className="font-medium text-card-foreground">
@@ -209,7 +206,7 @@ export function ClockedInTable() {
                       {shift.clockInActual ? formatTime(shift.clockInActual) : "--"}
                     </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">
-                      {formatTime(shift.endTime)}
+                      {shift.scheduleBlockId == null ? "Unscheduled" : formatTime(shift.endTime)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

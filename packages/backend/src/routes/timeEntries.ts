@@ -7,6 +7,14 @@ const router = Router();
 
 router.get('/', timeEntryController.getAll);
 
+router.post(
+  '/clock-in',
+  body('student_assistant_id').isInt().withMessage('student_assistant_id must be an integer'),
+  body('clock_in').optional().isString(),
+  validate,
+  timeEntryController.clockIn,
+);
+
 router.get(
   '/:id',
   param('id').isInt().withMessage('id must be an integer'),
@@ -51,6 +59,13 @@ router.patch(
   body('student_assistant_id').isInt().withMessage('student_assistant_id must be an integer'),
   validate,
   timeEntryController.closeOpen,
+);
+
+router.patch(
+  '/close-open-by-assistant',
+  body('student_assistant_id').isInt().withMessage('student_assistant_id must be an integer'),
+  validate,
+  timeEntryController.closeOpenByAssistant,
 );
 
 export default router;

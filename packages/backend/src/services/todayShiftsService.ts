@@ -9,7 +9,7 @@ import { timeEntryService } from './timeEntryService';
 type ScheduleBlockDay = Database['public']['Enums']['days'];
 
 export interface TodayShift {
-  scheduleBlockId: number;
+  scheduleBlockId: number | null;
   studentAssistantId: number;
   firstName: string;
   lastName: string;
@@ -71,20 +71,19 @@ export const todayShiftsService = {
       timeEntryMap.set(key, entry);
     }
 
-    return todaysBlocks
-      .map((block) => {
+    const scheduledShifts: TodayShift[] = todaysBlocks.flatMap((block) => {
         const schedule =
           block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
-        if (!schedule?.student_assistant_id) return null;
+        if (!schedule?.student_assistant_id) return [];
 
         const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
-        if (!studentAssistant || studentAssistant.is_active === false) return null;
+        if (!studentAssistant || studentAssistant.is_active === false) return [];
 
         const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`;
         const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
         const startTime = block.start_time ?? '00:00';
 
-        return {
+        return [{
           scheduleBlockId: block.id,
           studentAssistantId: schedule.student_assistant_id,
           firstName: studentAssistant.first_name ?? '',
@@ -96,8 +95,37 @@ export const todayShiftsService = {
           clockOutActual: timeEntry?.clock_out ?? null,
           timeEntryId: timeEntry?.id ?? null,
           status: computeShiftStatus(startTime, timeEntry?.clock_in ?? null, now),
-        } satisfies TodayShift;
-      })
-      .filter((shift): shift is TodayShift => shift !== null);
+        }];
+      });
+
+    const unscheduledShifts: TodayShift[] = [];
+    for (const entry of todaysTimeEntries) {
+      if (
+        entry.schedule_block_id != null ||
+        entry.clock_out != null ||
+        entry.student_assistant_id == null
+      ) {
+        continue;
+      }
+
+      const studentAssistant = studentAssistantMap.get(entry.student_assistant_id);
+      if (!studentAssistant || studentAssistant.is_active === false) continue;
+
+      unscheduledShifts.push({
+        scheduleBlockId: null,
+        studentAssistantId: entry.student_assistant_id,
+        firstName: studentAssistant.first_name ?? '',
+        lastName: studentAssistant.last_name ?? '',
+        role: formatStudentRole(studentAssistant.position),
+        startTime: '',
+        endTime: '',
+        clockInActual: entry.clock_in ?? null,
+        clockOutActual: null,
+        timeEntryId: entry.id ?? null,
+        status: 'on-time',
+      });
+    }
+
+    return [...scheduledShifts, ...unscheduledShifts];
   },
 };

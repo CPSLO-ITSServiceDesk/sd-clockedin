@@ -34,6 +34,19 @@ export const timeEntryController = {
     }
   },
 
+  async clockIn(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { student_assistant_id, clock_in } = req.body;
+      const result = await timeEntryService.clockIn({
+        student_assistant_id: Number(student_assistant_id),
+        clock_in,
+      });
+      res.status(201).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async update(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
@@ -75,6 +88,16 @@ export const timeEntryController = {
         res.status(500).json({ success: false, error: 'Failed to update time entry' });
         return;
       }
+      res.json({ success: true, data: updated });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async closeOpenByAssistant(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { student_assistant_id } = req.body;
+      const updated = await timeEntryService.closeOpenByAssistant(Number(student_assistant_id));
       res.json({ success: true, data: updated });
     } catch (err) {
       next(err);

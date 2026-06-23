@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, X } from "lucide-react"
 import {
   Dialog,
@@ -11,13 +11,15 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { studentAssistantsApi } from "@/lib/api/student-assistants"
 import { timeEntriesApi } from "@/lib/api/time-entries"
 import { queryKeys } from "@/lib/query-keys"
 import {
   formatShiftName,
-  getClockedInShifts,
-  getPendingClockInShifts,
+  getClockInStudentOptions,
+  getClockedInStudents,
   getShiftInitials,
+  type ClockInStudentOption,
   type TodayShift,
 } from "@/lib/shifts/today-shifts"
 
@@ -28,9 +30,19 @@ interface ClockModalProps {
   prefillName?: string
 }
 
-export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModalProps) {
+export function ClockModal({
+  open,
+  mode,
+  onClose,
+  prefillName = "",
+}: ClockModalProps) {
   const queryClient = useQueryClient()
-  const { data: shifts = [], isLoading } = useTodayShifts()
+  const { data: shifts = [], isLoading: shiftsLoading } = useTodayShifts()
+  const { data: students = [], isLoading: studentsLoading } = useQuery({
+    queryKey: queryKeys.students.all,
+    queryFn: studentAssistantsApi.list,
+    enabled: open && mode === "in",
+  })
   const [query, setQuery] = useState(prefillName)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -42,17 +54,21 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
     }
   }, [open, prefillName])
 
-  const eligibleShifts =
-    mode === "in" ? getPendingClockInShifts(shifts) : getClockedInShifts(shifts)
+  const isClockIn = mode === "in"
+  const isLoading = isClockIn ? shiftsLoading || studentsLoading : shiftsLoading
+
+  const eligibleStudents = isClockIn
+    ? getClockInStudentOptions(students, shifts)
+    : getClockedInStudents(shifts)
 
   const filtered = query.trim().length === 0
-    ? eligibleShifts
-    : eligibleShifts.filter((shift) => {
+    ? eligibleStudents
+    : eligibleStudents.filter((entry) => {
         const search = query.toLowerCase()
-        const name = formatShiftName(shift).toLowerCase()
-        const role = shift.role.toLowerCase()
-        const firstName = shift.firstName.toLowerCase()
-        const lastName = shift.lastName.toLowerCase()
+        const name = formatShiftName(entry).toLowerCase()
+        const role = entry.role.toLowerCase()
+        const firstName = entry.firstName.toLowerCase()
+        const lastName = entry.lastName.toLowerCase()
         return (
           name.includes(search) ||
           role.includes(search) ||
@@ -68,24 +84,28 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
     ])
   }
 
-  const handleSelect = async (shift: TodayShift) => {
+  const handleClockIn = async (student: ClockInStudentOption) => {
+    await timeEntriesApi.clockIn({
+      student_assistant_id: student.studentAssistantId,
+      clock_in: new Date().toISOString(),
+    })
+  }
+
+  const handleClockOut = async (shift: TodayShift) => {
+    await timeEntriesApi.closeOpenByAssistant(shift.studentAssistantId)
+  }
+
+  const handleSelect = async (entry: ClockInStudentOption | TodayShift) => {
     if (submitting) return
 
     setSubmitting(true)
     setSubmitError(null)
 
     try {
-      if (mode === "in") {
-        await timeEntriesApi.create({
-          schedule_block_id: shift.scheduleBlockId,
-          student_assistant_id: shift.studentAssistantId,
-          clock_in: new Date().toISOString(),
-        })
+      if (isClockIn) {
+        await handleClockIn(entry as ClockInStudentOption)
       } else {
-        await timeEntriesApi.closeOpen(
-          shift.scheduleBlockId,
-          shift.studentAssistantId,
-        )
+        await handleClockOut(entry as TodayShift)
       }
 
       await invalidateShiftData()
@@ -105,8 +125,6 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
       onClose()
     }
   }
-
-  const isClockIn = mode === "in"
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -148,24 +166,24 @@ export function ClockModal({ open, mode, onClose, prefillName = "" }: ClockModal
               No employees found
             </div>
           ) : (
-            filtered.map((shift) => {
-              const name = formatShiftName(shift)
+            filtered.map((entry) => {
+              const name = formatShiftName(entry)
               return (
                 <button
-                  key={`${shift.scheduleBlockId}-${shift.studentAssistantId}`}
-                  onClick={() => handleSelect(shift)}
+                  key={entry.studentAssistantId}
+                  onClick={() => handleSelect(entry)}
                   disabled={submitting}
                   className="w-full flex items-center gap-3 px-6 py-3 hover:bg-secondary/60 transition-colors border-b border-border/50 last:border-0 text-left group disabled:opacity-50"
                 >
                   <div className="h-9 w-9 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground shrink-0 group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
-                    {getShiftInitials(shift)}
+                    {getShiftInitials(entry)}
                   </div>
                   <div className="min-w-0">
                     <div className="font-medium text-card-foreground text-sm truncate">
                       {name}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {shift.role}
+                      {entry.role}
                     </div>
                   </div>
                   <span
