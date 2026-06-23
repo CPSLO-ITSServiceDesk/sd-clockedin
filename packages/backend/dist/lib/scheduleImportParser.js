@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.IMPORT_GROUP = exports.REQUIRED_HEADERS = void 0;
+exports.parseThemeColorIsRemote = parseThemeColorIsRemote;
 exports.parseScheduleSpreadsheet = parseScheduleSpreadsheet;
 const XLSX = __importStar(require("xlsx"));
 exports.REQUIRED_HEADERS = [
@@ -47,6 +48,16 @@ exports.REQUIRED_HEADERS = [
 ];
 exports.IMPORT_GROUP = 'Service Desk';
 const PREFERRED_SHEET_NAMES = ['Shifts', 'Schedule', 'Schedules'];
+function parseThemeColorIsRemote(themeColor) {
+    const normalized = themeColor.trim().toLowerCase();
+    if (!normalized)
+        return false;
+    if (normalized.includes('blue'))
+        return true;
+    if (normalized.includes('green'))
+        return false;
+    return null;
+}
 function normalizeHeader(value) {
     return String(value ?? '').trim();
 }
@@ -105,6 +116,7 @@ function parseWorksheetRows(rows) {
     const startTimeIdx = headerIndex.get('Start Time');
     const endDateIdx = headerIndex.get('End Date');
     const endTimeIdx = headerIndex.get('End Time');
+    const themeColorIdx = headerIndex.get('Theme Color');
     const parsed = [];
     for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
         const row = rows[rowIndex];
@@ -117,6 +129,7 @@ function parseWorksheetRows(rows) {
         const startTime = cellValue(row, startTimeIdx);
         const endDate = cellValue(row, endDateIdx);
         const endTime = cellValue(row, endTimeIdx);
+        const themeColor = themeColorIdx != null ? cellValue(row, themeColorIdx) : '';
         if (!member && !workEmail && !startDate && !startTime) {
             continue;
         }
@@ -130,6 +143,7 @@ function parseWorksheetRows(rows) {
             startTime,
             endDate,
             endTime,
+            themeColor,
             rowNumber: rowIndex + 1,
         });
     }

@@ -10,6 +10,8 @@ import {
   TimeEntriesEmptyState,
   TimeEntriesPanel,
 } from "@/components/admin/student-records/time-entries-panel"
+import { StudentAnalyticsPanel } from "@/components/admin/student-records/student-analytics-panel"
+import { useStudentAnalytics } from "@/hooks/use-analytics"
 import {
   entryMatchesTerm,
   getEntryDurationMinutes,
@@ -199,6 +201,12 @@ export function StudentRecordsManager() {
             entry.student_assistant_id === selectedStudent.id && !entry.clock_out,
         ).length
       : 0
+
+  const {
+    data: studentAnalytics,
+    isLoading: studentAnalyticsLoading,
+    error: studentAnalyticsError,
+  } = useStudentAnalytics(selectedStudentId, activeTermId)
 
   const isLoading =
     termsLoading ||
@@ -399,15 +407,32 @@ export function StudentRecordsManager() {
             ) : !selectedStudent ? (
               <TimeEntriesEmptyState />
             ) : (
-              <TimeEntriesPanel
-                key={`${selectedStudent.id}-${activeTermId}`}
-                student={selectedStudent}
-                term={selectedTerm}
-                termId={activeTermId}
-                schedules={schedules}
-                scheduleBlocks={scheduleBlocks}
-                timeEntries={timeEntries}
-              />
+              <div className="space-y-8">
+                <div>
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider">
+                    Punctuality
+                  </h3>
+                  <StudentAnalyticsPanel
+                    analytics={studentAnalytics}
+                    isLoading={studentAnalyticsLoading}
+                    error={studentAnalyticsError}
+                  />
+                </div>
+                <div>
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider">
+                    Time Entries
+                  </h3>
+                  <TimeEntriesPanel
+                    key={`${selectedStudent.id}-${activeTermId}`}
+                    student={selectedStudent}
+                    term={selectedTerm}
+                    termId={activeTermId}
+                    schedules={schedules}
+                    scheduleBlocks={scheduleBlocks}
+                    timeEntries={timeEntries}
+                  />
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

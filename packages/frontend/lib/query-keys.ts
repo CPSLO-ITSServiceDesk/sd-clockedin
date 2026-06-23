@@ -19,4 +19,9 @@ export const queryKeys = {
   todayShifts: {
     all: ["today-shifts"] as const,
   },
+  analytics: {
+    term: (termId: number) => ["analytics", "term", termId] as const,
+    student: (studentId: number, termId: number) =>
+      ["analytics", "student", studentId, termId] as const,
+  },
 } as const

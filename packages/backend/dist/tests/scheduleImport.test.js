@@ -17,6 +17,7 @@ const fixturePath = (0, node_path_1.join)(__dirname, 'fixtures', 'schedule-impor
             startDate: '6/22/2026',
             startTime: '08:00',
             endTime: '11:00',
+            themeColor: '3. Green',
         });
     });
     (0, vitest_1.it)('only imports Service Desk group rows', () => {
@@ -45,25 +46,61 @@ const fixturePath = (0, node_path_1.join)(__dirname, 'fixtures', 'schedule-impor
         (0, vitest_1.expect)(rows[0]).toMatchObject({
             member: 'Darryl James Arce Cruz',
             workEmail: 'dcruz44@calpoly.edu',
+            themeColor: '3. Green',
         });
+    });
+});
+(0, vitest_1.describe)('parseThemeColorIsRemote', () => {
+    (0, vitest_1.it)('maps When I Work theme colors', () => {
+        (0, vitest_1.expect)((0, scheduleImportParser_1.parseThemeColorIsRemote)('3. Green')).toBe(false);
+        (0, vitest_1.expect)((0, scheduleImportParser_1.parseThemeColorIsRemote)('2. Blue')).toBe(true);
+        (0, vitest_1.expect)((0, scheduleImportParser_1.parseThemeColorIsRemote)('')).toBe(false);
+        (0, vitest_1.expect)((0, scheduleImportParser_1.parseThemeColorIsRemote)('30. Plum')).toBeNull();
     });
 });
 (0, vitest_1.describe)('scheduleImportTransform', () => {
     (0, vitest_1.it)('maps dates to weekday blocks grouped by email', () => {
         const buffer = (0, node_fs_1.readFileSync)(fixturePath);
         const rows = (0, scheduleImportParser_1.parseScheduleSpreadsheet)(buffer, 'sample.csv');
-        const result = (0, scheduleImportTransform_1.transformImportRows)(rows, '2026-06-01', '2026-06-30');
+        const result = (0, scheduleImportTransform_1.transformImportRows)(rows, '2026-06-01', '2026-06-30', true);
         (0, vitest_1.expect)(result.skippedRows).toBe(0);
         (0, vitest_1.expect)(result.students).toHaveLength(2);
         const darryl = result.students.find((student) => student.workEmail === 'dcruz44@calpoly.edu');
         (0, vitest_1.expect)(darryl).toBeDefined();
         (0, vitest_1.expect)(darryl.blocks).toEqual(vitest_1.expect.arrayContaining([
-            { day: 'monday', start_time: '08:00', end_time: '11:00' },
-            { day: 'monday', start_time: '12:00', end_time: '17:00' },
-            { day: 'tuesday', start_time: '08:00', end_time: '11:00' },
+            {
+                day: 'monday',
+                start_time: '08:00',
+                end_time: '11:00',
+                is_remote: false,
+            },
+            {
+                day: 'monday',
+                start_time: '12:00',
+                end_time: '17:00',
+                is_remote: false,
+            },
+            {
+                day: 'tuesday',
+                start_time: '08:00',
+                end_time: '11:00',
+                is_remote: false,
+            },
         ]));
         (0, vitest_1.expect)(darryl.firstName).toBe('Darryl');
         (0, vitest_1.expect)(darryl.lastName).toBe('James Arce Cruz');
+        const edgar = result.students.find((student) => student.workEmail === 'eolozaga@calpoly.edu');
+        (0, vitest_1.expect)(edgar).toBeDefined();
+        (0, vitest_1.expect)(edgar.blocks.every((block) => block.is_remote)).toBe(true);
+    });
+    (0, vitest_1.it)('skips blue rows when remote shifts are not allowed', () => {
+        const buffer = (0, node_fs_1.readFileSync)(fixturePath);
+        const rows = (0, scheduleImportParser_1.parseScheduleSpreadsheet)(buffer, 'sample.csv');
+        const result = (0, scheduleImportTransform_1.transformImportRows)(rows, '2026-06-01', '2026-06-30', false);
+        (0, vitest_1.expect)(result.students).toHaveLength(1);
+        (0, vitest_1.expect)(result.students[0].workEmail).toBe('dcruz44@calpoly.edu');
+        (0, vitest_1.expect)(result.remoteRowsSkipped).toBe(1);
+        (0, vitest_1.expect)(result.skippedRows).toBe(1);
     });
     (0, vitest_1.it)('skips rows outside the selected term', () => {
         const buffer = (0, node_fs_1.readFileSync)(fixturePath);

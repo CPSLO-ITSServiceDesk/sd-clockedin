@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.scheduleBlocksService = void 0;
 const supabase_1 = require("../lib/supabase");
+const clearScheduleBlockReferences_1 = require("../lib/clearScheduleBlockReferences");
 const errorHandler_1 = require("../middleware/errorHandler");
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
@@ -53,10 +54,22 @@ exports.scheduleBlocksService = {
         return data;
     },
     async remove(id) {
+        await (0, clearScheduleBlockReferences_1.clearScheduleBlockReferences)([id]);
         const { error } = await supabase_1.supabase
             .from('schedule_blocks')
             .delete()
             .eq('id', id);
+        if (error)
+            throw new errorHandler_1.HttpError(500, error.message);
+    },
+    async removeMany(ids) {
+        if (ids.length === 0)
+            return;
+        await (0, clearScheduleBlockReferences_1.clearScheduleBlockReferences)(ids);
+        const { error } = await supabase_1.supabase
+            .from('schedule_blocks')
+            .delete()
+            .in('id', ids);
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
     },

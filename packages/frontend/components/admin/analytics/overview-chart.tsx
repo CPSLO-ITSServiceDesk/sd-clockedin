@@ -4,6 +4,7 @@ import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import type { DailyTrendPoint } from "@/lib/api/analytics"
 import {
   Card,
   CardAction,
@@ -32,39 +33,32 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 
-function generateAttendanceData(days: number) {
-  const data = []
-  const today = new Date("2026-06-11")
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    const dow = d.getDay()
-    const isWeekend = dow === 0 || dow === 6
-    const onTime = isWeekend ? 0 : Math.floor(Math.random() * 4) + 5
-    const late = isWeekend ? 0 : Math.floor(Math.random() * 3)
-    data.push({
-      date: d.toISOString().split("T")[0],
-      onTime,
-      late,
-    })
-  }
-  return data
-}
-
-const allData = generateAttendanceData(90)
-
 const chartConfig = {
   onTime: {
     label: "On Time",
     color: "var(--accent)",
   },
   late: {
-    label: "Late / Absent",
+    label: "Late",
+    color: "var(--chart-4)",
+  },
+  absent: {
+    label: "Absent",
     color: "var(--destructive)",
   },
 } satisfies ChartConfig
 
-export function OverviewChart() {
+interface OverviewChartProps {
+  data: DailyTrendPoint[]
+  isLoading?: boolean
+  error?: Error | null
+}
+
+export function OverviewChart({
+  data,
+  isLoading = false,
+  error = null,
+}: OverviewChartProps) {
   const isMobile = useIsMobile()
   const [timeRange, setTimeRange] = React.useState("30d")
 
@@ -74,8 +68,8 @@ export function OverviewChart() {
 
   const filteredData = React.useMemo(() => {
     const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 90
-    return allData.slice(-days)
-  }, [timeRange])
+    return data.slice(-days)
+  }, [data, timeRange])
 
   return (
     <Card className="@container/card">
@@ -83,7 +77,7 @@ export function OverviewChart() {
         <CardTitle>Attendance Trend</CardTitle>
         <CardDescription>
           <span className="hidden @[540px]/card:block">
-            Daily clock-in breakdown — on time vs late/absent
+            Daily clock-in breakdown — on time vs late vs absent
           </span>
           <span className="@[540px]/card:hidden">Clock-in breakdown</span>
         </CardDescription>
@@ -116,63 +110,91 @@ export function OverviewChart() {
         </CardAction>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
-          <AreaChart data={filteredData}>
-            <defs>
-              <linearGradient id="fillOnTime" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-onTime)" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="var(--color-onTime)" stopOpacity={0.05} />
-              </linearGradient>
-              <linearGradient id="fillLate" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-late)" stopOpacity={0.6} />
-                <stop offset="95%" stopColor="var(--color-late)" stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tick={{ fontSize: 11 }}
-              tickFormatter={(value) =>
-                new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-              }
-            />
-            <YAxis hide />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) =>
-                    new Date(value).toLocaleDateString("en-US", {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                    })
-                  }
-                  indicator="dot"
-                />
-              }
-            />
-            <Area
-              dataKey="onTime"
-              type="monotone"
-              fill="url(#fillOnTime)"
-              stroke="var(--color-onTime)"
-              strokeWidth={2}
-            />
-            <Area
-              dataKey="late"
-              type="monotone"
-              fill="url(#fillLate)"
-              stroke="var(--color-late)"
-              strokeWidth={2}
-            />
-            <ChartLegend content={<ChartLegendContent />} />
-          </AreaChart>
-        </ChartContainer>
+        {isLoading ? (
+          <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+            Loading chart...
+          </div>
+        ) : error ? (
+          <div className="flex h-[220px] items-center justify-center text-sm text-destructive">
+            Failed to load chart data
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+            No shift data for this term yet
+          </div>
+        ) : (
+          <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
+            <AreaChart data={filteredData}>
+              <defs>
+                <linearGradient id="fillOnTime" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-onTime)" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="var(--color-onTime)" stopOpacity={0.05} />
+                </linearGradient>
+                <linearGradient id="fillLate" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-late)" stopOpacity={0.6} />
+                  <stop offset="95%" stopColor="var(--color-late)" stopOpacity={0.05} />
+                </linearGradient>
+                <linearGradient id="fillAbsent" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-absent)" stopOpacity={0.6} />
+                  <stop offset="95%" stopColor="var(--color-absent)" stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+                tick={{ fontSize: 11 }}
+                tickFormatter={(value) =>
+                  new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                }
+              />
+              <YAxis hide />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) =>
+                      new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    }
+                    indicator="dot"
+                  />
+                }
+              />
+              <Area
+                dataKey="onTime"
+                type="monotone"
+                fill="url(#fillOnTime)"
+                stroke="var(--color-onTime)"
+                strokeWidth={2}
+              />
+              <Area
+                dataKey="late"
+                type="monotone"
+                fill="url(#fillLate)"
+                stroke="var(--color-late)"
+                strokeWidth={2}
+              />
+              <Area
+                dataKey="absent"
+                type="monotone"
+                fill="url(#fillAbsent)"
+                stroke="var(--color-absent)"
+                strokeWidth={2}
+              />
+              <ChartLegend content={<ChartLegendContent />} />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )

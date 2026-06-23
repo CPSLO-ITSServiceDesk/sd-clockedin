@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const express_validator_1 = require("express-validator");
+const analyticsController_1 = require("../controllers/analyticsController");
+const validate_1 = require("../middleware/validate");
+const router = (0, express_1.Router)();
+router.get('/terms/:termId', (0, express_validator_1.param)('termId').isInt().withMessage('termId must be an integer'), validate_1.validate, analyticsController_1.analyticsController.getTermAnalytics);
+router.get('/students/:studentId', (0, express_validator_1.param)('studentId').isInt().withMessage('studentId must be an integer'), (0, express_validator_1.query)('termId').isInt().withMessage('termId must be an integer'), validate_1.validate, analyticsController_1.analyticsController.getStudentAnalytics);
+exports.default = router;

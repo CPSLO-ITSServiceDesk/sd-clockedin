@@ -11,219 +11,236 @@ This is a monorepo managed by pnpm containing two packages:
 The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components via Radix UI primitives.
 For state management, the frontend uses React Query (@tanstack/react-query) and React Table (@tanstack/react-table).
 
-## Setup
+## Development Commands
 
-1. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-
-2. Environment variables:
-   - Frontend (`packages/frontend/.env`):
-     - MICROSOFT_CLIENT_ID, MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI, AUTH_API_BASE_URL
-   - Backend (`packages/backend/.env`):
-     - SUPABASE_URL, SUPABASE_ANON_KEY, PORT
-
-   Note: The backend defaults to port 3001, while the frontend expects the API at `http://localhost:8000/api` (adjust as needed or use a proxy).
-
-## Development
-
-### Running the application
-
-To start both frontend and backend:
+### Package Management
 ```bash
+# Install all dependencies
+pnpm install
+
+# Update lockfile without installing
+pnpm store prune
+```
+
+### Development Server
+```bash
+# Start both frontend and backend
 pnpm dev
-```
 
-This runs:
-- `pnpm -r dev`: runs dev script for all packages
-- `pnpm -r dev --filter backend`: runs dev script for backend (included in the above)
-
-To run only the frontend:
-```bash
+# Start only frontend
 pnpm --filter frontend dev
-```
 
-To run only the backend:
-```bash
+# Start only backend  
 pnpm --filter backend dev
 ```
 
 ### Building
-
-To build all packages:
 ```bash
+# Build all packages
 pnpm build
-```
 
-To build only the frontend:
-```bash
+# Build only frontend
 pnpm --filter frontend build
-```
 
-To build only the backend:
-```bash
+# Build only backend
 pnpm --filter backend build
 ```
 
-### Starting the production build
-
-To start all packages:
+### Production Server
 ```bash
+# Start all packages in production
 pnpm start
-```
 
-To start only the frontend:
-```bash
+# Start only frontend
 pnpm --filter frontend start
-```
 
-To start only the backend:
-```bash
+# Start only backend
 pnpm --filter backend start
 ```
 
-### Linting
-
-To lint all packages:
+### Code Quality
 ```bash
+# Lint all packages
 pnpm lint
-```
 
-This runs `eslint .` in both frontend and backend packages.
-
-To lint only the frontend:
-```bash
+# Lint only frontend
 pnpm --filter frontend lint
-```
 
-To lint only the backend:
-```bash
+# Lint only backend
 pnpm --filter backend lint
+
+# Fix auto-fixable lint errors
+pnpm lint --fix
 ```
 
-### Testing
-
-The backend has a test setup using Vitest.
-
-To run all backend tests:
+### Testing (Backend Only)
 ```bash
+# Run all backend tests
 pnpm --filter backend test
-```
 
-To run backend tests in watch mode:
-```bash
+# Run backend tests in watch mode
 pnpm --filter backend test:watch
-```
 
-To run a specific test file:
-```bash
+# Run a specific test file
 pnpm --filter backend test:run -- packages/backend/src/tests/<filename>.test.ts
-```
 
-Alternatively, using vitest directly:
-```bash
+# Run with Vitest directly
 pnpm --filter backend exec vitest run src/tests/<filename>.test.ts
 ```
 
-Currently, there are no tests in the frontend package. When adding tests, consider setting up a testing framework (e.g., Vitest or Jest) and updating the test scripts in `packages/frontend/package.json`.
-
-### State Management (Frontend)
-
-The frontend uses React Query for data fetching and state management.
-- A `QueryProvider` is wrapped around the application in `packages/frontend/app/layout.tsx`.
-- Query keys are centralized in `packages/frontend/lib/query-keys.ts`.
-- API services are located in `packages/frontend/lib/api/` (e.g., `student-assistants.ts`, `scheduleBlocks.ts`, `schedules.ts`, `time-entries.ts`).
-- Data transformation and persistence logic for schedules is in `packages/frontend/lib/schedules/`.
-
-### Type Generation
-
-Regenerate Supabase TypeScript types for the backend:
+### Database & Type Generation
 ```bash
+# Regenerate Supabase TypeScript types
 pnpm --filter backend gen:types
-```
 
-This updates `src/types/database.types.ts` based on the Supabase schema.
-
-### Supabase Connection Check
-
-Verify the backend can connect to Supabase:
-```bash
+# Verify Supabase connection
 pnpm --filter backend check
 ```
 
-This runs `tsx src/scripts/check-connection.ts`.
+### Frontend-Specific
+```bash
+# Clear Next.js cache
+pnpm --filter frontend exec next cache clear
+```
 
-### Debugging
+## Architecture & Patterns
 
-Backend runs with `tsx watch src/index.ts` for hot reload during development.
-Frontend runs with `next dev` with fast refresh.
+### Backend Architecture
+- **Express.js** with TypeScript for the API server
+- **Supabase** as the primary database with PostgREST API
+- **Modular structure** following feature-based organization:
+  - `src/routes/` - API route definitions with Express.Router
+  - `src/controllers/` - Request handlers coordinating between services and responses
+  - `src/services/` - Business logic and direct Supabase interactions
+  - `src/lib/` - Shared utilities (Supabase client initialization)
+  - `src/middleware/` - Custom Express middleware (error handling, validation, CORS)
+  - `src/scripts/` - Utility scripts (connection testing, type generation)
+
+#### Key Patterns:
+1. **CRUD Consistency**: All resources follow the same pattern (terms, studentAssistants, schedules, etc.)
+   - Routes use express-validator for input validation
+   - Controllers handle HTTP concerns and delegate to services
+   - Services contain Supabase queries and business logic
+   - Automatic 404 handling for missing resources in services
+   - Consistent error handling via HttpError class and centralized error handler
+
+2. **Database Interaction**:
+   - Direct Supabase client usage throughout services
+   - Consistent error handling converting PostgREST errors to HttpError
+   - Use of `.single()` for single-record queries with PGRST116 error handling
+   - Proper ordering and filtering in queries
+
+3. **API Response Format**:
+   ```json
+   {
+     "success": boolean,
+     "data": null | object | array,
+     "error": string | undefined
+   }
+   ```
+   - 204 No Content for successful deletions
+   - Appropriate HTTP status codes for different operations
+
+### Frontend Architecture
+- **Next.js 13+** with App Router (`app/` directory)
+- **React Query** for server state management and caching
+- **React Table** for complex table UIs with sorting, filtering, pagination
+- **React Hook Form** with Zod for form validation
+- **Shadcn/ui** component library built on Radix UI primitives
+- **Tailwind CSS** for utility-first styling
+
+#### Key Patterns:
+1. **API Layer**:
+   - Centralized `apiFetch` wrapper in `lib/api/client.ts`
+   - Automatic JSON serialization/deserialization
+   - Consistent error handling transforming API errors to thrown exceptions
+   - Resource-specific modules (`lib/api/terms.ts`, etc.) wrapping API endpoints
+
+2. **React Query Integration**:
+   - Query keys centralized in `lib/query-keys.ts`
+   - Custom hooks encapsulating query logic (`use-*.ts` files)
+   - Automatic refetching intervals for real-time data (e.g., today shifts)
+   - Optimistic updates where appropriate
+
+3. **Data Transformation**:
+   - Mapper functions in `lib/schedules/` for converting between API and UI formats
+   - Consistent TypeScript interfaces matching Supabase types
+   - Proper handling of nullable fields and JSONB columns
+
+4. **Component Organization**:
+   - Reusable UI components in `components/` (shadcn/ui based)
+   - Feature-specific components in route-specific directories (`app/(feature)/`)
+   - Custom hooks in `hooks/` directory
+   - Utility functions in `lib/` directory
+
+### Database Schema Overview
+The Supabase database contains these core tables:
+- `academic_term`: School terms/semesters
+- `student_assistant`: Student worker information
+- `schedules`: Work schedules for students
+- `schedule_blocks`: Individual shift blocks within schedules
+- `time_entry`: Clock-in/clock-out records
+- `admins`: System administrators
+- `import`: Batch import tracking
+
+### Key Integration Points
+1. **Frontend → Backend Communication**:
+   - Frontend expects API at `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:3001/api`)
+   - All API calls go through the typed `apiFetch` wrapper
+   - React Query handles caching, deduplication, and background updates
+
+2. **Schedule Management Flow**:
+   - Schedules contain multiple Schedule Blocks (shift templates)
+   - Time entries reference either a Schedule Block or have custom times
+   - When schedule blocks are deleted/updated, `clearScheduleBlockReferences` preserves time entries by nullifying references
+
+3. **State Synchronization**:
+   - React Query automatically refetches data after mutations
+   - Optimistic UI updates in some cases (e.g., schedule block creation)
+   - WebSocket or polling mechanisms for real-time updates (currently polling every 30s for today's shifts)
 
 ### Environment Variables
+**Backend** (`.env` in `packages/backend/`):
+- `SUPABASE_URL`: Supabase project URL
+- `SUPABASE_ANON_KEY`: Supabase anonymous key
+- `PORT`: Server port (default: 3001)
+- `NODE_ENV`: Environment (development/production)
+- `ALLOWED_ORIGINS`: CORS allowed origins (comma-separated)
 
-If you need to change the backend port, update `PORT` in `packages/backend/.env` and ensure the frontend’s `AUTH_API_BASE_URL` matches (e.g., `http://localhost:3001/api`).
+**Frontend** (`.env` in `packages/frontend/`):
+- `NEXT_PUBLIC_API_URL`: Base URL for API calls (must include `/api` suffix)
+- Other Next.js environment variables as needed
 
-You can also use a proxy in development to avoid CORS; see Next.js documentation for rewrites.
+### Common Development Tasks
 
-## Code Structure
+#### Adding a New API Endpoint
+1. Create service methods in `src/services/[resource]Service.ts`
+2. Create controller in `src/controllers/[resource]Controller.ts`
+3. Define routes in `src/routes/[resource].ts`
+4. Register route in `src/routes/index.ts`
+5. Update frontend API wrapper in `packages/frontend/lib/api/[resource].ts`
+6. Add query keys to `packages/frontend/lib/query-keys.ts` if needed
+7. Create React Query hooks in `packages/frontend/hooks/` as needed
 
-### Frontend (`packages/frontend`)
+#### Database Changes
+1. Modify Supabase schema directly or through migrations
+2. Run `pnpm --filter backend gen:types` to update TypeScript definitions
+3. Update service methods to use new columns/tables
+4. Adjust frontend API types and UI components accordingly
 
-- `app/`: Next.js 13+ app directory structure
-  - `admin/`: Admin route (likely protected area)
-  - `globals.css`: Global CSS styles
-  - `layout.tsx`: Root layout component (includes QueryProvider and TooltipProvider)
-  - `page.tsx`: Home page component
-- `components/`: Reusable UI components (shadcn/ui based)
-  - `providers/`: React providers (e.g., QueryProvider)
-- `hooks/`: Custom React hooks
-- `lib/`: Utility functions and shared logic
-  - `api/`: API service layer (wrappers around Supabase via the backend)
-  - `format-time.ts`: Time formatting utilities
-  - `query-keys.ts`: Centralized React Query keys
-  - `schedules/`: Schedule-specific persistence and utilities
-- `public/`: Static assets
-- `styles/`: Additional CSS/Tailwind configuration
-- Configuration files:
-  - `next.config.mjs`: Next.js configuration
-  - `tsconfig.json`: TypeScript configuration
-  - `postcss.config.mjs`: PostCSS/Tailwind configuration
-  - `components.json`: shadcn/ui configuration
+#### Debugging
+- Backend: Runs with `tsx watch src/index.ts` for hot reload during development
+- Frontend: Runs with `next dev` with Fast Refresh
+- Check Supabase dashboard for direct database inspection
+- Use browser dev tools to inspect React Query cache and network requests
+- Backend logs startup information including port and CORS configuration
 
-### Backend (`packages/backend`)
-
-- `src/index.ts`: Express app entry point (middleware, routes, 404, error handler)
-- `src/config/environment.ts`: Environment validation and configuration object
-- `src/lib/supabase.ts`: Supabase client initialization (reused across services)
-- `src/middleware/`: Custom middleware (errorHandler, validate)
-- `src/routes/`: Route definitions (mounted under `/api`)
-  - `index.ts`: Registers routes and adds `/health` endpoint
-  - `terms.ts`: CRUD endpoints for academic terms (complete)
-  - `schedules.ts`: Stub endpoints for schedules (to be implemented)
-  - `timeEntries.ts`: Stub endpoints for time entries (to be implemented)
-  - `studentAssistants.ts`: CRUD endpoints for student assistants (complete)
-- `src/controllers/`: Request handlers (e.g., `termController.ts`, `schedulesController.ts`)
-- `src/services/`: Business logic and Supabase interactions (e.g., `termService.ts`, `schedulesService.ts`, `studentAssistantService.ts`)
-- `src/tests/`: Test files (e.g., `timeEntry.service.test.ts`, `studentAssistant.service.test.ts`)
-- `src/scripts/`: Utility scripts (e.g., `check-connection.ts` for verifying Supabase connection)
-- `src/types/database.types.ts`: Auto-generated Supabase database types
-
-## Notes
-
-- The backend is a working Express + TypeScript API that talks to Supabase.
-- The backend uses integer IDs (not UUIDs) as per the Supabase schema.
-- The `terms` and `studentAssistants` modules serve as reference implementations for CRUD operations.
-- When implementing new resources (schedules, time entries), follow the pattern established in the `terms` module.
-- Error handling: Services throw `HttpError(status, msg)`; the central error handler logs only 5xx errors and returns `{ success: false, error }`.
-- The backend includes helper scripts:
-  - `pnpm --filter backend gen:types`: Regenerate Supabase types
-  - `pnpm --filter backend check`: Verify Supabase connection
-- The frontend expects the backend API at `AUTH_API_BASE_URL` (default: `http://localhost:8000/api`). If the backend runs on a different port, consider setting up a proxy or updating the environment variable.
-- The root `pnpm dev` command runs both packages concurrently; adjust as needed if you need to run only one package.
-- Mock implementations have been removed in favor of direct API calls (see deletion of `mock-schedule-store.tsx`).
-- The frontend uses React Query for data fetching and caching, with query keys defined in `lib/query-keys.ts`.
-
-## Additional Resources
-
-- Cursor IDE rules can be added or modified in `.cursor/rules/` (currently empty).
-- Migration and planning notes are available in `postgres-plan.md`.
+## File Conventions
+- **TypeScript**: Strict mode enabled with path aliases via `tsconfig.json`
+- **File Naming**: kebab-case for files, PascalCase for components/types
+- **Imports**: Relative paths with `@/` alias for frontend root, relative for backend
+- **State**: Prefer React Query over local state for server-synchronized data
+- **Styling**: Tailwind utility classes with occasional custom CSS in `globals.css`
+- **Error Handling**: 
+  - Backend: Services throw `HttpError`, middleware formats responses
+  - Frontend: API errors thrown as `ApiRequestError`, caught by React Query/error boundaries

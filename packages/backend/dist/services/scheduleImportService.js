@@ -51,12 +51,13 @@ async function replaceScheduleBlocks(studentId, termId, blocks, dryRun) {
         });
     }
     const existingBlocks = await scheduleBlocksService_1.scheduleBlocksService.getByScheduleId(schedule.id);
-    await Promise.all(existingBlocks.map((block) => scheduleBlocksService_1.scheduleBlocksService.remove(block.id)));
+    await scheduleBlocksService_1.scheduleBlocksService.removeMany(existingBlocks.map((block) => block.id));
     await Promise.all(blocks.map((block) => scheduleBlocksService_1.scheduleBlocksService.create({
         schedule_id: schedule.id,
         days: block.day,
         start_time: block.start_time,
         end_time: block.end_time,
+        is_remote: block.is_remote,
     })));
 }
 exports.scheduleImportService = {
@@ -69,7 +70,7 @@ exports.scheduleImportService = {
             throw new errorHandler_1.HttpError(400, 'Selected term is missing start or end date');
         }
         const rows = (0, scheduleImportParser_1.parseScheduleSpreadsheet)(buffer, filename);
-        const { students, warnings, skippedRows } = (0, scheduleImportTransform_1.transformImportRows)(rows, term.start_date, term.end_date);
+        const { students, warnings, skippedRows, remoteRowsSkipped } = (0, scheduleImportTransform_1.transformImportRows)(rows, term.start_date, term.end_date, term.remote_shifts_allowed ?? false);
         if (students.length === 0) {
             throw new errorHandler_1.HttpError(400, 'No valid schedule rows found for the selected term');
         }
@@ -93,10 +94,12 @@ exports.scheduleImportService = {
                 action,
                 studentId: student?.id,
                 blockCount: entry.blocks.length,
+                remoteBlockCount: entry.blocks.filter((block) => block.is_remote).length,
                 blocks: entry.blocks,
             });
         }
         const totalBlocks = previews.reduce((sum, preview) => sum + preview.blockCount, 0);
+        const remoteBlocks = previews.reduce((sum, preview) => sum + preview.remoteBlockCount, 0);
         return {
             dryRun,
             termId,
@@ -106,7 +109,9 @@ exports.scheduleImportService = {
                 studentsMatched,
                 schedulesUpdated: previews.length,
                 totalBlocks,
+                remoteBlocks,
                 skippedRows,
+                remoteRowsSkipped,
             },
             students: previews,
             warnings,
