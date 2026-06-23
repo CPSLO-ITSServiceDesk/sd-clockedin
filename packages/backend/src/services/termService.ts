@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
+import { scheduleBlocksService } from './scheduleBlocksService';
 
 type Term = Database['public']['Tables']['academic_term']['Row'];
 type TermInsert = Database['public']['Tables']['academic_term']['Insert'];
@@ -64,8 +65,38 @@ export const termService = {
     return data;
   },
 
-  // delete a term by id
+  // delete a term by id and its schedules + schedule blocks
   async remove(id: number): Promise<void> {
+    const { data: schedules, error: schedulesError } = await supabase
+      .from('schedules')
+      .select('id')
+      .eq('academic_term_id', id);
+
+    if (schedulesError) throw new HttpError(500, schedulesError.message);
+
+    const scheduleIds = (schedules ?? []).map((schedule) => schedule.id);
+
+    if (scheduleIds.length > 0) {
+      const { data: blocks, error: blocksError } = await supabase
+        .from('schedule_blocks')
+        .select('id')
+        .in('schedule_id', scheduleIds);
+
+      if (blocksError) throw new HttpError(500, blocksError.message);
+
+      const blockIds = (blocks ?? []).map((block) => block.id);
+      await scheduleBlocksService.removeMany(blockIds);
+
+      const { error: deleteSchedulesError } = await supabase
+        .from('schedules')
+        .delete()
+        .in('id', scheduleIds);
+
+      if (deleteSchedulesError) {
+        throw new HttpError(500, deleteSchedulesError.message);
+      }
+    }
+
     const { error } = await supabase
       .from('academic_term')
       .delete()

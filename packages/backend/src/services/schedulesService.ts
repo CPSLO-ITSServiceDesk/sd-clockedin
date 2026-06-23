@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
+import { scheduleBlocksService } from './scheduleBlocksService';
 
 type Schedule = Database['public']['Tables']['schedules']['Row'];
 type ScheduleInsert = Database['public']['Tables']['schedules']['Insert'];
@@ -76,6 +77,9 @@ export const schedulesService = {
   },
 
   async remove(id: number): Promise<void> {
+    const blocks = await scheduleBlocksService.getByScheduleId(id);
+    await scheduleBlocksService.removeMany(blocks.map((block) => block.id));
+
     const { error } = await supabase
       .from('schedules')
       .delete()

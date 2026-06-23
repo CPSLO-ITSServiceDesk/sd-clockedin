@@ -86,7 +86,11 @@ export function TermsTable() {
   const sortedTerms = useMemo(() => sortTermsByActiveStatus(terms), [terms])
 
   const invalidateTerms = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.terms.all })
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.terms.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduleBlocks.all }),
+    ])
 
   const handleAdd = async (values: TermFormValues) => {
     try {
@@ -342,7 +346,7 @@ export function TermsTable() {
             <AlertDialogTitle>Delete term?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `${deleteTarget.name} will be permanently removed. This action cannot be undone.`
+                ? `${deleteTarget.name} will be permanently removed along with its schedules and schedule blocks. Time entries will be kept, but unlinked from deleted blocks. This action cannot be undone.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>

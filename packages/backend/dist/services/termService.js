@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.termService = void 0;
 const supabase_1 = require("../lib/supabase");
 const errorHandler_1 = require("../middleware/errorHandler");
+const scheduleBlocksService_1 = require("./scheduleBlocksService");
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
 exports.termService = {
@@ -56,8 +57,32 @@ exports.termService = {
         }
         return data;
     },
-    // delete a term by id
+    // delete a term by id and its schedules + schedule blocks
     async remove(id) {
+        const { data: schedules, error: schedulesError } = await supabase_1.supabase
+            .from('schedules')
+            .select('id')
+            .eq('academic_term_id', id);
+        if (schedulesError)
+            throw new errorHandler_1.HttpError(500, schedulesError.message);
+        const scheduleIds = (schedules ?? []).map((schedule) => schedule.id);
+        if (scheduleIds.length > 0) {
+            const { data: blocks, error: blocksError } = await supabase_1.supabase
+                .from('schedule_blocks')
+                .select('id')
+                .in('schedule_id', scheduleIds);
+            if (blocksError)
+                throw new errorHandler_1.HttpError(500, blocksError.message);
+            const blockIds = (blocks ?? []).map((block) => block.id);
+            await scheduleBlocksService_1.scheduleBlocksService.removeMany(blockIds);
+            const { error: deleteSchedulesError } = await supabase_1.supabase
+                .from('schedules')
+                .delete()
+                .in('id', scheduleIds);
+            if (deleteSchedulesError) {
+                throw new errorHandler_1.HttpError(500, deleteSchedulesError.message);
+            }
+        }
         const { error } = await supabase_1.supabase
             .from('academic_term')
             .delete()
