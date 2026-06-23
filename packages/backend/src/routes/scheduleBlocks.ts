@@ -24,6 +24,7 @@ router.post(
   body('end_time').optional().isString(),
   body('schedule_id').optional().isInt(),
   body('start_time').optional().isString(),
+  body('is_remote').optional().isBoolean(),
   // id is optional but typically not provided on create; still validate if present
   body('id').optional().isInt(),
   validate,
@@ -41,6 +42,7 @@ router.put(
   body('end_time').optional().isString(),
   body('schedule_id').optional().isInt(),
   body('start_time').optional().isString(),
+  body('is_remote').optional().isBoolean(),
   body('id').optional().isInt(),
   validate,
   scheduleBlocksController.update,

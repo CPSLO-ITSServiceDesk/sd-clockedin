@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { useTodayShiftList } from "@/hooks/use-today-shifts"
 import { studentAssistantsApi } from "@/lib/api/student-assistants"
 import { timeEntriesApi } from "@/lib/api/time-entries"
 import { queryKeys } from "@/lib/query-keys"
@@ -37,7 +37,8 @@ export function ClockModal({
   prefillName = "",
 }: ClockModalProps) {
   const queryClient = useQueryClient()
-  const { data: shifts = [], isLoading: shiftsLoading } = useTodayShifts()
+  const { shifts, remoteOnlyStudentIds, isLoading: shiftsLoading } =
+    useTodayShiftList()
   const { data: students = [], isLoading: studentsLoading } = useQuery({
     queryKey: queryKeys.students.all,
     queryFn: studentAssistantsApi.list,
@@ -58,7 +59,7 @@ export function ClockModal({
   const isLoading = isClockIn ? shiftsLoading || studentsLoading : shiftsLoading
 
   const eligibleStudents = isClockIn
-    ? getClockInStudentOptions(students, shifts)
+    ? getClockInStudentOptions(students, shifts, remoteOnlyStudentIds)
     : getClockedInStudents(shifts)
 
   const filtered = query.trim().length === 0

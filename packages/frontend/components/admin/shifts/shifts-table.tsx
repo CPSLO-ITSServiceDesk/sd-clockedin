@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useRef } from "react"
+import { Fragment, useCallback, useMemo, useRef, useState } from "react"
 import { Clock } from "lucide-react"
 import {
   Table,
@@ -13,6 +13,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group"
 import { cn } from "@/lib/utils"
 import { GRID_START_HOUR } from "@/components/admin/schedules/schedule-types"
 import { timeToMinutes } from "@/components/admin/schedules/schedule-utils"
@@ -23,7 +27,8 @@ import {
   formatTimeRange,
   normalizeTimeKey,
 } from "@/lib/format-time"
-import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { useTodayShiftList } from "@/hooks/use-today-shifts"
+import { WorkModeBadge } from "@/components/admin/work-mode-badge"
 import {
   formatShiftName,
   formatShiftStatusLabel,
@@ -33,9 +38,29 @@ import {
   type TodayShift,
 } from "@/lib/shifts/today-shifts"
 
+type LocationFilter = "all" | "in-person" | "remote"
+
+function filterShiftsByLocation(
+  shifts: TodayShift[],
+  locationFilter: LocationFilter,
+): TodayShift[] {
+  if (locationFilter === "all") return shifts
+  if (locationFilter === "in-person") {
+    return shifts.filter((shift) => !shift.isRemote)
+  }
+  return shifts.filter((shift) => shift.isRemote)
+}
+
 export function ShiftsTable() {
-  const { data: shifts = [], isLoading, error, refetch } = useTodayShifts()
-  const shiftGroups = groupShiftsByStartTime(shifts)
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>("all")
+  const { shifts, isLoading, error, refetch } = useTodayShiftList({
+    includeRemote: true,
+  })
+  const filteredShifts = useMemo(
+    () => filterShiftsByLocation(shifts, locationFilter),
+    [shifts, locationFilter],
+  )
+  const shiftGroups = groupShiftsByStartTime(filteredShifts)
   const groupRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const currentGroupIndex = findCurrentGroupIndex(shiftGroups)
 
@@ -93,17 +118,28 @@ export function ShiftsTable() {
   if (shiftGroups.length === 0) {
     const todayDay = getTodayDay()
     const isWeekend = !todayDay
+    const hasShiftsButFilteredOut =
+      shifts.length > 0 && locationFilter !== "all"
 
     return (
       <Card className="bg-card border-border">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
           <CardTitle className="text-lg font-semibold uppercase tracking-wider">
             All Shifts Today
           </CardTitle>
+          <LocationFilterToggle
+            value={locationFilter}
+            onValueChange={setLocationFilter}
+          />
         </CardHeader>
         <CardContent className="px-6 py-6">
           <div className="flex flex-col items-center justify-center py-8">
-            {isWeekend ? (
+            {hasShiftsButFilteredOut ? (
+              <p className="text-sm text-muted-foreground">
+                No {locationFilter === "in-person" ? "in-person" : "remote"} shifts
+                scheduled for today.
+              </p>
+            ) : isWeekend ? (
               <p className="text-sm text-muted-foreground">No shifts scheduled for weekends.</p>
             ) : (
               <p className="text-sm text-muted-foreground">No shifts scheduled for today.</p>
@@ -114,29 +150,35 @@ export function ShiftsTable() {
     )
   }
 
-  const COLUMN_COUNT = 5
+  const COLUMN_COUNT = 6
 
   return (
     <Card className="bg-card border-border">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
         <div className="space-y-1">
           <CardTitle className="text-lg font-semibold uppercase tracking-wider">
             All Shifts Today
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Grouped by clock-in hour
+            Grouped by clock-in hour. Remote staff are expected to work but do not clock in here.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={scrollToNow}
-          className="uppercase tracking-wider text-xs"
-        >
-          <Clock className="h-3.5 w-3.5" />
-          Go to Now
-        </Button>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <LocationFilterToggle
+            value={locationFilter}
+            onValueChange={setLocationFilter}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={scrollToNow}
+            className="uppercase tracking-wider text-xs"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Go to Now
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="px-6 pb-6">
         <Table>
@@ -147,6 +189,9 @@ export function ShiftsTable() {
               </TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
                 Role
+              </TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
+                Location
               </TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs">
                 Expected Shift
@@ -165,7 +210,7 @@ export function ShiftsTable() {
               const hour = Number.parseInt(group.startTime.split(":")[0] ?? "", 10)
               const onShiftCount = Number.isNaN(hour)
                 ? 0
-                : countWorkingDuringHour(shifts, hour)
+                : countWorkingDuringHour(filteredShifts, hour)
 
               return (
               <Fragment key={group.startTime}>
@@ -223,18 +268,31 @@ export function ShiftsTable() {
                     <TableCell className="text-muted-foreground">
                       {shift.role}
                     </TableCell>
+                    <TableCell>
+                      <WorkModeBadge mode={shift.isRemote ? "remote" : "in-person"} />
+                    </TableCell>
                     <TableCell className="text-sm">
                       {formatTimeRange(shift.startTime, shift.endTime)}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {formatActualShift(shift.clockInActual, shift.clockOutActual)}
+                      {shift.isRemote && !shift.clockInActual ? (
+                        <span className="text-muted-foreground">Not required</span>
+                      ) : (
+                        formatActualShift(shift.clockInActual, shift.clockOutActual)
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge
-                        variant={shift.status === "incoming" ? "outline" : "secondary"}
+                        variant={
+                          shift.status === "incoming" || shift.status === "expected"
+                            ? "outline"
+                            : "secondary"
+                        }
                         className={getShiftStatusBadgeClassName(shift.status)}
                       >
-                        {formatShiftStatusLabel(shift.status)}
+                        {formatShiftStatusLabel(shift.status, {
+                          isRemote: shift.isRemote,
+                        })}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -246,6 +304,37 @@ export function ShiftsTable() {
         </Table>
       </CardContent>
     </Card>
+  )
+}
+
+function LocationFilterToggle({
+  value,
+  onValueChange,
+}: {
+  value: LocationFilter
+  onValueChange: (value: LocationFilter) => void
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => {
+        if (next) onValueChange(next as LocationFilter)
+      }}
+      variant="outline"
+      size="sm"
+      className="justify-end"
+    >
+      <ToggleGroupItem value="all" className="text-xs uppercase tracking-wider">
+        All
+      </ToggleGroupItem>
+      <ToggleGroupItem value="in-person" className="text-xs uppercase tracking-wider">
+        In person
+      </ToggleGroupItem>
+      <ToggleGroupItem value="remote" className="text-xs uppercase tracking-wider">
+        Remote
+      </ToggleGroupItem>
+    </ToggleGroup>
   )
 }
 

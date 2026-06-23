@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { clearScheduleBlockReferences } from '../lib/clearScheduleBlockReferences';
 import { timeEntryService } from '../services/timeEntryService';
+
+describe('clearScheduleBlockReferences', () => {
+  it('is exported as a function', () => {
+    expect(typeof clearScheduleBlockReferences).toBe('function');
+  });
+});
 
 describe('timeEntryService - basic existence', () => {
   it('should have all expected methods', () => {

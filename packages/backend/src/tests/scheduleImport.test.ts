@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseScheduleSpreadsheet } from '../lib/scheduleImportParser';
+import {
+  parseScheduleSpreadsheet,
+  parseThemeColorIsRemote,
+} from '../lib/scheduleImportParser';
 import { normalizeTime, transformImportRows } from '../lib/scheduleImportTransform';
 
 const fixturePath = join(__dirname, 'fixtures', 'schedule-import-sample.csv');
@@ -18,6 +21,7 @@ describe('scheduleImportParser', () => {
       startDate: '6/22/2026',
       startTime: '08:00',
       endTime: '11:00',
+      themeColor: '3. Green',
     });
   });
 
@@ -60,7 +64,17 @@ describe('scheduleImportParser', () => {
     expect(rows[0]).toMatchObject({
       member: 'Darryl James Arce Cruz',
       workEmail: 'dcruz44@calpoly.edu',
+      themeColor: '3. Green',
     });
+  });
+});
+
+describe('parseThemeColorIsRemote', () => {
+  it('maps When I Work theme colors', () => {
+    expect(parseThemeColorIsRemote('3. Green')).toBe(false);
+    expect(parseThemeColorIsRemote('2. Blue')).toBe(true);
+    expect(parseThemeColorIsRemote('')).toBe(false);
+    expect(parseThemeColorIsRemote('30. Plum')).toBeNull();
   });
 });
 
@@ -68,7 +82,7 @@ describe('scheduleImportTransform', () => {
   it('maps dates to weekday blocks grouped by email', () => {
     const buffer = readFileSync(fixturePath);
     const rows = parseScheduleSpreadsheet(buffer, 'sample.csv');
-    const result = transformImportRows(rows, '2026-06-01', '2026-06-30');
+    const result = transformImportRows(rows, '2026-06-01', '2026-06-30', true);
 
     expect(result.skippedRows).toBe(0);
     expect(result.students).toHaveLength(2);
@@ -79,14 +93,46 @@ describe('scheduleImportTransform', () => {
     expect(darryl).toBeDefined();
     expect(darryl!.blocks).toEqual(
       expect.arrayContaining([
-        { day: 'monday', start_time: '08:00', end_time: '11:00' },
-        { day: 'monday', start_time: '12:00', end_time: '17:00' },
-        { day: 'tuesday', start_time: '08:00', end_time: '11:00' },
+        {
+          day: 'monday',
+          start_time: '08:00',
+          end_time: '11:00',
+          is_remote: false,
+        },
+        {
+          day: 'monday',
+          start_time: '12:00',
+          end_time: '17:00',
+          is_remote: false,
+        },
+        {
+          day: 'tuesday',
+          start_time: '08:00',
+          end_time: '11:00',
+          is_remote: false,
+        },
       ]),
     );
 
     expect(darryl!.firstName).toBe('Darryl');
     expect(darryl!.lastName).toBe('James Arce Cruz');
+
+    const edgar = result.students.find(
+      (student) => student.workEmail === 'eolozaga@calpoly.edu',
+    );
+    expect(edgar).toBeDefined();
+    expect(edgar!.blocks.every((block) => block.is_remote)).toBe(true);
+  });
+
+  it('skips blue rows when remote shifts are not allowed', () => {
+    const buffer = readFileSync(fixturePath);
+    const rows = parseScheduleSpreadsheet(buffer, 'sample.csv');
+    const result = transformImportRows(rows, '2026-06-01', '2026-06-30', false);
+
+    expect(result.students).toHaveLength(1);
+    expect(result.students[0].workEmail).toBe('dcruz44@calpoly.edu');
+    expect(result.remoteRowsSkipped).toBe(1);
+    expect(result.skippedRows).toBe(1);
   });
 
   it('skips rows outside the selected term', () => {

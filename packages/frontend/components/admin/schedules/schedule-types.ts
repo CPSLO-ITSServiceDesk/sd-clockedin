@@ -15,6 +15,7 @@ export interface ScheduleBlock {
   day: Weekday
   start_time: string
   end_time: string
+  is_remote: boolean
 }
 
 export type DraftScheduleBlock = Omit<ScheduleBlock, "id" | "schedule_id">

@@ -18,7 +18,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { useTodayShiftList } from "@/hooks/use-today-shifts"
 import { computeHourlyHeadcount } from "@/lib/shifts/dashboard-stats"
 import { getTodayDay } from "@/lib/shifts/today-shifts"
 
@@ -34,7 +34,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function HourlyHeadcountChart() {
-  const { data: shifts = [], isLoading, error } = useTodayShifts()
+  const { shifts, isLoading, error } = useTodayShiftList({ includeRemote: true })
   const chartData = computeHourlyHeadcount(shifts, new Date())
   const todayDay = getTodayDay()
 

@@ -65,6 +65,7 @@ function toTermFields(values: TermFormValues) {
     name: values.name.trim(),
     start_date: values.start_date,
     end_date: values.end_date,
+    remote_shifts_allowed: values.remote_shifts_allowed,
     off_days: toTermOffDays(values),
   }
 }

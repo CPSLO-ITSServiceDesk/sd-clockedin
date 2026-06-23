@@ -100,6 +100,7 @@ export function selectedSlotsToDraftBlocks(
         day,
         start_time: minutesToTime(rangeStart),
         end_time: minutesToTime(rangeEnd),
+        is_remote: false,
       })
       rangeStart = current
       rangeEnd = current + SLOT_MINUTES
@@ -109,6 +110,7 @@ export function selectedSlotsToDraftBlocks(
       day,
       start_time: minutesToTime(rangeStart),
       end_time: minutesToTime(rangeEnd),
+      is_remote: false,
     })
   }
 
@@ -121,6 +123,26 @@ export function selectedSlotsToDraftBlocks(
   })
 }
 
+export function mergeBlockWorkModes(
+  nextBlocks: DraftScheduleBlock[],
+  previousBlocks: DraftScheduleBlock[],
+  defaultIsRemote = false,
+): DraftScheduleBlock[] {
+  return nextBlocks.map((block) => {
+    const match = previousBlocks.find(
+      (previous) =>
+        previous.day === block.day &&
+        previous.start_time === block.start_time &&
+        previous.end_time === block.end_time,
+    )
+
+    return {
+      ...block,
+      is_remote: match?.is_remote ?? defaultIsRemote,
+    }
+  })
+}
+
 export function normalizeDraftBlock(
   block: DraftScheduleBlock,
 ): DraftScheduleBlock {
@@ -128,13 +150,21 @@ export function normalizeDraftBlock(
     day: block.day,
     start_time: normalizeTimeKey(block.start_time),
     end_time: normalizeTimeKey(block.end_time),
+    is_remote: block.is_remote ?? false,
   }
 }
 
 export function normalizeDraftBlocks(
   blocks: DraftScheduleBlock[],
+  options?: { forceInPerson?: boolean },
 ): DraftScheduleBlock[] {
-  return blocks.map(normalizeDraftBlock)
+  const normalized = blocks.map(normalizeDraftBlock)
+
+  if (options?.forceInPerson) {
+    return normalized.map((block) => ({ ...block, is_remote: false }))
+  }
+
+  return normalized
 }
 
 export function validateDraftBlocks(blocks: DraftScheduleBlock[]): string | null {
@@ -205,10 +235,10 @@ export function summarizeScheduleBlocks(
   })
 
   return sorted
-    .map(
-      (block) =>
-        `${formatDayShort(block.day)} ${formatTime(block.start_time)}–${formatTime(block.end_time)}`,
-    )
+    .map((block) => {
+      const label = `${formatDayShort(block.day)} ${formatTime(block.start_time)}–${formatTime(block.end_time)}`
+      return "is_remote" in block && block.is_remote ? `${label} (remote)` : label
+    })
     .join(", ")
 }
 

@@ -1,8 +1,16 @@
-import { todayShiftsApi } from "@/lib/api/today-shifts"
+import { todayShiftsApi, type TodayShiftsResponse } from "@/lib/api/today-shifts"
 import { formatStudentRole, type StudentAssistant } from "@/lib/api/student-assistants"
 import { timeToMinutes } from "@/lib/format-time"
 
-export type TodayShiftStatus = "incoming" | "on-time" | "late" | "early" | "absent"
+export type { TodayShiftsResponse }
+
+export type TodayShiftStatus =
+  | "incoming"
+  | "on-time"
+  | "late"
+  | "early"
+  | "absent"
+  | "expected"
 
 export interface TodayShift {
   scheduleBlockId: number | null
@@ -16,6 +24,7 @@ export interface TodayShift {
   clockOutActual: string | null
   timeEntryId: number | null
   status: TodayShiftStatus
+  isRemote: boolean
 }
 
 export interface ClockInStudentOption {
@@ -39,8 +48,10 @@ export function getTodayDay(): "monday" | "tuesday" | "wednesday" | "thursday" |
   return days[day - 1]
 }
 
-export async function fetchTodayShifts(): Promise<TodayShift[]> {
-  return todayShiftsApi.listToday()
+export async function fetchTodayShifts(
+  options?: { includeRemote?: boolean },
+): Promise<TodayShiftsResponse> {
+  return todayShiftsApi.listToday(options)
 }
 
 export function getClockedInShifts(shifts: TodayShift[]): TodayShift[] {
@@ -72,12 +83,19 @@ export function getClockedInStudentIds(shifts: TodayShift[]): Set<number> {
 export function getClockInStudentOptions(
   students: StudentAssistant[],
   shifts: TodayShift[],
+  remoteOnlyStudentIds: number[] = [],
 ): ClockInStudentOption[] {
   const clockedInIds = getClockedInStudentIds(shifts)
+  const remoteOnlyIds = new Set(remoteOnlyStudentIds)
   const roleOrder = (role: string) => (role === "Student Lead" ? 0 : 1)
 
   return students
-    .filter((student) => student.is_active !== false && !clockedInIds.has(student.id))
+    .filter(
+      (student) =>
+        student.is_active !== false &&
+        !clockedInIds.has(student.id) &&
+        !remoteOnlyIds.has(student.id),
+    )
     .map((student) => ({
       studentAssistantId: student.id,
       firstName: student.first_name ?? "",
@@ -197,7 +215,15 @@ export function getShiftInitials(shift: Pick<TodayShift, "firstName" | "lastName
     .join("")
 }
 
-export function formatShiftStatusLabel(status: TodayShiftStatus): string {
+export function formatShiftStatusLabel(
+  status: TodayShiftStatus,
+  options?: { isRemote?: boolean },
+): string {
+  if (options?.isRemote) {
+    if (status === "incoming") return "Scheduled"
+    if (status === "expected") return "Expected"
+  }
+
   switch (status) {
     case "incoming":
       return "Incoming"
@@ -209,6 +235,8 @@ export function formatShiftStatusLabel(status: TodayShiftStatus): string {
       return "Early"
     case "absent":
       return "Absent"
+    case "expected":
+      return "Expected"
   }
 }
 
@@ -224,5 +252,7 @@ export function getShiftStatusBadgeClassName(status: TodayShiftStatus): string {
       return "border-transparent bg-sky-500/20 text-sky-500 shadow-none"
     case "absent":
       return "border-transparent bg-destructive/20 text-destructive shadow-none"
+    case "expected":
+      return "border-transparent bg-sky-500/15 text-sky-600 dark:text-sky-300 shadow-none"
   }
 }

@@ -14,12 +14,14 @@ import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-t
 import {
   blocksToSelectedSlots,
   formatWeeklyHours,
+  mergeBlockWorkModes,
   normalizeDraftBlocks,
   selectedSlotsToDraftBlocks,
   summarizeScheduleBlocks,
   totalWeeklyHours,
   validateDraftBlocks,
 } from "@/components/admin/schedules/schedule-utils"
+import { WorkModeBadge, type WorkMode } from "@/components/admin/work-mode-badge"
 import type { ScheduleStudent } from "@/lib/api/schedule-mappers"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,12 +31,14 @@ import { cn } from "@/lib/utils"
 interface ScheduleEditorPanelProps {
   student: ScheduleStudent
   initialBlocks: DraftScheduleBlock[]
+  remoteShiftsAllowed?: boolean
   onSave: (_blocks: DraftScheduleBlock[]) => Promise<void>
 }
 
 export function ScheduleEditorPanel({
   student,
   initialBlocks,
+  remoteShiftsAllowed = false,
   onSave,
 }: ScheduleEditorPanelProps) {
   const normalizedInitialBlocks = useMemo(
@@ -49,6 +53,7 @@ export function ScheduleEditorPanel({
     setDraftBlocks(normalizedInitialBlocks)
   }
   const [inputMode, setInputMode] = useState<"grid" | "manual">("grid")
+  const [gridWorkMode, setGridWorkMode] = useState<WorkMode>("in-person")
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -63,18 +68,30 @@ export function ScheduleEditorPanel({
     [draftBlocks],
   )
 
-  const handleSelectedSlotsChange = (slots: Set<string>) => {
-    setDraftBlocks(normalizeDraftBlocks(selectedSlotsToDraftBlocks(slots)))
-    setError(null)
-  }
-
-  const handleManualChange = (blocks: DraftScheduleBlock[]) => {
+  const updateDraftBlocks = (blocks: DraftScheduleBlock[]) => {
     setDraftBlocks(normalizeDraftBlocks(blocks))
     setError(null)
   }
 
+  const handleSelectedSlotsChange = (slots: Set<string>) => {
+    const fromGrid = selectedSlotsToDraftBlocks(slots)
+    updateDraftBlocks(
+      mergeBlockWorkModes(
+        fromGrid,
+        draftBlocks,
+        remoteShiftsAllowed && gridWorkMode === "remote",
+      ),
+    )
+  }
+
+  const handleManualChange = (blocks: DraftScheduleBlock[]) => {
+    updateDraftBlocks(blocks)
+  }
+
   const handleSave = async () => {
-    const normalizedBlocks = normalizeDraftBlocks(draftBlocks)
+    const normalizedBlocks = normalizeDraftBlocks(draftBlocks, {
+      forceInPerson: !remoteShiftsAllowed,
+    })
     const validationError = validateDraftBlocks(normalizedBlocks)
     if (validationError) {
       setError(validationError)
@@ -141,6 +158,28 @@ export function ScheduleEditorPanel({
         </TabsList>
 
         <TabsContent value="grid" forceMount className="data-[state=inactive]:hidden">
+          {remoteShiftsAllowed ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground text-xs uppercase tracking-wider">
+                Paint as
+              </span>
+              {(["in-person", "remote"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setGridWorkMode(mode)}
+                  className={cn(
+                    "rounded-full transition-opacity",
+                    gridWorkMode === mode
+                      ? "opacity-100"
+                      : "opacity-45 hover:opacity-80",
+                  )}
+                >
+                  <WorkModeBadge mode={mode} />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <ScheduleGrid
             selectedSlots={selectedSlots}
             onSelectedSlotsChange={handleSelectedSlotsChange}
@@ -152,6 +191,7 @@ export function ScheduleEditorPanel({
             variant="compact"
             blocks={draftBlocks}
             onChange={handleManualChange}
+            remoteShiftsAllowed={remoteShiftsAllowed}
           />
         </TabsContent>
       </Tabs>

@@ -7,6 +7,7 @@ export interface Term {
   is_active: boolean | null
   name: string | null
   off_days: any | null // Using any for Json type since we don't have the exact type definition
+  remote_shifts_allowed: boolean
   start_date: string | null
 }
 
@@ -17,6 +18,7 @@ export type TermInput = {
   is_active?: boolean | null
   name?: string | null
   off_days?: any | null
+  remote_shifts_allowed?: boolean
   start_date?: string | null
 }
 

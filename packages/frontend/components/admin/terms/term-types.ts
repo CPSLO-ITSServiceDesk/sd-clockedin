@@ -29,6 +29,7 @@ export interface AcademicTerm {
   start_date: string
   end_date: string
   is_active: boolean
+  remote_shifts_allowed: boolean
   off_days: TermOffDays | null
 }
 

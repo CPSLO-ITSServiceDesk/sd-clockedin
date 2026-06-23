@@ -1,5 +1,8 @@
 import type { Database } from '../types/database.types';
-import type { ScheduleImportRow } from './scheduleImportParser';
+import {
+  parseThemeColorIsRemote,
+  type ScheduleImportRow,
+} from './scheduleImportParser';
 
 type Weekday = Database['public']['Enums']['days'];
 
@@ -7,6 +10,7 @@ export interface DraftScheduleBlock {
   day: Weekday;
   start_time: string;
   end_time: string;
+  is_remote: boolean;
 }
 
 export interface StudentScheduleImport {
@@ -21,6 +25,7 @@ export interface TransformResult {
   students: StudentScheduleImport[];
   warnings: string[];
   skippedRows: number;
+  remoteRowsSkipped: number;
 }
 
 const WEEKDAYS: Weekday[] = [
@@ -110,12 +115,6 @@ function timeToMinutes(value: string): number {
   return hours * 60 + minutes;
 }
 
-function minutesToTime(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-}
-
 function mergeBlocks(blocks: DraftScheduleBlock[]): DraftScheduleBlock[] {
   const sorted = [...blocks].sort(
     (a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time),
@@ -125,7 +124,11 @@ function mergeBlocks(blocks: DraftScheduleBlock[]): DraftScheduleBlock[] {
 
   for (const block of sorted) {
     const last = merged[merged.length - 1];
-    if (last && timeToMinutes(block.start_time) <= timeToMinutes(last.end_time)) {
+    if (
+      last &&
+      last.is_remote === block.is_remote &&
+      timeToMinutes(block.start_time) <= timeToMinutes(last.end_time)
+    ) {
       if (timeToMinutes(block.end_time) > timeToMinutes(last.end_time)) {
         last.end_time = block.end_time;
       }
@@ -138,19 +141,22 @@ function mergeBlocks(blocks: DraftScheduleBlock[]): DraftScheduleBlock[] {
 }
 
 function mergeBlocksByDay(blocks: DraftScheduleBlock[]): DraftScheduleBlock[] {
-  const byDay = new Map<Weekday, DraftScheduleBlock[]>();
+  const byDayAndMode = new Map<string, DraftScheduleBlock[]>();
 
   for (const block of blocks) {
-    const list = byDay.get(block.day) ?? [];
+    const key = `${block.day}:${block.is_remote}`;
+    const list = byDayAndMode.get(key) ?? [];
     list.push(block);
-    byDay.set(block.day, list);
+    byDayAndMode.set(key, list);
   }
 
   const result: DraftScheduleBlock[] = [];
   for (const day of WEEKDAYS) {
-    const dayBlocks = byDay.get(day);
-    if (!dayBlocks?.length) continue;
-    result.push(...mergeBlocks(dayBlocks));
+    for (const isRemote of [false, true]) {
+      const dayBlocks = byDayAndMode.get(`${day}:${isRemote}`);
+      if (!dayBlocks?.length) continue;
+      result.push(...mergeBlocks(dayBlocks));
+    }
   }
 
   return result;
@@ -160,9 +166,11 @@ export function transformImportRows(
   rows: ScheduleImportRow[],
   termStartDate: string,
   termEndDate: string,
+  remoteShiftsAllowed = false,
 ): TransformResult {
   const warnings: string[] = [];
   let skippedRows = 0;
+  let remoteRowsSkipped = 0;
 
   const byEmail = new Map<
     string,
@@ -179,6 +187,24 @@ export function transformImportRows(
     if (!row.member) {
       warnings.push(`Row ${row.rowNumber}: missing Member name`);
       skippedRows += 1;
+      continue;
+    }
+
+    const themeRemote = parseThemeColorIsRemote(row.themeColor);
+    if (themeRemote === null) {
+      warnings.push(
+        `Row ${row.rowNumber}: unknown Theme Color "${row.themeColor}" — treated as in-person`,
+      );
+    }
+
+    const isRemote = themeRemote === true;
+
+    if (isRemote && !remoteShiftsAllowed) {
+      warnings.push(
+        `Row ${row.rowNumber}: remote shift skipped (term does not allow remote shifts)`,
+      );
+      skippedRows += 1;
+      remoteRowsSkipped += 1;
       continue;
     }
 
@@ -230,6 +256,7 @@ export function transformImportRows(
       day: weekday,
       start_time: startTime,
       end_time: endTime,
+      is_remote: isRemote,
     });
     byEmail.set(row.workEmail, existing);
   }
@@ -251,5 +278,5 @@ export function transformImportRows(
     });
   }
 
-  return { students, warnings, skippedRows };
+  return { students, warnings, skippedRows, remoteRowsSkipped };
 }

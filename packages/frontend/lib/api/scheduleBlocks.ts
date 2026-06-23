@@ -12,6 +12,7 @@ export interface ScheduleBlock {
   days: ScheduleBlockDay | null
   end_time: string | null
   id: number
+  is_remote: boolean
   schedule_id: number | null
   start_time: string | null
 }
@@ -21,6 +22,7 @@ export type ScheduleBlockInput = {
   days?: ScheduleBlockDay | null
   end_time?: string | null
   id?: number
+  is_remote?: boolean
   schedule_id?: number | null
   start_time?: string | null
 }

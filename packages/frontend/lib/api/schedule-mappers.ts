@@ -37,6 +37,7 @@ export function apiBlockToDraft(
     day: block.days,
     start_time: normalizeTimeKey(block.start_time),
     end_time: normalizeTimeKey(block.end_time),
+    is_remote: block.is_remote ?? false,
   }
 }
 
@@ -49,5 +50,6 @@ export function draftToApiBlockInput(
     days: block.day,
     start_time: block.start_time,
     end_time: block.end_time,
+    is_remote: block.is_remote ?? false,
   }
 }

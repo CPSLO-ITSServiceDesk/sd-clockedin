@@ -18,6 +18,7 @@ export interface ScheduleImportBlock {
   day: string
   start_time: string
   end_time: string
+  is_remote: boolean
 }
 
 export interface ScheduleImportStudentPreview {
@@ -26,6 +27,7 @@ export interface ScheduleImportStudentPreview {
   action: "create" | "match"
   studentId?: number
   blockCount: number
+  remoteBlockCount: number
   blocks: ScheduleImportBlock[]
 }
 
@@ -34,7 +36,9 @@ export interface ScheduleImportSummary {
   studentsMatched: number
   schedulesUpdated: number
   totalBlocks: number
+  remoteBlocks: number
   skippedRows: number
+  remoteRowsSkipped: number
 }
 
 export interface ScheduleImportResult {

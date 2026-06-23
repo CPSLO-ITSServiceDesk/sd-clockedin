@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { useTodayShiftList } from "@/hooks/use-today-shifts"
 import { timeEntriesApi } from "@/lib/api/time-entries"
 import { formatTime } from "@/lib/format-time"
 import { queryKeys } from "@/lib/query-keys"
@@ -36,7 +36,7 @@ import {
 
 export function ClockedInTable() {
   const queryClient = useQueryClient()
-  const { data: shifts = [], isLoading, error } = useTodayShifts()
+  const { shifts, isLoading, error } = useTodayShiftList()
   const clockedIn = getClockedInStudents(shifts)
   const [now, setNow] = useState(() => new Date())
   const [confirmTarget, setConfirmTarget] = useState<TodayShift | null>(null)

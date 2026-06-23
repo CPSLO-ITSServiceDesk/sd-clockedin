@@ -89,17 +89,23 @@ export function buildWorkingHourSlots(
   return slots
 }
 
+export function inPersonShifts(shifts: TodayShift[]): TodayShift[] {
+  return shifts.filter((shift) => !shift.isRemote)
+}
+
 export function computeDashboardKpis(
   shifts: TodayShift[],
   now: Date = new Date(),
 ): DashboardKpis {
+  const inPerson = inPersonShifts(shifts)
+
   return {
-    late: shifts.filter((shift) => shift.status === "late").length,
-    absent: shifts.filter((shift) => shift.status === "absent").length,
-    onShift: shifts.filter(
+    late: inPerson.filter((shift) => shift.status === "late").length,
+    absent: inPerson.filter((shift) => shift.status === "absent").length,
+    onShift: inPerson.filter(
       (shift) => shift.clockInActual && !shift.clockOutActual,
     ).length,
-    incomingNextTwoHours: getExpectedArrivalShifts(shifts, now).length,
+    incomingNextTwoHours: getExpectedArrivalShifts(inPerson, now).length,
   }
 }
 

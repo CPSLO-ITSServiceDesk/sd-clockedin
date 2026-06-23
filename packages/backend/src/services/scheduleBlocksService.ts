@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { clearScheduleBlockReferences } from '../lib/clearScheduleBlockReferences';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
 
@@ -61,10 +62,25 @@ export const scheduleBlocksService = {
   },
 
   async remove(id: number): Promise<void> {
+    await clearScheduleBlockReferences([id]);
+
     const { error } = await supabase
       .from('schedule_blocks')
       .delete()
       .eq('id', id);
+
+    if (error) throw new HttpError(500, error.message);
+  },
+
+  async removeMany(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    await clearScheduleBlockReferences(ids);
+
+    const { error } = await supabase
+      .from('schedule_blocks')
+      .delete()
+      .in('id', ids);
 
     if (error) throw new HttpError(500, error.message);
   },

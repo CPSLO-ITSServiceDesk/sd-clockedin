@@ -132,12 +132,13 @@ export function ScheduleImportPanel({
 
       {preview ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
               ["New students", preview.summary.studentsCreated],
               ["Matched", preview.summary.studentsMatched],
               ["Schedules", preview.summary.schedulesUpdated],
               ["Blocks", preview.summary.totalBlocks],
+              ["Remote blocks", preview.summary.remoteBlocks],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -154,7 +155,11 @@ export function ScheduleImportPanel({
           {preview.summary.skippedRows > 0 ? (
             <p className="text-muted-foreground text-sm">
               {preview.summary.skippedRows} row
-              {preview.summary.skippedRows === 1 ? "" : "s"} skipped.
+              {preview.summary.skippedRows === 1 ? "" : "s"} skipped
+              {preview.summary.remoteRowsSkipped > 0
+                ? ` (${preview.summary.remoteRowsSkipped} remote)`
+                : ""}
+              .
             </p>
           ) : null}
 
@@ -261,6 +266,9 @@ function ImportStudentSection({
             </div>
             <Badge variant="secondary" className={cn("shrink-0", badgeClassName)}>
               {badgeLabel} · {student.blockCount} blocks
+              {student.remoteBlockCount > 0
+                ? ` · ${student.remoteBlockCount} remote`
+                : ""}
             </Badge>
           </div>
         ))}

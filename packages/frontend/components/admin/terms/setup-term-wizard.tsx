@@ -14,6 +14,7 @@ import {
   ISO_DATE_PATTERN,
 } from "@/components/admin/terms/term-types"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -50,6 +52,7 @@ const setupTermSchema = z
       .max(100, "Term name must be 100 characters or fewer"),
     start_date: z.string().regex(ISO_DATE_PATTERN, "Start date is required"),
     end_date: z.string().regex(ISO_DATE_PATTERN, "End date is required"),
+    remote_shifts_allowed: z.boolean(),
   })
   .superRefine((values, context) => {
     if (values.start_date && values.end_date && values.end_date < values.start_date) {
@@ -124,6 +127,7 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
       name: "",
       start_date: "",
       end_date: "",
+      remote_shifts_allowed: false,
     },
     mode: "onTouched",
   })
@@ -160,6 +164,7 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
         start_date: values.start_date,
         end_date: values.end_date,
         is_active: true,
+        remote_shifts_allowed: values.remote_shifts_allowed,
         off_days: { vacations: [], special_schedules: [] },
       })
 
@@ -258,6 +263,28 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="remote_shifts_allowed"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start gap-3 rounded-md border border-border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Allow remote shifts</FormLabel>
+                        <FormDescription>
+                          Enable before importing schedules with Blue Theme Color
+                          rows from When I Work.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
 
                 {submitError ? (
                   <p className="text-sm text-destructive">{submitError}</p>

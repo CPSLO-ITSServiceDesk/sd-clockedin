@@ -17,6 +17,7 @@ import {
   type Weekday,
 } from "@/components/admin/terms/term-types"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,7 @@ const termFormSchema = z
       .string()
       .regex(ISO_DATE_PATTERN, "Start date is required"),
     end_date: z.string().regex(ISO_DATE_PATTERN, "End date is required"),
+    remote_shifts_allowed: z.boolean(),
     vacations: z.array(vacationEntrySchema),
     special_schedules: z.array(specialScheduleEntrySchema),
   })
@@ -176,6 +178,7 @@ const emptyValues: TermFormValues = {
   name: "",
   start_date: "",
   end_date: "",
+  remote_shifts_allowed: false,
   vacations: [],
   special_schedules: [],
 }
@@ -187,6 +190,7 @@ function valuesFromTerm(term: AcademicTerm): TermFormValues {
     name: term.name,
     start_date: term.start_date,
     end_date: term.end_date,
+    remote_shifts_allowed: term.remote_shifts_allowed ?? false,
     vacations: offDays.vacations.map((vacation) => ({
       clientId: createClientId(),
       date: vacation.date,
@@ -384,6 +388,28 @@ export function TermForm({
                       )}
                     />
                   </div>
+
+                  <FormField
+                    control={form.control}
+                    name="remote_shifts_allowed"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start gap-3 rounded-md border border-border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Allow remote shifts</FormLabel>
+                          <FormDescription>
+                            Import Blue Theme Color rows from When I Work. Remote
+                            staff are excluded from the clock-in kiosk.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
                 <Separator />

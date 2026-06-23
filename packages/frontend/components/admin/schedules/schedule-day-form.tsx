@@ -15,6 +15,7 @@ import {
   type DraftScheduleBlock,
   type Weekday,
 } from "@/components/admin/schedules/schedule-types"
+import { WorkModeBadge, type WorkMode } from "@/components/admin/work-mode-badge"
 import { formatTimeRange, normalizeTimeKey } from "@/lib/format-time"
 import { cn } from "@/lib/utils"
 
@@ -22,6 +23,7 @@ interface ScheduleDayFormProps {
   blocks: DraftScheduleBlock[]
   onChange: (blocks: DraftScheduleBlock[]) => void
   variant?: "default" | "compact"
+  remoteShiftsAllowed?: boolean
 }
 
 function createEmptyBlock(day: Weekday = "monday"): DraftScheduleBlock {
@@ -29,13 +31,41 @@ function createEmptyBlock(day: Weekday = "monday"): DraftScheduleBlock {
     day,
     start_time: "09:00",
     end_time: "12:00",
+    is_remote: false,
   }
+}
+
+function WorkModeSelect({
+  value,
+  onChange,
+}: Readonly<{
+  value: WorkMode
+  onChange: (mode: WorkMode) => void
+}>) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {(["in-person", "remote"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => onChange(mode)}
+          className={cn(
+            "rounded-full transition-opacity",
+            value === mode ? "opacity-100" : "opacity-45 hover:opacity-80",
+          )}
+        >
+          <WorkModeBadge mode={mode} />
+        </button>
+      ))}
+    </div>
+  )
 }
 
 export function ScheduleDayForm({
   blocks,
   onChange,
   variant = "default",
+  remoteShiftsAllowed = false,
 }: ScheduleDayFormProps) {
   const updateBlock = (
     index: number,
@@ -135,6 +165,14 @@ export function ScheduleDayForm({
                         }
                         className="w-[132px] border-border bg-input"
                       />
+                      {remoteShiftsAllowed ? (
+                        <WorkModeSelect
+                          value={block.is_remote ? "remote" : "in-person"}
+                          onChange={(mode) =>
+                            updateBlock(index, { is_remote: mode === "remote" })
+                          }
+                        />
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"
@@ -261,6 +299,19 @@ export function ScheduleDayForm({
                         className="w-[132px]"
                       />
                     </div>
+                    {remoteShiftsAllowed ? (
+                      <div className="space-y-1">
+                        <label className="text-muted-foreground text-xs uppercase tracking-wider">
+                          Location
+                        </label>
+                        <WorkModeSelect
+                          value={block.is_remote ? "remote" : "in-person"}
+                          onChange={(mode) =>
+                            updateBlock(index, { is_remote: mode === "remote" })
+                          }
+                        />
+                      </div>
+                    ) : null}
                     <Button
                       type="button"
                       variant="ghost"

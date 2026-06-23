@@ -3,7 +3,7 @@
 import { AlertTriangle, CalendarClock, UserCheck, UserX } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
-import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { useTodayShiftList } from "@/hooks/use-today-shifts"
 import { computeDashboardKpis } from "@/lib/shifts/dashboard-stats"
 
 function KpiValue({ value, isLoading }: Readonly<{ value: number; isLoading: boolean }>) {
@@ -15,7 +15,7 @@ function KpiValue({ value, isLoading }: Readonly<{ value: number; isLoading: boo
 }
 
 export function KpiCards() {
-  const { data: shifts = [], isLoading } = useTodayShifts()
+  const { shifts, isLoading } = useTodayShiftList()
   const { late, absent, onShift, incomingNextTwoHours } = computeDashboardKpis(shifts)
 
   return (
@@ -28,7 +28,7 @@ export function KpiCards() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">On Shift</p>
-            <p className="text-xs text-muted-foreground">currently clocked in</p>
+            <p className="text-xs text-muted-foreground">in-person, clocked in</p>
           </div>
           <KpiValue value={onShift} isLoading={isLoading} />
         </CardContent>
@@ -42,7 +42,7 @@ export function KpiCards() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Incoming</p>
-            <p className="text-xs text-muted-foreground">next 2 hours</p>
+            <p className="text-xs text-muted-foreground">in-person, next 2 hours</p>
           </div>
           <KpiValue value={incomingNextTwoHours} isLoading={isLoading} />
         </CardContent>
@@ -56,7 +56,7 @@ export function KpiCards() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Late</p>
-            <p className="text-xs text-muted-foreground">clocked in after start</p>
+            <p className="text-xs text-muted-foreground">in-person, after start</p>
           </div>
           <KpiValue value={late} isLoading={isLoading} />
         </CardContent>
@@ -70,7 +70,7 @@ export function KpiCards() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Absent</p>
-            <p className="text-xs text-muted-foreground">no clock-in today</p>
+            <p className="text-xs text-muted-foreground">in-person, no clock-in</p>
           </div>
           <KpiValue value={absent} isLoading={isLoading} />
         </CardContent>

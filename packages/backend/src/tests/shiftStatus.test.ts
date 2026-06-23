@@ -1,5 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { computeShiftStatus, ON_TIME_GRACE_MINUTES } from '../lib/shiftStatus';
+import {
+  computeRemoteShiftStatus,
+  computeShiftStatus,
+  ON_TIME_GRACE_MINUTES,
+} from '../lib/shiftStatus';
+
+describe('computeRemoteShiftStatus', () => {
+  const startTime = '09:00';
+  const beforeStart = new Date(2026, 5, 22, 8, 30);
+  const afterStart = new Date(2026, 5, 22, 9, 30);
+
+  it('returns incoming before the remote shift starts', () => {
+    expect(computeRemoteShiftStatus(startTime, beforeStart)).toBe('incoming');
+  });
+
+  it('returns expected once the remote shift has started', () => {
+    expect(computeRemoteShiftStatus(startTime, afterStart)).toBe('expected');
+  });
+});
 
 describe('computeShiftStatus', () => {
   const startTime = '09:00';

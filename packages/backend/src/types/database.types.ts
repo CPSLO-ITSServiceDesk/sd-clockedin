@@ -22,6 +22,7 @@ export type Database = {
           is_active: boolean | null
           name: string | null
           off_days: Json | null
+          remote_shifts_allowed: boolean
           start_date: string | null
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           is_active?: boolean | null
           name?: string | null
           off_days?: Json | null
+          remote_shifts_allowed?: boolean
           start_date?: string | null
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           is_active?: boolean | null
           name?: string | null
           off_days?: Json | null
+          remote_shifts_allowed?: boolean
           start_date?: string | null
         }
         Relationships: []
@@ -80,6 +83,7 @@ export type Database = {
           days: Database["public"]["Enums"]["days"] | null
           end_time: string | null
           id: number
+          is_remote: boolean
           schedule_id: number | null
           start_time: string | null
         }
@@ -88,6 +92,7 @@ export type Database = {
           days?: Database["public"]["Enums"]["days"] | null
           end_time?: string | null
           id?: number
+          is_remote?: boolean
           schedule_id?: number | null
           start_time?: string | null
         }
@@ -96,6 +101,7 @@ export type Database = {
           days?: Database["public"]["Enums"]["days"] | null
           end_time?: string | null
           id?: number
+          is_remote?: boolean
           schedule_id?: number | null
           start_time?: string | null
         }

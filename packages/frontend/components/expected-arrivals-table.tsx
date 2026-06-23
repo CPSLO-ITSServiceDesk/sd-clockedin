@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useTodayShifts } from "@/hooks/use-today-shifts"
+import { useTodayShiftList } from "@/hooks/use-today-shifts"
 import { timeEntriesApi } from "@/lib/api/time-entries"
 import { formatTimeRange } from "@/lib/format-time"
 import { queryKeys } from "@/lib/query-keys"
@@ -25,7 +25,7 @@ import {
 
 export function ExpectedArrivalsTable() {
   const queryClient = useQueryClient()
-  const { data: shifts = [], isLoading, error } = useTodayShifts()
+  const { shifts, isLoading, error } = useTodayShiftList()
   const expectedArrivals = getExpectedArrivalStudents(shifts)
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -63,7 +63,7 @@ export function ExpectedArrivalsTable() {
               Expected Arrivals
             </h2>
             <p className="text-sm text-muted-foreground">
-              Upcoming scheduled shifts
+              In-person staff arriving within the next 2 hours
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -428,6 +428,7 @@ export function SchedulesManager() {
                 key={`${selectedStudent.id}-${activeTermId}`}
                 student={selectedStudent}
                 initialBlocks={selectedScheduleData?.blocks ?? []}
+                remoteShiftsAllowed={selectedTerm?.remote_shifts_allowed ?? false}
                 onSave={handleSaveSchedule}
               />
             )}

@@ -21,6 +21,7 @@ router.post(
   body('end_date').optional().isISO8601(),
   body('is_active').optional().isBoolean(),
   body('off_days').optional().isObject(),
+  body('remote_shifts_allowed').optional().isBoolean(),
   validate,
   termController.create,
 );
@@ -33,6 +34,7 @@ router.put(
   body('end_date').optional().isISO8601(),
   body('is_active').optional().isBoolean(),
   body('off_days').optional().isObject(),
+  body('remote_shifts_allowed').optional().isBoolean(),
   validate,
   termController.update,
 );

@@ -21,7 +21,16 @@ export interface ScheduleImportRow {
   startTime: string;
   endDate: string;
   endTime: string;
+  themeColor: string;
   rowNumber: number;
+}
+
+export function parseThemeColorIsRemote(themeColor: string): boolean | null {
+  const normalized = themeColor.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.includes('blue')) return true;
+  if (normalized.includes('green')) return false;
+  return null;
 }
 
 function normalizeHeader(value: unknown): string {
@@ -97,6 +106,7 @@ function parseWorksheetRows(rows: unknown[][]): ScheduleImportRow[] {
   const startTimeIdx = headerIndex.get('Start Time')!;
   const endDateIdx = headerIndex.get('End Date')!;
   const endTimeIdx = headerIndex.get('End Time')!;
+  const themeColorIdx = headerIndex.get('Theme Color');
 
   const parsed: ScheduleImportRow[] = [];
 
@@ -111,6 +121,8 @@ function parseWorksheetRows(rows: unknown[][]): ScheduleImportRow[] {
     const startTime = cellValue(row, startTimeIdx);
     const endDate = cellValue(row, endDateIdx);
     const endTime = cellValue(row, endTimeIdx);
+    const themeColor =
+      themeColorIdx != null ? cellValue(row, themeColorIdx) : '';
 
     if (!member && !workEmail && !startDate && !startTime) {
       continue;
@@ -127,6 +139,7 @@ function parseWorksheetRows(rows: unknown[][]): ScheduleImportRow[] {
       startTime,
       endDate,
       endTime,
+      themeColor,
       rowNumber: rowIndex + 1,
     });
   }
