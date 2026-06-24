@@ -8,6 +8,7 @@ import importRoutes from './import';
 import todayShiftsRoutes from './todayShifts';
 import analyticsRoutes from './analytics';
 import timesheetRoutes from './timesheet';
+import adminRoutes from './admins';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use('/import', importRoutes);
 router.use('/shifts', todayShiftsRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/timesheet', timesheetRoutes);
+router.use('/admins', adminRoutes);
 
 /** Mounts all API routes under the /api prefix. */
 export function registerRoutes(app: Application): void {

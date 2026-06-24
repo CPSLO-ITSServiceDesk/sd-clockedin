@@ -28,4 +28,7 @@ export const queryKeys = {
     hoursByDay: (studentId: number, startDate: string, endDate: string) =>
       ["timesheet", "hours-by-day", studentId, startDate, endDate] as const,
   },
+  admins: {
+    all: ["admins"] as const,
+  },
 } as const
