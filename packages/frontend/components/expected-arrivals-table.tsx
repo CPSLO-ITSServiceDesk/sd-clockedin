@@ -23,7 +23,9 @@ import {
   getTodayDay,
 } from "@/lib/shifts/today-shifts"
 
-export function ExpectedArrivalsTable() {
+export function ExpectedArrivalsTable({
+  showActions = true,
+}: Readonly<{ showActions?: boolean }>) {
   const queryClient = useQueryClient()
   const { shifts, isLoading, error } = useTodayShiftList()
   const expectedArrivals = getExpectedArrivalStudents(shifts)
@@ -85,33 +87,35 @@ export function ExpectedArrivalsTable() {
             <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
               Schedule
             </TableHead>
-            <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
-              Action
-            </TableHead>
+            {showActions ? (
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
+                Action
+              </TableHead>
+            ) : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
             <TableRow className="border-border">
-              <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-muted-foreground">
                 Loading...
               </TableCell>
             </TableRow>
           ) : error ? (
             <TableRow className="border-border">
-              <TableCell colSpan={4} className="py-8 text-center text-sm text-destructive">
+              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-destructive">
                 Failed to load expected arrivals
               </TableCell>
             </TableRow>
           ) : !todayDay ? (
             <TableRow className="border-border">
-              <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-muted-foreground">
                 No shifts scheduled for weekends
               </TableCell>
             </TableRow>
           ) : expectedArrivals.length === 0 ? (
             <TableRow className="border-border">
-              <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-muted-foreground">
                 No pending arrivals for today
               </TableCell>
             </TableRow>
@@ -138,25 +142,27 @@ export function ExpectedArrivalsTable() {
                   <TableCell className="text-muted-foreground tabular-nums">
                     {formatTimeRange(shift.startTime, shift.endTime)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleClockInClick(shift.studentAssistantId)}
-                      disabled={isSubmitting}
-                      className="text-accent hover:bg-accent/10 hover:text-accent"
-                      aria-label={`Clock in ${name}`}
-                    >
-                      <DoorOpen className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+                  {showActions ? (
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleClockInClick(shift.studentAssistantId)}
+                        disabled={isSubmitting}
+                        className="text-accent hover:bg-accent/10 hover:text-accent"
+                        aria-label={`Clock in ${name}`}
+                      >
+                        <DoorOpen className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               )
             })
           )}
         </TableBody>
       </Table>
-      {submitError && (
+      {showActions && submitError && (
         <div className="border-t border-border px-6 py-3 text-sm text-destructive">
           {submitError}
         </div>

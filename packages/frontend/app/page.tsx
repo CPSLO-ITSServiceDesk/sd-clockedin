@@ -48,7 +48,6 @@ export default function Home() {
           <LiveClock />
         </section>
 
-        {/* Tables Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ClockedInTable />
           <ExpectedArrivalsTable />

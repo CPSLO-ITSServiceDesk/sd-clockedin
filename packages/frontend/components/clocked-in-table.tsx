@@ -34,7 +34,7 @@ import {
   type TodayShift,
 } from "@/lib/shifts/today-shifts"
 
-export function ClockedInTable() {
+export function ClockedInTable({ showActions = true }: Readonly<{ showActions?: boolean }>) {
   const queryClient = useQueryClient()
   const { shifts, isLoading, error } = useTodayShiftList()
   const clockedIn = getClockedInStudents(shifts)
@@ -119,7 +119,7 @@ export function ClockedInTable() {
                   {clockedIn.length} clocked in
                 </span>
               </div>
-              {showClockOutAll && (
+              {showActions && showClockOutAll && (
                 <Button
                   type="button"
                   variant="destructive"
@@ -153,33 +153,35 @@ export function ClockedInTable() {
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
                 Shift End
               </TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
-                Action
-              </TableHead>
+              {showActions ? (
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
+                  Action
+                </TableHead>
+              ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow className="border-border">
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow className="border-border">
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-destructive">
+                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-destructive">
                   Failed to load clocked-in employees
                 </TableCell>
               </TableRow>
             ) : !todayDay ? (
               <TableRow className="border-border">
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
                   No shifts scheduled for weekends
                 </TableCell>
               </TableRow>
             ) : clockedIn.length === 0 ? (
               <TableRow className="border-border">
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
                   No one is currently clocked in
                 </TableCell>
               </TableRow>
@@ -208,20 +210,22 @@ export function ClockedInTable() {
                     <TableCell className="text-muted-foreground tabular-nums">
                       {shift.scheduleBlockId == null ? "Unscheduled" : formatTime(shift.endTime)}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSubmitError(null)
-                          setConfirmTarget(shift)
-                        }}
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        aria-label={`Clock out ${name}`}
-                      >
-                        <DoorOpen className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+                    {showActions ? (
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSubmitError(null)
+                            setConfirmTarget(shift)
+                          }}
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={`Clock out ${name}`}
+                        >
+                          <DoorOpen className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 )
               })
@@ -230,71 +234,75 @@ export function ClockedInTable() {
         </Table>
       </div>
 
-      <AlertDialog
-        open={confirmTarget !== null}
-        onOpenChange={(open) => {
-          if (!open && !submitting) {
-            setConfirmTarget(null)
-            setSubmitError(null)
-          }
-        }}
-      >
-        <AlertDialogContent className="border-border bg-card">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clock out?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to clock out
-              {confirmTarget ? ` ${formatShiftName(confirmTarget)}` : ""}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {submitError && confirmTarget !== null && (
-            <p className="text-sm text-destructive">{submitError}</p>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
-            <Button
-              variant="destructive"
-              disabled={submitting}
-              onClick={handleConfirmClockOut}
-            >
-              {submitting ? "Clocking out..." : "Clock Out"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {showActions ? (
+        <>
+          <AlertDialog
+            open={confirmTarget !== null}
+            onOpenChange={(open) => {
+              if (!open && !submitting) {
+                setConfirmTarget(null)
+                setSubmitError(null)
+              }
+            }}
+          >
+            <AlertDialogContent className="border-border bg-card">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clock out?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to clock out
+                  {confirmTarget ? ` ${formatShiftName(confirmTarget)}` : ""}?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {submitError && confirmTarget !== null && (
+                <p className="text-sm text-destructive">{submitError}</p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+                <Button
+                  variant="destructive"
+                  disabled={submitting}
+                  onClick={handleConfirmClockOut}
+                >
+                  {submitting ? "Clocking out..." : "Clock Out"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-      <AlertDialog
-        open={clockOutAllOpen}
-        onOpenChange={(open) => {
-          if (!open && !submitting) {
-            setClockOutAllOpen(false)
-            setSubmitError(null)
-          }
-        }}
-      >
-        <AlertDialogContent className="border-border bg-card">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clock out everyone?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will clock out all {clockedIn.length} employee
-              {clockedIn.length === 1 ? "" : "s"} still on shift for today.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {submitError && clockOutAllOpen && (
-            <p className="text-sm text-destructive">{submitError}</p>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
-            <Button
-              variant="destructive"
-              disabled={submitting}
-              onClick={handleClockOutAll}
-            >
-              {submitting ? "Clocking out..." : "Clock Out All"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <AlertDialog
+            open={clockOutAllOpen}
+            onOpenChange={(open) => {
+              if (!open && !submitting) {
+                setClockOutAllOpen(false)
+                setSubmitError(null)
+              }
+            }}
+          >
+            <AlertDialogContent className="border-border bg-card">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clock out everyone?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will clock out all {clockedIn.length} employee
+                  {clockedIn.length === 1 ? "" : "s"} still on shift for today.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {submitError && clockOutAllOpen && (
+                <p className="text-sm text-destructive">{submitError}</p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+                <Button
+                  variant="destructive"
+                  disabled={submitting}
+                  onClick={handleClockOutAll}
+                >
+                  {submitting ? "Clocking out..." : "Clock Out All"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      ) : null}
     </>
   )
 }
