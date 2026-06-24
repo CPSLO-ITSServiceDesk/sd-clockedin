@@ -40,6 +40,7 @@ const navManage = [
   { title: "Terms", href: "/admin/terms", icon: BookOpen },
   { title: "Schedules", href: "/admin/schedules", icon: Calendar },
   { title: "Student Records", href: "/admin/studentrecords", icon: ClipboardList },
+  { title: "Timesheet Verification", href: "/admin/timesheet-verification", icon: Clock },
   { title: "Admin Access", href: "/admin/access", icon: ShieldCheck },
 ]
 

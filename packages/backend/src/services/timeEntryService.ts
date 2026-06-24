@@ -1,4 +1,9 @@
 import { resolveNearestBlock } from '../lib/resolveNearestBlock';
+import {
+  addLocalDays,
+  getClockInDate,
+  isLocalDateInRange,
+} from '../lib/shiftStatus';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
@@ -215,5 +220,39 @@ export const timeEntryService = {
     }
 
     return updated;
+  },
+
+  async getHoursByDay(studentAssistantId: number, startDate: string, endDate: string): Promise<Record<string, number>> {
+    // Widen the query so entries near month boundaries are not missed due to UTC storage.
+    const queryStart = addLocalDays(startDate, -1);
+    const queryEnd = addLocalDays(endDate, 1);
+
+    const { data, error } = await supabase
+      .from('time_entry')
+      .select('clock_in, clock_out')
+      .eq('student_assistant_id', studentAssistantId)
+      .gte('clock_in', queryStart)
+      .lt('clock_in', queryEnd)
+      .order('clock_in');
+
+    if (error) throw new HttpError(500, error.message);
+
+    const hoursByDay: Record<string, number> = {};
+
+    (data || []).forEach(entry => {
+      if (!entry.clock_in || !entry.clock_out) return;
+
+      const dateStr = getClockInDate(entry.clock_in);
+      if (!dateStr || !isLocalDateInRange(dateStr, startDate, endDate)) return;
+
+      const start = new Date(entry.clock_in);
+      const end = new Date(entry.clock_out);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+
+      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      hoursByDay[dateStr] = (hoursByDay[dateStr] || 0) + hours;
+    });
+
+    return hoursByDay;
   },
 };

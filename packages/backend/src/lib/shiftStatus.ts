@@ -75,6 +75,23 @@ export function toLocalDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Shift a YYYY-MM-DD local date by a number of days. */
+export function addLocalDays(dateStr: string, delta: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + delta);
+  return toLocalDateString(date);
+}
+
+/** True when dateKey falls in [startDate, endDateExclusive). */
+export function isLocalDateInRange(
+  dateKey: string,
+  startDate: string,
+  endDateExclusive: string,
+): boolean {
+  return dateKey >= startDate && dateKey < endDateExclusive;
+}
+
 /** Extract the local calendar date from a clock-in timestamp. */
 export function getClockInDate(clockIn: string | null): string | null {
   if (!clockIn) return null;

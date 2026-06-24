@@ -99,6 +99,75 @@ export function getStudentTermBlockIds(
   )
 }
 
+export function getEntryLocalDateKey(clockIn: string | null): string | null {
+  if (!clockIn) return null
+
+  if (clockIn.includes("T")) {
+    const date = new Date(clockIn)
+    if (Number.isNaN(date.getTime())) return null
+
+    const pad = (value: number) => value.toString().padStart(2, "0")
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  }
+
+  return null
+}
+
+export function isLocalDateInRange(
+  dateKey: string,
+  startDate: string,
+  endDateExclusive: string,
+): boolean {
+  return dateKey >= startDate && dateKey < endDateExclusive
+}
+
+export function aggregateHoursByDay(
+  entries: TimeEntry[],
+  studentId: number,
+  startDate: string,
+  endDateExclusive: string,
+): Record<string, number> {
+  const hoursByDay: Record<string, number> = {}
+
+  for (const entry of entries) {
+    if (entry.student_assistant_id !== studentId || !entry.clock_in || !entry.clock_out) {
+      continue
+    }
+
+    const dateKey = getEntryLocalDateKey(entry.clock_in)
+    if (!dateKey || !isLocalDateInRange(dateKey, startDate, endDateExclusive)) {
+      continue
+    }
+
+    const start = new Date(entry.clock_in)
+    const end = new Date(entry.clock_out)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue
+
+    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+    hoursByDay[dateKey] = (hoursByDay[dateKey] || 0) + hours
+  }
+
+  return hoursByDay
+}
+
+export function getStudentEntriesForDay(
+  entries: TimeEntry[],
+  studentId: number,
+  dateKey: string,
+): TimeEntry[] {
+  return entries
+    .filter(
+      (entry) =>
+        entry.student_assistant_id === studentId &&
+        getEntryLocalDateKey(entry.clock_in) === dateKey,
+    )
+    .sort((a, b) => {
+      const aTime = a.clock_in ? new Date(a.clock_in).getTime() : 0
+      const bTime = b.clock_in ? new Date(b.clock_in).getTime() : 0
+      return aTime - bTime
+    })
+}
+
 export function sortTimeEntries(entries: TimeEntry[]): TimeEntry[] {
   return [...entries].sort((a, b) => {
     const aTime = a.clock_in ? new Date(a.clock_in).getTime() : 0
