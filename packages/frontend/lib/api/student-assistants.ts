@@ -1,6 +1,8 @@
 import { apiFetch } from "./client"
 
-export type StudentRole = "student lead, student assistant"
+export type StudentRole = "student_lead" | "student_assistant"
+
+export type StudentRoleDisplay = "Student Lead" | "Student Assistant"
 
 export interface StudentAssistant {
   created_at: string
@@ -50,9 +52,16 @@ export const studentAssistantsApi = {
 }
 
 // Helper function to format student role for display
-export function formatStudentRole(position: string): string {
-  if (position === "student lead, student assistant") {
+export function formatStudentRole(position: string): StudentRoleDisplay {
+  if (position === "student_lead") {
+    return "Student Lead"
+  }
+  if (position === "student_assistant" || position === "student lead, student assistant") {
     return "Student Assistant"
   }
-  return position
+  return position as StudentRoleDisplay
+}
+
+export function displayRoleToStudentRole(role: StudentRoleDisplay): StudentRole {
+  return role === "Student Lead" ? "student_lead" : "student_assistant"
 }

@@ -2,6 +2,7 @@ import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-t
 import type { StudentRole } from "@/components/admin/students/student-assistant-form"
 import { normalizeTimeKey } from "@/lib/format-time"
 import type { StudentAssistant as ApiStudent } from "@/lib/api/student-assistants"
+import { formatStudentRole } from "@/lib/api/student-assistants"
 import type { ScheduleBlock as ApiScheduleBlock } from "@/lib/api/scheduleBlocks"
 
 export interface ScheduleStudent {
@@ -20,7 +21,7 @@ export function apiStudentToScheduleStudent(
     id: student.id,
     first_name: student.first_name ?? "",
     last_name: student.last_name ?? "",
-    role: "Student Assistant",
+    role: formatStudentRole(student.position),
     polycard_id: student.polycard_id,
     is_active: student.is_active ?? false,
   }

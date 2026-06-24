@@ -78,7 +78,7 @@ async function upsertStudent(
     last_name: entry.lastName,
     work_email: entry.workEmail,
     is_active: true,
-    position: 'student lead, student assistant',
+    position: 'student_assistant',
   });
 
   return { student: created, action: 'create' };

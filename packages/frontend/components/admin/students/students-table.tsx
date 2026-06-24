@@ -49,7 +49,7 @@ import {
   type StudentAssistantFormValues,
 } from "@/components/admin/students/student-assistant-form"
 import { StudentKpiCards } from "@/components/admin/students/student-kpi-cards"
-import { studentAssistantsApi, type StudentAssistant as ApiStudent } from "@/lib/api/student-assistants"
+import { studentAssistantsApi, type StudentAssistant as ApiStudent, displayRoleToStudentRole } from "@/lib/api/student-assistants"
 import { queryKeys } from "@/lib/query-keys"
 import {
   compareStudentsByRoleThenName,
@@ -61,10 +61,8 @@ import { cn } from "@/lib/utils"
 type RoleFilter = "all" | "lead" | "assistant"
 type StatusFilter = "all" | "active" | "inactive"
 
-const mapRoleToBackend = (_role: StudentAssistantFormValues["role"]) => {
-  // The DB only has one possible position value
-  return "student lead, student assistant"
-}
+const mapRoleToBackend = (role: StudentAssistantFormValues["role"]) =>
+  displayRoleToStudentRole(role)
 
 function toStudentFields(values: StudentAssistantFormValues) {
   const polycardId = values.polycard_id.trim()
@@ -86,7 +84,7 @@ function apiStudentToForm(student: ApiStudent): StudentAssistantFormValues {
   return {
     first_name: student.first_name ?? "",
     last_name: student.last_name ?? "",
-    role: "Student Assistant",
+    role: getStudentRole(student),
     polycard_id: student.polycard_id != null ? String(student.polycard_id) : "",
     work_email: student.work_email ?? "",
   }
