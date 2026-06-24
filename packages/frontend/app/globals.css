@@ -4,50 +4,113 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* SD-ClockedIn: Dark industrial dbrand-esque theme */
-  --background: oklch(0.09 0 0);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.12 0 0);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.12 0 0);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.98 0 0);
-  --primary-foreground: oklch(0.09 0 0);
-  --secondary: oklch(0.18 0 0);
-  --secondary-foreground: oklch(0.85 0 0);
-  --muted: oklch(0.15 0 0);
-  --muted-foreground: oklch(0.55 0 0);
-  --accent: oklch(0.75 0.15 145);
-  --accent-foreground: oklch(0.09 0 0);
+  /* Design tokens — warm neutrals (light) */
+  --ds-bg: oklch(0.985 0.006 85);
+  --ds-surface: oklch(0.997 0.003 90);
+  --ds-surface-2: oklch(0.955 0.008 85);
+  --ds-border: oklch(0.9 0.008 80);
+  --ds-fg-subtle: oklch(0.63 0.012 70);
+  --ds-fg-muted: oklch(0.46 0.014 65);
+  --ds-fg: oklch(0.24 0.012 60);
+
+  /* Accent — warm green */
+  --ds-accent: oklch(0.6 0.13 150);
+  --ds-accent-soft: oklch(0.93 0.045 150);
+  --ds-accent-text: oklch(0.48 0.12 150);
+
+  /* Status */
+  --status-online: var(--ds-accent);
+  --status-pending: oklch(0.72 0.14 85);
+  --status-offline: var(--ds-fg-subtle);
+
+  /* shadcn semantic mapping */
+  --background: var(--ds-bg);
+  --foreground: var(--ds-fg);
+  --card: var(--ds-surface);
+  --card-foreground: var(--ds-fg);
+  --popover: var(--ds-surface);
+  --popover-foreground: var(--ds-fg);
+  --primary: var(--ds-accent);
+  --primary-foreground: var(--ds-surface);
+  --secondary: var(--ds-surface-2);
+  --secondary-foreground: var(--ds-fg);
+  --muted: var(--ds-surface-2);
+  --muted-foreground: var(--ds-fg-muted);
+  --accent: var(--ds-accent);
+  --accent-foreground: var(--ds-surface);
   --destructive: oklch(0.55 0.22 27);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.22 0 0);
-  --input: oklch(0.15 0 0);
-  --ring: oklch(0.75 0.15 145);
-  --chart-1: oklch(0.75 0.15 145);
+  --destructive-foreground: var(--ds-surface);
+  --border: var(--ds-border);
+  --input: var(--ds-border);
+  --ring: var(--ds-accent);
+  --chart-1: var(--ds-accent);
   --chart-2: oklch(0.65 0.12 200);
   --chart-3: oklch(0.55 0.08 250);
-  --chart-4: oklch(0.80 0.18 85);
-  --chart-5: oklch(0.70 0.15 30);
+  --chart-4: oklch(0.72 0.14 85);
+  --chart-5: oklch(0.7 0.15 30);
   --radius: 0.375rem;
-  --sidebar: oklch(0.14 0 0);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.98 0 0);
-  --sidebar-primary-foreground: oklch(0.09 0 0);
-  --sidebar-accent: oklch(0.18 0 0);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.22 0 0);
-  --sidebar-ring: oklch(0.75 0.15 145);
 
-  /* Custom status colors */
-  --status-online: oklch(0.75 0.18 145);
-  --status-pending: oklch(0.80 0.15 85);
-  --status-offline: oklch(0.50 0 0);
+  --sidebar: var(--ds-surface);
+  --sidebar-foreground: var(--ds-fg);
+  --sidebar-primary: var(--ds-accent);
+  --sidebar-primary-foreground: var(--ds-surface);
+  --sidebar-accent: var(--ds-accent-soft);
+  --sidebar-accent-foreground: var(--ds-accent-text);
+  --sidebar-border: var(--ds-border);
+  --sidebar-ring: var(--ds-accent);
+}
+
+.dark {
+  --ds-bg: oklch(0.18 0.012 60);
+  --ds-surface: oklch(0.22 0.012 62);
+  --ds-surface-2: oklch(0.28 0.012 65);
+  --ds-border: oklch(0.35 0.012 68);
+  --ds-fg-subtle: oklch(0.55 0.012 70);
+  --ds-fg-muted: oklch(0.68 0.012 75);
+  --ds-fg: oklch(0.95 0.006 85);
+
+  --ds-accent: oklch(0.68 0.13 150);
+  --ds-accent-soft: oklch(0.28 0.045 150);
+  --ds-accent-text: oklch(0.78 0.12 150);
+
+  --status-online: var(--ds-accent);
+  --status-pending: oklch(0.78 0.14 85);
+  --status-offline: var(--ds-fg-subtle);
+
+  --background: var(--ds-bg);
+  --foreground: var(--ds-fg);
+  --card: var(--ds-surface);
+  --card-foreground: var(--ds-fg);
+  --popover: var(--ds-surface);
+  --popover-foreground: var(--ds-fg);
+  --primary: var(--ds-accent);
+  --primary-foreground: var(--ds-bg);
+  --secondary: var(--ds-surface-2);
+  --secondary-foreground: var(--ds-fg);
+  --muted: var(--ds-surface-2);
+  --muted-foreground: var(--ds-fg-muted);
+  --accent: var(--ds-accent);
+  --accent-foreground: var(--ds-bg);
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: var(--ds-fg);
+  --border: var(--ds-border);
+  --input: var(--ds-border);
+  --ring: var(--ds-accent);
+
+  --sidebar: var(--ds-surface);
+  --sidebar-foreground: var(--ds-fg);
+  --sidebar-primary: var(--ds-accent);
+  --sidebar-primary-foreground: var(--ds-bg);
+  --sidebar-accent: var(--ds-accent-soft);
+  --sidebar-accent-foreground: var(--ds-accent-text);
+  --sidebar-border: var(--ds-border);
+  --sidebar-ring: var(--ds-accent);
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -84,6 +147,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Design system aliases */
+  --color-surface: var(--ds-surface);
+  --color-surface-2: var(--ds-surface-2);
+  --color-fg-subtle: var(--ds-fg-subtle);
+  --color-fg-muted: var(--ds-fg-muted);
+  --color-accent-soft: var(--ds-accent-soft);
+  --color-accent-text: var(--ds-accent-text);
   --color-status-online: var(--status-online);
   --color-status-pending: var(--status-pending);
   --color-status-offline: var(--status-offline);
@@ -94,17 +165,9 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
   }
-}
-
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
 }

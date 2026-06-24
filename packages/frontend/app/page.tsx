@@ -3,6 +3,7 @@ import { ClockedInTable } from "@/components/clocked-in-table"
 import { ExpectedArrivalsTable } from "@/components/expected-arrivals-table"
 import { LoginArea } from "@/components/login-area"
 import { SystemStatus } from "@/components/system-status"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function Home() {
   return (
@@ -36,7 +37,10 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <LoginArea />
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <LoginArea />
+            </div>
           </div>
         </div>
       </header>

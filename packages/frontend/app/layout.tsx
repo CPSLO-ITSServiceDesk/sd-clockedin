@@ -1,12 +1,22 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist_Mono, Hanken_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { QueryProvider } from '@/components/providers/query-provider'
+import { RootThemeToggle } from '@/components/root-theme-toggle'
+import { ThemeProvider } from '@/components/theme-provider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './globals.css'
 
-const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
-const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
+const hankenGrotesk = Hanken_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-hanken',
+  weight: ['400', '500', '600', '700', '800'],
+})
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+})
 
 export const metadata: Metadata = {
   title: 'SD-ClockedIn | Employee Time Management',
@@ -37,13 +47,26 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geist.variable} ${geistMono.variable} bg-background`}>
-      <body className="font-sans antialiased bg-background min-h-screen">
-        <QueryProvider>
-          <TooltipProvider>
-            {children}
-          </TooltipProvider>
-        </QueryProvider>
+    <html
+      lang="en"
+      className={`${hankenGrotesk.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-screen bg-background font-sans antialiased">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          storageKey="sd-clockin-theme"
+          disableTransitionOnChange
+        >
+          <QueryProvider>
+            <TooltipProvider>
+              <RootThemeToggle />
+              {children}
+            </TooltipProvider>
+          </QueryProvider>
+        </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
