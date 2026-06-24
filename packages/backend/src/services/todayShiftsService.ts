@@ -1,5 +1,5 @@
 import { formatStudentRole } from '../lib/formatStudentRole';
-import { computeRemoteShiftStatus, computeShiftStatus, type ShiftStatus } from '../lib/shiftStatus';
+import { computeRemoteShiftStatus, computeShiftStatus, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
 import type { Database } from '../types/database.types';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
@@ -43,7 +43,7 @@ export function getTodayDay(now: Date = new Date()): ScheduleBlockDay | null {
 }
 
 export function getTodayDateString(now: Date = new Date()): string {
-  return now.toISOString().split('T')[0];
+  return toLocalDateString(now);
 }
 
 function resolveBlockStudentId(

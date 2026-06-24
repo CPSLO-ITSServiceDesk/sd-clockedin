@@ -20,7 +20,7 @@ export function resolveNearestBlock(
     const start = timeToMinutes(block.startTime);
     const end = timeToMinutes(block.endTime);
     if (Number.isNaN(start) || Number.isNaN(end)) return false;
-    return nowMin >= start && nowMin <= end;
+    return nowMin >= start && nowMin < end;
   });
 
   const pool = inWindow.length > 0 ? inWindow : pending;
