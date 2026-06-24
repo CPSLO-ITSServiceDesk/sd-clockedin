@@ -5,7 +5,11 @@ import {
   getAuthErrorMessage,
 } from "@/lib/auth/errors"
 import { logAuthError, logAuthInfo } from "@/lib/auth/logger"
-import { createClient } from "@/lib/supabase/server"
+import {
+  createRouteHandlerClient,
+  getRequestOrigin,
+  redirectWithCookies,
+} from "@/lib/supabase/route-handler"
 
 function resolveRedirectPath(next: string | null): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
@@ -15,28 +19,41 @@ function resolveRedirectPath(next: string | null): string {
   return next
 }
 
-function redirectWithAuthError(
+function buildAuthErrorUrl(
   origin: string,
   errorCode: string,
   detail?: string,
-): NextResponse {
+): URL {
   const url = new URL("/", origin)
   url.searchParams.set("authError", errorCode)
   if (detail) {
     url.searchParams.set("authDetail", encodeAuthDetail(detail))
   }
+  return url
+}
 
-  logAuthError("Auth callback redirecting with error", {
-    errorCode,
-    message: getAuthErrorMessage(errorCode),
-    detail,
-  })
+function finishAuthRedirect(
+  cookieCarrier: NextResponse,
+  url: URL,
+  logContext?: {
+    errorCode: string
+    detail?: string
+  },
+): NextResponse {
+  if (logContext) {
+    logAuthError("Auth callback redirecting with error", {
+      errorCode: logContext.errorCode,
+      message: getAuthErrorMessage(logContext.errorCode),
+      detail: logContext.detail,
+    })
+  }
 
-  return NextResponse.redirect(url)
+  return redirectWithCookies(url, cookieCarrier)
 }
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const origin = getRequestOrigin(request)
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get("code")
   const oauthError = searchParams.get("error")
   const oauthErrorDescription = searchParams.get("error_description")
@@ -47,21 +64,25 @@ export async function GET(request: Request) {
     oauthError,
     oauthErrorDescription,
     next,
+    origin,
   })
 
   if (oauthError) {
-    return redirectWithAuthError(
-      origin,
-      "microsoft_error",
-      oauthErrorDescription ?? oauthError,
+    return NextResponse.redirect(
+      buildAuthErrorUrl(
+        origin,
+        "microsoft_error",
+        oauthErrorDescription ?? oauthError,
+      ),
     )
   }
 
   if (!code) {
-    return redirectWithAuthError(origin, "missing_code")
+    return NextResponse.redirect(buildAuthErrorUrl(origin, "missing_code"))
   }
 
-  const supabase = await createClient()
+  const cookieCarrier = NextResponse.next()
+  const supabase = await createRouteHandlerClient(cookieCarrier)
   const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
 
   if (sessionError) {
@@ -75,7 +96,11 @@ export async function GET(request: Request) {
       ? "invalid_api_key"
       : "callback_failed"
 
-    return redirectWithAuthError(origin, errorCode, sessionError.message)
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(origin, errorCode, sessionError.message),
+      { errorCode, detail: sessionError.message },
+    )
   }
 
   const {
@@ -88,10 +113,17 @@ export async function GET(request: Request) {
       userError,
     })
     await supabase.auth.signOut()
-    return redirectWithAuthError(
-      origin,
-      "callback_failed",
-      userError?.message ?? "No user returned from Supabase session",
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(
+        origin,
+        "callback_failed",
+        userError?.message ?? "No user returned from Supabase session",
+      ),
+      {
+        errorCode: "callback_failed",
+        detail: userError?.message ?? "No user returned from Supabase session",
+      },
     )
   }
 
@@ -103,16 +135,20 @@ export async function GET(request: Request) {
 
   if (!email) {
     await supabase.auth.signOut()
-    return redirectWithAuthError(origin, "missing_email")
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(origin, "missing_email"),
+      { errorCode: "missing_email" },
+    )
   }
 
   if (!email.endsWith("@calpoly.edu")) {
     logAuthError("Rejected non-Cal Poly email", { email })
     await supabase.auth.signOut()
-    return redirectWithAuthError(
-      origin,
-      "not_allowed_domain",
-      `Signed in as ${email}`,
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(origin, "not_allowed_domain", `Signed in as ${email}`),
+      { errorCode: "not_allowed_domain", detail: `Signed in as ${email}` },
     )
   }
 
@@ -125,19 +161,34 @@ export async function GET(request: Request) {
   } catch (error) {
     logAuthError("Admin authorize API unreachable", { error })
     await supabase.auth.signOut()
-    return redirectWithAuthError(
-      origin,
-      "admin_api_unreachable",
-      error instanceof Error ? error.message : "Network request failed",
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(
+        origin,
+        "admin_api_unreachable",
+        error instanceof Error ? error.message : "Network request failed",
+      ),
+      {
+        errorCode: "admin_api_unreachable",
+        detail:
+          error instanceof Error ? error.message : "Network request failed",
+      },
     )
   }
 
   if (accessResponse.message?.includes("Authorize endpoint not found")) {
     await supabase.auth.signOut()
-    return redirectWithAuthError(
-      origin,
-      "admin_api_not_found",
-      accessResponse.message,
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(
+        origin,
+        "admin_api_not_found",
+        accessResponse.message,
+      ),
+      {
+        errorCode: "admin_api_not_found",
+        detail: accessResponse.message,
+      },
     )
   }
 
@@ -149,10 +200,18 @@ export async function GET(request: Request) {
       message: accessResponse.message,
     })
     await supabase.auth.signOut()
-    return redirectWithAuthError(
-      origin,
-      "not_allowed_admin",
-      accessResponse.message ?? `No active admin record found for ${email}`,
+    return finishAuthRedirect(
+      cookieCarrier,
+      buildAuthErrorUrl(
+        origin,
+        "not_allowed_admin",
+        accessResponse.message ?? `No active admin record found for ${email}`,
+      ),
+      {
+        errorCode: "not_allowed_admin",
+        detail:
+          accessResponse.message ?? `No active admin record found for ${email}`,
+      },
     )
   }
 
@@ -162,5 +221,5 @@ export async function GET(request: Request) {
     redirectTo: next,
   })
 
-  return NextResponse.redirect(new URL(next, origin))
+  return redirectWithCookies(new URL(next, origin), cookieCarrier)
 }

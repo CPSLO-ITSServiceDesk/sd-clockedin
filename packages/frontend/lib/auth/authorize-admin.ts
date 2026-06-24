@@ -4,6 +4,20 @@ import { logAuthError, logAuthInfo } from "@/lib/auth/logger"
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api"
 
+function resolveApiBase(): string {
+  if (
+    process.env.NODE_ENV === "production" &&
+    /localhost|127\.0\.0\.1/.test(API_BASE)
+  ) {
+    logAuthError("NEXT_PUBLIC_API_URL points to localhost in production", {
+      apiBase: API_BASE,
+      hint: "Set NEXT_PUBLIC_API_URL to your deployed backend URL in the hosting environment and redeploy.",
+    })
+  }
+
+  return API_BASE
+}
+
 export interface AdminAuthorizeResult {
   allowed: boolean
   admin?: Admin
@@ -14,7 +28,7 @@ export async function authorizeAdminAccess(data: {
   email?: string
   name?: string
 }): Promise<AdminAuthorizeResult> {
-  const url = `${API_BASE}/admins/authorize`
+  const url = `${resolveApiBase()}/admins/authorize`
 
   logAuthInfo("Calling admin authorize API", { url, email: data.email })
 
