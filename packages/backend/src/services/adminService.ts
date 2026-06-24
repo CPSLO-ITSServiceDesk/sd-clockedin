@@ -148,4 +148,37 @@ export const adminService = {
 
     if (error) throw new HttpError(500, error.message);
   },
+
+  async authorize(
+    email: string,
+    name?: string,
+  ): Promise<{ allowed: boolean; admin?: Admin; message?: string }> {
+    const normalized = normalizeEmail(email);
+    if (!normalized) {
+      return { allowed: false, message: 'email is required' };
+    }
+
+    if (!normalized.endsWith('@calpoly.edu')) {
+      return { allowed: false, message: 'Only @calpoly.edu accounts are allowed' };
+    }
+
+    const admin = await this.findByEmail(normalized);
+    if (!admin || !admin.isactive) {
+      return { allowed: false, message: 'User is not an active admin' };
+    }
+
+    const updatePayload: AdminUpdate = {
+      last_login: new Date().toISOString(),
+    };
+
+    if (name && !admin.first_name && !admin.last_name) {
+      const parts = name.trim().split(/\s+/);
+      updatePayload.first_name = parts[0] ?? null;
+      updatePayload.last_name =
+        parts.length > 1 ? parts.slice(1).join(' ') : null;
+    }
+
+    const updated = await this.update(admin.id, updatePayload);
+    return { allowed: true, admin: updated ?? admin };
+  },
 };

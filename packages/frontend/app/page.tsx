@@ -1,13 +1,15 @@
 import { LiveClock } from "@/components/live-clock"
 import { ClockedInTable } from "@/components/clocked-in-table"
 import { ExpectedArrivalsTable } from "@/components/expected-arrivals-table"
-import { LoginArea } from "@/components/login-area"
+import { LeadLogin } from "@/components/lead-login"
+import { AuthNotifications } from "@/components/auth-notifications"
 import { SystemStatus } from "@/components/system-status"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-background">
+      <AuthNotifications />
       {/* Header */}
       <header className="border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -39,7 +41,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <LoginArea />
+              <LeadLogin />
             </div>
           </div>
         </div>

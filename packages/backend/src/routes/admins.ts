@@ -7,6 +7,14 @@ const router = Router();
 
 router.get('/', adminController.getAll);
 
+router.post(
+  '/authorize',
+  body('email').isEmail().withMessage('email must be a valid email'),
+  body('name').optional().isString(),
+  validate,
+  adminController.authorize,
+);
+
 router.get(
   '/:id',
   param('id').isInt().withMessage('id must be an integer'),

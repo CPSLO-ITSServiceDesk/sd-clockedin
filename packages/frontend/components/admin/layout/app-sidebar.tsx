@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sidebar"
 import { NavUser } from "@/components/nav-user"
 import { SetupTermWizard } from "@/components/admin/terms/setup-term-wizard"
+import { useAdminSession } from "@/hooks/use-admin-session"
 
 const navMain = [
   { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -49,15 +50,10 @@ const navAnalytics = [
   { title: "Group Schedule", href: "/admin/analytics/group-schedule", icon: CalendarRange },
 ]
 
-const user = {
-  name: "Darryl James Cruz",
-  email: "darryljamescruz@gmail.com",
-  avatar: "",
-}
-
 export function AppSidebar() {
   const pathname = usePathname()
   const [setupOpen, setSetupOpen] = useState(false)
+  const { displayName, email } = useAdminSession()
 
   return (
     <>
@@ -147,7 +143,13 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <NavUser user={user} />
+        <NavUser
+          user={{
+            name: displayName,
+            email,
+            avatar: "",
+          }}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
