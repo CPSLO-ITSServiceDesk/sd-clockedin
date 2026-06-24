@@ -4,6 +4,8 @@ exports.ON_TIME_GRACE_MINUTES = void 0;
 exports.computeRemoteShiftStatus = computeRemoteShiftStatus;
 exports.computeShiftStatus = computeShiftStatus;
 exports.toLocalDateString = toLocalDateString;
+exports.addLocalDays = addLocalDays;
+exports.isLocalDateInRange = isLocalDateInRange;
 exports.getClockInDate = getClockInDate;
 exports.computeMinutesLate = computeMinutesLate;
 exports.computeHistoricalShiftStatus = computeHistoricalShiftStatus;
@@ -48,6 +50,17 @@ function toLocalDateString(date) {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+/** Shift a YYYY-MM-DD local date by a number of days. */
+function addLocalDays(dateStr, delta) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + delta);
+    return toLocalDateString(date);
+}
+/** True when dateKey falls in [startDate, endDateExclusive). */
+function isLocalDateInRange(dateKey, startDate, endDateExclusive) {
+    return dateKey >= startDate && dateKey < endDateExclusive;
 }
 /** Extract the local calendar date from a clock-in timestamp. */
 function getClockInDate(clockIn) {

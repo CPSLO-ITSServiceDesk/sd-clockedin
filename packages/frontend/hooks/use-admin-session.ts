@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import type { User } from "@supabase/supabase-js"
+import { useEffect, useState } from "react"
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
 
 function getDisplayName(user: User | null): string {
@@ -29,32 +29,44 @@ function getDisplayName(user: User | null): string {
 }
 
 export function useAdminSession() {
-  const supabase = useMemo(() => createClient(), [])
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
+    let subscription: { unsubscribe: () => void } | undefined
 
-    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
+    try {
+      const supabase = createClient()
+
+      void supabase.auth.getUser().then((response) => {
+        if (isMounted) {
+          setUser(response.data.user)
+          setLoading(false)
+        }
+      })
+
+      const {
+        data: { subscription: authSubscription },
+      } = supabase.auth.onAuthStateChange(
+        (_event: AuthChangeEvent, session: Session | null) => {
+          setUser(session?.user ?? null)
+          setLoading(false)
+        },
+      )
+
+      subscription = authSubscription
+    } catch {
       if (isMounted) {
-        setUser(currentUser)
         setLoading(false)
       }
-    })
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    }
 
     return () => {
       isMounted = false
-      subscription.unsubscribe()
+      subscription?.unsubscribe()
     }
-  }, [supabase])
+  }, [])
 
   return {
     user,

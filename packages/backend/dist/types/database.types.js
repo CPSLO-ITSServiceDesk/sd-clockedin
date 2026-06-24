@@ -5,7 +5,7 @@ exports.Constants = {
     public: {
         Enums: {
             days: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-            student_role: ["student lead, student assistant"],
+            student_role: ["student_lead", "student_assistant"],
         },
     },
 };

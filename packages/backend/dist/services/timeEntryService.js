@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.timeEntryService = void 0;
 const resolveNearestBlock_1 = require("../lib/resolveNearestBlock");
+const shiftStatus_1 = require("../lib/shiftStatus");
 const supabase_1 = require("../lib/supabase");
 const errorHandler_1 = require("../middleware/errorHandler");
 const scheduleBlocksService_1 = require("./scheduleBlocksService");
@@ -170,5 +171,34 @@ exports.timeEntryService = {
             throw new errorHandler_1.HttpError(500, 'Failed to update time entry');
         }
         return updated;
+    },
+    async getHoursByDay(studentAssistantId, startDate, endDate) {
+        // Widen the query so entries near month boundaries are not missed due to UTC storage.
+        const queryStart = (0, shiftStatus_1.addLocalDays)(startDate, -1);
+        const queryEnd = (0, shiftStatus_1.addLocalDays)(endDate, 1);
+        const { data, error } = await supabase_1.supabase
+            .from('time_entry')
+            .select('clock_in, clock_out')
+            .eq('student_assistant_id', studentAssistantId)
+            .gte('clock_in', queryStart)
+            .lt('clock_in', queryEnd)
+            .order('clock_in');
+        if (error)
+            throw new errorHandler_1.HttpError(500, error.message);
+        const hoursByDay = {};
+        (data || []).forEach(entry => {
+            if (!entry.clock_in || !entry.clock_out)
+                return;
+            const dateStr = (0, shiftStatus_1.getClockInDate)(entry.clock_in);
+            if (!dateStr || !(0, shiftStatus_1.isLocalDateInRange)(dateStr, startDate, endDate))
+                return;
+            const start = new Date(entry.clock_in);
+            const end = new Date(entry.clock_out);
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()))
+                return;
+            const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+            hoursByDay[dateStr] = (hoursByDay[dateStr] || 0) + hours;
+        });
+        return hoursByDay;
     },
 };

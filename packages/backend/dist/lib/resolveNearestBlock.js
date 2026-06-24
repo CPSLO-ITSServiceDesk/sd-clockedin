@@ -12,7 +12,7 @@ function resolveNearestBlock(blocks, now = new Date()) {
         const end = (0, time_1.timeToMinutes)(block.endTime);
         if (Number.isNaN(start) || Number.isNaN(end))
             return false;
-        return nowMin >= start && nowMin <= end;
+        return nowMin >= start && nowMin < end;
     });
     const pool = inWindow.length > 0 ? inWindow : pending;
     const useStartTieBreak = inWindow.length > 0;

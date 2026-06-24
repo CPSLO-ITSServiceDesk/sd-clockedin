@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const express_validator_1 = require("express-validator");
+const adminController_1 = require("../controllers/adminController");
+const validate_1 = require("../middleware/validate");
+const router = (0, express_1.Router)();
+router.get('/', adminController_1.adminController.getAll);
+router.post('/authorize', (0, express_validator_1.body)('email').isEmail().withMessage('email must be a valid email'), (0, express_validator_1.body)('name').optional().isString(), validate_1.validate, adminController_1.adminController.authorize);
+router.get('/:id', (0, express_validator_1.param)('id').isInt().withMessage('id must be an integer'), validate_1.validate, adminController_1.adminController.getById);
+router.post('/', (0, express_validator_1.body)('email').isEmail().withMessage('email must be a valid email'), (0, express_validator_1.body)('first_name').optional({ values: 'null' }).isString(), (0, express_validator_1.body)('last_name').optional({ values: 'null' }).isString(), (0, express_validator_1.body)('isactive').optional().isBoolean(), validate_1.validate, adminController_1.adminController.create);
+router.put('/:id', (0, express_validator_1.param)('id').isInt().withMessage('id must be an integer'), (0, express_validator_1.body)('email').optional().isEmail().withMessage('email must be a valid email'), (0, express_validator_1.body)('first_name').optional({ values: 'null' }).isString(), (0, express_validator_1.body)('last_name').optional({ values: 'null' }).isString(), (0, express_validator_1.body)('isactive').optional().isBoolean(), (0, express_validator_1.body)('last_login').optional({ values: 'null' }).isISO8601(), validate_1.validate, adminController_1.adminController.update);
+router.delete('/:id', (0, express_validator_1.param)('id').isInt().withMessage('id must be an integer'), validate_1.validate, adminController_1.adminController.remove);
+exports.default = router;

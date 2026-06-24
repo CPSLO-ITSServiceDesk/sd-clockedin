@@ -23,7 +23,7 @@ function getTodayDay(now = new Date()) {
     return WEEKDAY_DAYS[day - 1];
 }
 function getTodayDateString(now = new Date()) {
-    return now.toISOString().split('T')[0];
+    return (0, shiftStatus_1.toLocalDateString)(now);
 }
 function resolveBlockStudentId(block, scheduleMap) {
     if (block.schedule_id == null)
