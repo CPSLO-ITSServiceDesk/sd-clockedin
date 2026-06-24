@@ -2,6 +2,7 @@
 
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/admin/layout/app-sidebar"
+import { RadixOverlayCleanup } from "@/components/admin/layout/radix-overlay-cleanup"
 import { Separator } from "@/components/ui/separator"
 import {
   Breadcrumb,
@@ -64,6 +65,7 @@ export default function AdminLayout({
 
   return (
     <SidebarProvider>
+      <RadixOverlayCleanup />
       <AppSidebar />
       <SidebarInset className="overflow-x-hidden">
         <header className="flex h-auto sm:h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4 py-2 sm:py-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 overflow-x-hidden">
