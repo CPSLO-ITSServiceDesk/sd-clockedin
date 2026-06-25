@@ -35,7 +35,7 @@ export default function Home() {
                   SD-ClockedIn
                 </h1>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Time Management System
+                  ClockIn v2
                 </p>
               </div>
             </div>
@@ -64,7 +64,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
             <SystemStatus />
             <div className="flex items-center gap-4">
-              <span>v1.0.0</span>
+              <span>v2.0.0</span>
               <span className="text-border">|</span>
               <span>SD-ClockedIn</span>
             </div>
