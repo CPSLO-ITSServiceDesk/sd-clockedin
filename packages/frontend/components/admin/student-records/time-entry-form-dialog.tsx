@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import type { ScheduleBlock } from "@/lib/api/scheduleBlocks"
-import type { TimeEntry } from "@/lib/api/time-entries"
+import type { TimeEntry, TimeEntryInput } from "@/lib/api/time-entries"
 import {
   formatBlockLabel,
   fromDatetimeLocalValue,
@@ -116,7 +116,8 @@ export function TimeEntryFormDialog({
             {mode === "create" ? "Add time entry" : "Edit time entry"}
           </DialogTitle>
           <DialogDescription>
-            {studentName} · adjust clock in/out times and linked shift
+            {studentName} · adjust clock in/out times and linked shift. Clock
+            out is optional for open entries.
           </DialogDescription>
         </DialogHeader>
 
@@ -216,4 +217,27 @@ export function timeEntryFormToPayload(
       ? fromDatetimeLocalValue(values.clock_out)
       : null,
   }
+}
+
+/** Partial update — omits clock_out when blank so open entries stay open. */
+export function timeEntryFormToPatchPayload(
+  values: TimeEntryFormValues,
+  studentId: number,
+  initialEntry?: TimeEntry | null,
+) {
+  const payload: TimeEntryInput = {
+    student_assistant_id: studentId,
+    schedule_block_id: values.schedule_block_id
+      ? Number(values.schedule_block_id)
+      : null,
+    clock_in: fromDatetimeLocalValue(values.clock_in),
+  }
+
+  if (values.clock_out.trim()) {
+    payload.clock_out = fromDatetimeLocalValue(values.clock_out)
+  } else if (initialEntry?.clock_out) {
+    payload.clock_out = null
+  }
+
+  return payload
 }

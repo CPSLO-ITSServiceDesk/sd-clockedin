@@ -1,5 +1,6 @@
 import { formatStudentRole } from '../lib/formatStudentRole';
-import { computeRemoteShiftStatus, computeShiftStatus, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
+import { getOrgDayOfWeek } from '../lib/orgTime';
+import { computeRemoteShiftStatus, computeShiftStatus, getClockInDate, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
 import type { Database } from '../types/database.types';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
@@ -37,7 +38,7 @@ const WEEKDAY_DAYS: ScheduleBlockDay[] = [
 ];
 
 export function getTodayDay(now: Date = new Date()): ScheduleBlockDay | null {
-  const day = now.getDay();
+  const day = getOrgDayOfWeek(now);
   if (day === 0 || day === 6) return null;
   return WEEKDAY_DAYS[day - 1];
 }
@@ -77,7 +78,7 @@ export const todayShiftsService = {
 
     const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
     const todaysTimeEntries = timeEntries.filter((entry) =>
-      entry.created_at?.startsWith(todayDate),
+      getClockInDate(entry.clock_in) === todayDate,
     );
 
     const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));

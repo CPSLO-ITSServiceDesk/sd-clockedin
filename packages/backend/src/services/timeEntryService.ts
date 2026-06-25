@@ -164,7 +164,7 @@ export const timeEntryService = {
 
     const todaysTimeEntries = timeEntries.filter(
       (entry) =>
-        entry.created_at?.startsWith(todayDate) &&
+        getClockInDate(entry.clock_in) === todayDate &&
         entry.student_assistant_id === student_assistant_id,
     );
 

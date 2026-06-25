@@ -8,55 +8,78 @@ import {
   toLocalDateString,
 } from '../lib/shiftStatus';
 
+/** Pacific wall-clock instants in June (PDT, UTC-7). */
+const PT = {
+  jun22_845am: new Date('2026-06-22T15:45:00.000Z'),
+  jun22_830am: new Date('2026-06-22T15:30:00.000Z'),
+  jun22_9am: new Date('2026-06-22T16:00:00.000Z'),
+  jun22_930am: new Date('2026-06-22T16:30:00.000Z'),
+  jun23_830am: new Date('2026-06-23T15:30:00.000Z'),
+  jun23_10am: new Date('2026-06-23T17:00:00.000Z'),
+  jun23_330pm: new Date('2026-06-23T22:30:00.000Z'),
+  jun25_820am: new Date('2026-06-25T15:20:00.000Z'),
+} as const;
+
 describe('computeRemoteShiftStatus', () => {
   const startTime = '09:00';
-  const beforeStart = new Date(2026, 5, 22, 8, 30);
-  const afterStart = new Date(2026, 5, 22, 9, 30);
 
   it('returns incoming before the remote shift starts', () => {
-    expect(computeRemoteShiftStatus(startTime, beforeStart)).toBe('incoming');
+    expect(computeRemoteShiftStatus(startTime, PT.jun22_830am)).toBe('incoming');
   });
 
   it('returns expected once the remote shift has started', () => {
-    expect(computeRemoteShiftStatus(startTime, afterStart)).toBe('expected');
+    expect(computeRemoteShiftStatus(startTime, PT.jun22_930am)).toBe('expected');
   });
 });
 
 describe('computeShiftStatus', () => {
   const startTime = '09:00';
-  const beforeStart = new Date(2026, 5, 22, 8, 30);
-  const atStart = new Date(2026, 5, 22, 9, 0);
-  const afterStart = new Date(2026, 5, 22, 9, 30);
 
   it('returns incoming when not clocked in and shift has not started', () => {
-    expect(computeShiftStatus(startTime, null, beforeStart)).toBe('incoming');
+    expect(computeShiftStatus(startTime, null, PT.jun22_830am)).toBe('incoming');
   });
 
   it('returns absent when not clocked in and shift start has passed', () => {
-    expect(computeShiftStatus(startTime, null, afterStart)).toBe('absent');
+    expect(computeShiftStatus(startTime, null, PT.jun22_930am)).toBe('absent');
   });
 
   it('returns early when clocked in before scheduled start', () => {
-    expect(computeShiftStatus(startTime, '2026-06-22T08:45:00', atStart)).toBe('early');
+    expect(
+      computeShiftStatus(startTime, '2026-06-22T15:45:00.000Z', PT.jun22_9am),
+    ).toBe('early');
+  });
+
+  it('returns early when clocked in hours before a noon shift', () => {
+    expect(
+      computeShiftStatus(
+        '12:00',
+        '2026-06-25T15:20:00.000Z',
+        PT.jun25_820am,
+      ),
+    ).toBe('early');
   });
 
   it('returns on-time when clocked in at scheduled start', () => {
-    expect(computeShiftStatus(startTime, '2026-06-22T09:00:00', atStart)).toBe('on-time');
+    expect(
+      computeShiftStatus(startTime, '2026-06-22T16:00:00.000Z', PT.jun22_9am),
+    ).toBe('on-time');
   });
 
   it('returns on-time when clocked in within grace period', () => {
-    const graceClockIn = `2026-06-22T09:0${ON_TIME_GRACE_MINUTES}:00`;
-    expect(computeShiftStatus(startTime, graceClockIn, afterStart)).toBe('on-time');
+    const graceClockIn = `2026-06-22T16:0${ON_TIME_GRACE_MINUTES}:00.000Z`;
+    expect(computeShiftStatus(startTime, graceClockIn, PT.jun22_930am)).toBe('on-time');
   });
 
   it('returns late when clocked in after grace period', () => {
-    expect(computeShiftStatus(startTime, '2026-06-22T09:10:00', afterStart)).toBe('late');
+    expect(
+      computeShiftStatus(startTime, '2026-06-22T16:10:00.000Z', PT.jun22_930am),
+    ).toBe('late');
   });
 });
 
 describe('computeHistoricalShiftStatus', () => {
   const startTime = '09:00';
-  const now = new Date(2026, 5, 23, 10, 0);
+  const now = PT.jun23_10am;
 
   it('skips future shift dates', () => {
     expect(
@@ -71,9 +94,8 @@ describe('computeHistoricalShiftStatus', () => {
   });
 
   it('returns incoming for today before start without clock-in', () => {
-    const morning = new Date(2026, 5, 23, 8, 30);
     expect(
-      computeHistoricalShiftStatus(startTime, null, '2026-06-23', morning),
+      computeHistoricalShiftStatus(startTime, null, '2026-06-23', PT.jun23_830am),
     ).toEqual({ status: 'incoming', minutesLate: 0 });
   });
 
@@ -87,7 +109,7 @@ describe('computeHistoricalShiftStatus', () => {
     expect(
       computeHistoricalShiftStatus(
         startTime,
-        '2026-06-20T09:05:00',
+        '2026-06-20T16:05:00.000Z',
         '2026-06-20',
         now,
       ),
@@ -98,7 +120,7 @@ describe('computeHistoricalShiftStatus', () => {
     expect(
       computeHistoricalShiftStatus(
         startTime,
-        '2026-06-20T09:10:00',
+        '2026-06-20T16:10:00.000Z',
         '2026-06-20',
         now,
       ),
@@ -108,13 +130,13 @@ describe('computeHistoricalShiftStatus', () => {
 
 describe('computeMinutesLate', () => {
   it('returns minutes beyond grace period', () => {
-    expect(computeMinutesLate('09:00', '2026-06-20T09:10:00')).toBe(5);
-    expect(computeMinutesLate('09:00', '2026-06-20T09:05:00')).toBe(0);
+    expect(computeMinutesLate('09:00', '2026-06-20T16:10:00.000Z')).toBe(5);
+    expect(computeMinutesLate('09:00', '2026-06-20T16:05:00.000Z')).toBe(0);
   });
 });
 
 describe('toLocalDateString', () => {
-  it('formats local calendar date', () => {
-    expect(toLocalDateString(new Date(2026, 5, 23, 15, 30))).toBe('2026-06-23');
+  it('formats organization calendar date', () => {
+    expect(toLocalDateString(PT.jun23_330pm)).toBe('2026-06-23');
   });
 });

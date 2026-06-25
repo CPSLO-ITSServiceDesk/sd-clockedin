@@ -60,6 +60,12 @@ export const timeEntriesApi = {
       body: JSON.stringify(payload),
     }),
 
+  patch: (id: number, payload: Partial<TimeEntryInput>) =>
+    apiFetch<TimeEntry>(`/time-entries/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
   remove: (id: number) =>
     apiFetch<void>(`/time-entries/${id}`, {
       method: "DELETE",

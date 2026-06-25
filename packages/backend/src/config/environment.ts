@@ -5,7 +5,7 @@ import 'dotenv/config';
  * Call this once at startup, before the server begins listening.
  */
 export function loadEnvironment(): void {
-  const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+  const requiredVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 
   const missing = requiredVars.filter((name) => !process.env[name]);
 

@@ -1,3 +1,4 @@
+import { getOrgLocalDateString, getOrgLocalMinutes } from './orgTime';
 import { timeToMinutes } from './time';
 
 export type ShiftStatus =
@@ -20,7 +21,7 @@ export function computeRemoteShiftStatus(
     return 'expected';
   }
 
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowMinutes = getOrgLocalMinutes(now);
   if (nowMinutes < startMinutes) {
     return 'incoming';
   }
@@ -38,7 +39,7 @@ export function computeShiftStatus(
     return 'incoming';
   }
 
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowMinutes = getOrgLocalMinutes(now);
 
   if (!clockIn) {
     return nowMinutes < startMinutes ? 'incoming' : 'absent';
@@ -67,12 +68,9 @@ export interface HistoricalShiftResult {
   minutesLate: number;
 }
 
-/** Format a Date as YYYY-MM-DD in local time. */
+/** Format a Date as YYYY-MM-DD in the organization timezone. */
 export function toLocalDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getOrgLocalDateString(date);
 }
 
 /** Shift a YYYY-MM-DD local date by a number of days. */
@@ -129,7 +127,7 @@ export function computeHistoricalShiftStatus(
   shiftDate: string,
   now: Date = new Date(),
 ): HistoricalShiftResult {
-  const today = toLocalDateString(now);
+  const today = getOrgLocalDateString(now);
 
   if (shiftDate > today) {
     return { status: 'skipped', minutesLate: 0 };
@@ -145,7 +143,7 @@ export function computeHistoricalShiftStatus(
       return { status: 'absent', minutesLate: 0 };
     }
 
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = getOrgLocalMinutes(now);
     if (nowMinutes < startMinutes) {
       return { status: 'incoming', minutesLate: 0 };
     }
@@ -159,7 +157,7 @@ export function computeHistoricalShiftStatus(
       return { status: 'absent', minutesLate: 0 };
     }
 
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = getOrgLocalMinutes(now);
     if (nowMinutes < startMinutes) {
       return { status: 'incoming', minutesLate: 0 };
     }

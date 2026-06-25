@@ -14,6 +14,7 @@ import { formatStudentName } from "@/components/admin/mock-students"
 import {
   TimeEntryFormDialog,
   timeEntryFormToPayload,
+  timeEntryFormToPatchPayload,
   type TimeEntryFormValues,
 } from "@/components/admin/student-records/time-entry-form-dialog"
 import {
@@ -143,9 +144,9 @@ export function TimeEntriesPanel({
 
   const handleUpdate = async (values: TimeEntryFormValues) => {
     if (!editingEntry) return
-    await timeEntriesApi.update(
+    await timeEntriesApi.patch(
       editingEntry.id,
-      timeEntryFormToPayload(values, student.id),
+      timeEntryFormToPatchPayload(values, student.id, editingEntry),
     )
     await invalidateTimeData()
   }

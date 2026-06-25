@@ -55,7 +55,7 @@ const scheduleBlocks: ScheduleBlock[] = [
   },
 ];
 
-const now = new Date(2026, 5, 23, 12, 0);
+const now = new Date('2026-06-23T19:00:00.000Z');
 
 describe('expandEvaluatedShifts', () => {
   it('expands in-person blocks and excludes remote and vacation days', () => {
@@ -71,8 +71,8 @@ describe('expandEvaluatedShifts', () => {
         id: 1,
         schedule_block_id: 20,
         student_assistant_id: 100,
-        clock_in: '2026-06-22T09:10:00',
-        clock_out: '2026-06-22T12:00:00',
+        clock_in: '2026-06-22T16:10:00.000Z',
+        clock_out: '2026-06-22T19:00:00.000Z',
         created_at: '2026-06-22T09:10:00Z',
       },
     ];
@@ -98,8 +98,8 @@ describe('buildTermAnalytics', () => {
         id: 1,
         schedule_block_id: 20,
         student_assistant_id: 100,
-        clock_in: '2026-06-22T09:00:00',
-        clock_out: '2026-06-22T12:00:00',
+        clock_in: '2026-06-22T16:00:00.000Z',
+        clock_out: '2026-06-22T19:00:00.000Z',
         created_at: '2026-06-22T09:00:00Z',
       },
     ];
@@ -124,8 +124,8 @@ describe('buildStudentAnalytics', () => {
         id: 1,
         schedule_block_id: 20,
         student_assistant_id: 100,
-        clock_in: '2026-06-22T09:15:00',
-        clock_out: '2026-06-22T12:00:00',
+        clock_in: '2026-06-22T16:15:00.000Z',
+        clock_out: '2026-06-22T19:00:00.000Z',
         created_at: '2026-06-22T09:15:00Z',
       },
     ];
