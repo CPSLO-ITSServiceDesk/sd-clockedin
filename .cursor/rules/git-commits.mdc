@@ -1,0 +1,66 @@
+---
+description: Git commit message and safety standards
+alwaysApply: true
+---
+
+# Git commits
+
+Only create commits when the user explicitly asks. If unclear, ask first.
+
+## Message format
+
+Use Conventional Commits aligned with this repo:
+
+```
+<type>: <subject>
+
+[optional body]
+```
+
+- **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `delete`
+- **Subject:** imperative mood, lowercase after type, no trailing period, ≤72 chars
+- Focus on **why** the change matters, not a file list
+- One logical change per commit when possible
+
+### Good
+
+```
+fix: widen shift arrival window to ±10 minutes
+
+feat: add location toggles to hourly workforce chart
+```
+
+### Bad
+
+```
+updated files
+feat: changed shiftStatus.ts, dashboard-stats.ts, and hourly-headcount-chart.tsx
+Fixed bug
+```
+
+## Before committing
+
+Run in parallel: `git status`, `git diff` (staged + unstaged), `git log -5 --format='%s'`.
+
+Then:
+
+1. Stage only relevant files — never `.env`, keys, or credentials
+2. Draft a 1–2 sentence message from the **staged** diff
+3. Commit via HEREDOC:
+
+```bash
+git commit -m "$(cat <<'EOF'
+fix: widen shift arrival window to ±10 minutes
+
+EOF
+)"
+```
+
+4. Run `git status` after to confirm success
+
+## Safety
+
+- Never update git config
+- Never `--no-verify`, `--amend`, force push, or destructive git unless explicitly requested
+- Never push unless explicitly asked
+- If a pre-commit hook fails, fix and create a **new** commit — do not amend unless all amend conditions are met

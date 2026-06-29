@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ARRIVAL_WINDOW_MINUTES,
   computeHistoricalShiftStatus,
   computeMinutesLate,
   computeRemoteShiftStatus,
   computeShiftStatus,
-  ON_TIME_GRACE_MINUTES,
   toLocalDateString,
 } from '../lib/shiftStatus';
 
@@ -43,10 +43,22 @@ describe('computeShiftStatus', () => {
     expect(computeShiftStatus(startTime, null, PT.jun22_930am)).toBe('absent');
   });
 
-  it('returns early when clocked in before scheduled start', () => {
+  it('returns early when clocked in more than 10 minutes before scheduled start', () => {
     expect(
       computeShiftStatus(startTime, '2026-06-22T15:45:00.000Z', PT.jun22_9am),
     ).toBe('early');
+  });
+
+  it('returns on-time when clocked in within 10 minutes before scheduled start', () => {
+    expect(
+      computeShiftStatus(startTime, '2026-06-22T15:51:00.000Z', PT.jun22_9am),
+    ).toBe('on-time');
+  });
+
+  it('returns on-time for a clock-in 9 minutes after an 8:00 start', () => {
+    expect(
+      computeShiftStatus('08:00', '2026-06-22T15:09:00.000Z', PT.jun22_9am),
+    ).toBe('on-time');
   });
 
   it('returns early when clocked in hours before a noon shift', () => {
@@ -65,14 +77,14 @@ describe('computeShiftStatus', () => {
     ).toBe('on-time');
   });
 
-  it('returns on-time when clocked in within grace period', () => {
-    const graceClockIn = `2026-06-22T16:0${ON_TIME_GRACE_MINUTES}:00.000Z`;
-    expect(computeShiftStatus(startTime, graceClockIn, PT.jun22_930am)).toBe('on-time');
+  it('returns on-time when clocked in within arrival window after start', () => {
+    const windowClockIn = `2026-06-22T16:${String(ARRIVAL_WINDOW_MINUTES).padStart(2, '0')}:00.000Z`;
+    expect(computeShiftStatus(startTime, windowClockIn, PT.jun22_930am)).toBe('on-time');
   });
 
-  it('returns late when clocked in after grace period', () => {
+  it('returns late when clocked in after arrival window', () => {
     expect(
-      computeShiftStatus(startTime, '2026-06-22T16:10:00.000Z', PT.jun22_930am),
+      computeShiftStatus(startTime, '2026-06-22T16:11:00.000Z', PT.jun22_930am),
     ).toBe('late');
   });
 });
@@ -105,18 +117,7 @@ describe('computeHistoricalShiftStatus', () => {
     ).toEqual({ status: 'absent', minutesLate: 0 });
   });
 
-  it('returns on-time within grace period', () => {
-    expect(
-      computeHistoricalShiftStatus(
-        startTime,
-        '2026-06-20T16:05:00.000Z',
-        '2026-06-20',
-        now,
-      ),
-    ).toEqual({ status: 'on-time', minutesLate: 0 });
-  });
-
-  it('returns late with minutesLate after grace period', () => {
+  it('returns on-time within arrival window', () => {
     expect(
       computeHistoricalShiftStatus(
         startTime,
@@ -124,14 +125,25 @@ describe('computeHistoricalShiftStatus', () => {
         '2026-06-20',
         now,
       ),
-    ).toEqual({ status: 'late', minutesLate: 5 });
+    ).toEqual({ status: 'on-time', minutesLate: 0 });
+  });
+
+  it('returns late with minutesLate after arrival window', () => {
+    expect(
+      computeHistoricalShiftStatus(
+        startTime,
+        '2026-06-20T16:11:00.000Z',
+        '2026-06-20',
+        now,
+      ),
+    ).toEqual({ status: 'late', minutesLate: 1 });
   });
 });
 
 describe('computeMinutesLate', () => {
-  it('returns minutes beyond grace period', () => {
-    expect(computeMinutesLate('09:00', '2026-06-20T16:10:00.000Z')).toBe(5);
-    expect(computeMinutesLate('09:00', '2026-06-20T16:05:00.000Z')).toBe(0);
+  it('returns minutes beyond arrival window', () => {
+    expect(computeMinutesLate('09:00', '2026-06-20T16:11:00.000Z')).toBe(1);
+    expect(computeMinutesLate('09:00', '2026-06-20T16:10:00.000Z')).toBe(0);
   });
 });
 

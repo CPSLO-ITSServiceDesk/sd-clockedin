@@ -63,7 +63,7 @@ export function TermAnalyticsKpiCards({
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               Late
             </p>
-            <p className="text-xs text-muted-foreground">after grace period</p>
+            <p className="text-xs text-muted-foreground">after 10 min window</p>
           </div>
           <KpiValue value={summary?.late ?? 0} isLoading={isLoading} />
         </CardContent>

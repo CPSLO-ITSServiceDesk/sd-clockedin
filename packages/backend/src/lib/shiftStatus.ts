@@ -9,8 +9,11 @@ export type ShiftStatus =
   | 'absent'
   | 'expected';
 
-/** Minutes after scheduled start that still count as on-time. */
-export const ON_TIME_GRACE_MINUTES = 5;
+/** Minutes before/after scheduled start that still count as on-time. */
+export const ARRIVAL_WINDOW_MINUTES = 10;
+
+/** @deprecated Use ARRIVAL_WINDOW_MINUTES */
+export const ON_TIME_GRACE_MINUTES = ARRIVAL_WINDOW_MINUTES;
 
 export function computeRemoteShiftStatus(
   scheduledStartTime: string,
@@ -42,23 +45,34 @@ export function computeShiftStatus(
   const nowMinutes = getOrgLocalMinutes(now);
 
   if (!clockIn) {
-    return nowMinutes < startMinutes ? 'incoming' : 'absent';
+    return isWithinArrivalWindow(startMinutes, nowMinutes) ? 'incoming' : 'absent';
   }
 
   const clockInMinutes = timeToMinutes(clockIn);
   if (Number.isNaN(clockInMinutes)) {
-    return nowMinutes < startMinutes ? 'incoming' : 'absent';
+    return isWithinArrivalWindow(startMinutes, nowMinutes) ? 'incoming' : 'absent';
   }
 
-  if (clockInMinutes < startMinutes) {
+  return evaluateClockedInStatus(startMinutes, clockInMinutes);
+}
+
+function evaluateClockedInStatus(
+  startMinutes: number,
+  clockInMinutes: number,
+): EvaluatableShiftStatus {
+  if (clockInMinutes < startMinutes - ARRIVAL_WINDOW_MINUTES) {
     return 'early';
   }
 
-  if (clockInMinutes <= startMinutes + ON_TIME_GRACE_MINUTES) {
+  if (clockInMinutes <= startMinutes + ARRIVAL_WINDOW_MINUTES) {
     return 'on-time';
   }
 
   return 'late';
+}
+
+function isWithinArrivalWindow(startMinutes: number, nowMinutes: number): boolean {
+  return nowMinutes <= startMinutes + ARRIVAL_WINDOW_MINUTES;
 }
 
 export type EvaluatableShiftStatus = 'early' | 'on-time' | 'late' | 'absent';
@@ -113,7 +127,7 @@ export function computeMinutesLate(
     return 0;
   }
 
-  const lateBy = clockInMinutes - startMinutes - ON_TIME_GRACE_MINUTES;
+  const lateBy = clockInMinutes - startMinutes - ARRIVAL_WINDOW_MINUTES;
   return lateBy > 0 ? lateBy : 0;
 }
 
@@ -144,7 +158,7 @@ export function computeHistoricalShiftStatus(
     }
 
     const nowMinutes = getOrgLocalMinutes(now);
-    if (nowMinutes < startMinutes) {
+    if (isWithinArrivalWindow(startMinutes, nowMinutes)) {
       return { status: 'incoming', minutesLate: 0 };
     }
 
@@ -158,23 +172,18 @@ export function computeHistoricalShiftStatus(
     }
 
     const nowMinutes = getOrgLocalMinutes(now);
-    if (nowMinutes < startMinutes) {
+    if (isWithinArrivalWindow(startMinutes, nowMinutes)) {
       return { status: 'incoming', minutesLate: 0 };
     }
 
     return { status: 'absent', minutesLate: 0 };
   }
 
-  if (clockInMinutes < startMinutes) {
-    return { status: 'early', minutesLate: 0 };
-  }
-
-  if (clockInMinutes <= startMinutes + ON_TIME_GRACE_MINUTES) {
-    return { status: 'on-time', minutesLate: 0 };
-  }
-
+  const status = evaluateClockedInStatus(startMinutes, clockInMinutes);
   return {
-    status: 'late',
-    minutesLate: computeMinutesLate(scheduledStartTime, clockIn),
+    status,
+    minutesLate: status === 'late'
+      ? computeMinutesLate(scheduledStartTime, clockIn)
+      : 0,
   };
 }

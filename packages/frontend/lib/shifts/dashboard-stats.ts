@@ -25,6 +25,10 @@ export interface HourlyHeadcount {
   label: string
   expected: number
   actual: number
+  expectedInPerson: number
+  expectedRemote: number
+  actualInPerson: number
+  actualRemote: number
 }
 
 function formatHourSlot(hour: number): string {
@@ -68,6 +72,26 @@ export function isWorkingDuringHour(
   if (Number.isNaN(clockOut)) return true
 
   return clockOut > hourStart
+}
+
+/** Whether a remote shift counts as working during the given hour (no clock-in required). */
+export function isRemoteWorkingDuringHour(
+  shift: TodayShift,
+  hour: number,
+  now: Date = new Date(),
+): boolean {
+  if (!shift.isRemote || !isScheduledDuringHour(shift, hour)) return false
+
+  const { start: hourStart, end: hourEnd } = getHourWindow(hour)
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  if (nowMinutes < hourStart) return false
+
+  const shiftEnd = timeToMinutes(shift.endTime)
+  if (Number.isNaN(shiftEnd)) return false
+
+  if (nowMinutes >= hourEnd) return true
+
+  return nowMinutes < shiftEnd
 }
 
 export function countWorkingDuringHour(
@@ -117,13 +141,33 @@ export function computeHourlyHeadcount(
     const hour = Number.parseInt(startTime.split(":")[0] ?? "", 10)
     let expected = 0
     let actual = 0
+    let expectedInPerson = 0
+    let expectedRemote = 0
+    let actualInPerson = 0
+    let actualRemote = 0
 
     for (const shift of shifts) {
       if (isScheduledDuringHour(shift, hour)) {
         expected += 1
+        if (shift.isRemote) {
+          expectedRemote += 1
+        } else {
+          expectedInPerson += 1
+        }
       }
-      if (isWorkingDuringHour(shift, hour, now)) {
+
+      const isWorking = shift.isRemote
+        ? isRemoteWorkingDuringHour(shift, hour, now) ||
+          isWorkingDuringHour(shift, hour, now)
+        : isWorkingDuringHour(shift, hour, now)
+
+      if (isWorking) {
         actual += 1
+        if (shift.isRemote) {
+          actualRemote += 1
+        } else {
+          actualInPerson += 1
+        }
       }
     }
 
@@ -132,6 +176,14 @@ export function computeHourlyHeadcount(
       label: formatStartTimeHeader(startTime),
       expected,
       actual,
+      expectedInPerson,
+      expectedRemote,
+      actualInPerson,
+      actualRemote,
     }
   })
+}
+
+export function hasRemoteShifts(shifts: TodayShift[]): boolean {
+  return shifts.some((shift) => shift.isRemote)
 }
