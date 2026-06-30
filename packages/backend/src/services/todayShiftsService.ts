@@ -1,3 +1,4 @@
+import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
 import { formatStudentRole } from '../lib/formatStudentRole';
 import { getOrgDayOfWeek } from '../lib/orgTime';
 import { computeRemoteShiftStatus, computeShiftStatus, getClockInDate, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
@@ -5,6 +6,7 @@ import type { Database } from '../types/database.types';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
 import { studentAssistantService } from './studentAssistantService';
+import { termService } from './termService';
 import { timeEntryService } from './timeEntryService';
 
 type ScheduleBlockDay = Database['public']['Enums']['days'];
@@ -68,13 +70,16 @@ export const todayShiftsService = {
 
     const todayDate = getTodayDateString(now);
 
-    const [schedules, scheduleBlocks, studentAssistants, timeEntries] =
+    const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] =
       await Promise.all([
         schedulesService.getAll(),
         scheduleBlocksService.getAll(),
         studentAssistantService.getAll(),
         timeEntryService.getAll(),
+        termService.getAll(),
       ]);
+
+    const termMap = new Map(terms.map((term) => [term.id, term]));
 
     const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
     const todaysTimeEntries = timeEntries.filter((entry) =>
@@ -92,6 +97,20 @@ export const todayShiftsService = {
     for (const block of todaysBlocks) {
       const studentId = resolveBlockStudentId(block, scheduleMap);
       if (studentId == null) continue;
+
+      const schedule =
+        block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
+      const term =
+        schedule?.academic_term_id != null
+          ? termMap.get(schedule.academic_term_id)
+          : undefined;
+      if (
+        schedule &&
+        term &&
+        !isDateInEffectiveScheduleRange(todayDate, schedule, term)
+      ) {
+        continue;
+      }
 
       const studentAssistant = studentAssistantMap.get(studentId);
       if (!studentAssistant || studentAssistant.is_active === false) continue;
@@ -119,6 +138,17 @@ export const todayShiftsService = {
       const schedule =
         block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
       if (!schedule?.student_assistant_id) return [];
+
+      const term =
+        schedule.academic_term_id != null
+          ? termMap.get(schedule.academic_term_id)
+          : undefined;
+      if (
+        term &&
+        !isDateInEffectiveScheduleRange(todayDate, schedule, term)
+      ) {
+        return [];
+      }
 
       const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
       if (!studentAssistant || studentAssistant.is_active === false) return [];

@@ -11,6 +11,8 @@ import {
 import { ScheduleDayForm } from "@/components/admin/schedules/schedule-day-form"
 import { ScheduleGrid } from "@/components/admin/schedules/schedule-grid"
 import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-types"
+import { DatePickerField } from "@/components/admin/terms/date-picker-field"
+import { formatTermDate } from "@/components/admin/terms/term-types"
 import {
   blocksToSelectedSlots,
   formatWeeklyHours,
@@ -23,21 +25,38 @@ import {
 } from "@/components/admin/schedules/schedule-utils"
 import { WorkModeBadge, type WorkMode } from "@/components/admin/work-mode-badge"
 import type { ScheduleStudent } from "@/lib/api/schedule-mappers"
+import { validateScheduleDateOverrides } from "@/lib/schedules/date-range"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
+
+export type ScheduleSavePayload = {
+  blocks: DraftScheduleBlock[]
+  startDate: string | null
+  endDate: string | null
+}
 
 interface ScheduleEditorPanelProps {
   student: ScheduleStudent
   initialBlocks: DraftScheduleBlock[]
+  initialStartDate?: string | null
+  initialEndDate?: string | null
+  termStartDate?: string | null
+  termEndDate?: string | null
   remoteShiftsAllowed?: boolean
-  onSave: (_blocks: DraftScheduleBlock[]) => Promise<void>
+  onSave: (payload: ScheduleSavePayload) => Promise<void>
 }
 
 export function ScheduleEditorPanel({
   student,
   initialBlocks,
+  initialStartDate = null,
+  initialEndDate = null,
+  termStartDate = null,
+  termEndDate = null,
   remoteShiftsAllowed = false,
   onSave,
 }: ScheduleEditorPanelProps) {
@@ -47,10 +66,37 @@ export function ScheduleEditorPanel({
   )
   const [draftBlocks, setDraftBlocks] = useState(normalizedInitialBlocks)
   const [loadedBlocks, setLoadedBlocks] = useState(normalizedInitialBlocks)
+  const hasInitialDateOverride = Boolean(initialStartDate || initialEndDate)
+  const [startDate, setStartDate] = useState(initialStartDate ?? "")
+  const [endDate, setEndDate] = useState(initialEndDate ?? "")
+  const [customDatesEnabled, setCustomDatesEnabled] = useState(hasInitialDateOverride)
+  const [loadedDates, setLoadedDates] = useState({
+    startDate: initialStartDate ?? "",
+    endDate: initialEndDate ?? "",
+    customDatesEnabled: hasInitialDateOverride,
+  })
 
   if (normalizedInitialBlocks !== loadedBlocks) {
     setLoadedBlocks(normalizedInitialBlocks)
     setDraftBlocks(normalizedInitialBlocks)
+  }
+
+  const nextStartDate = initialStartDate ?? ""
+  const nextEndDate = initialEndDate ?? ""
+  const nextCustomDatesEnabled = Boolean(initialStartDate || initialEndDate)
+  if (
+    nextStartDate !== loadedDates.startDate ||
+    nextEndDate !== loadedDates.endDate ||
+    nextCustomDatesEnabled !== loadedDates.customDatesEnabled
+  ) {
+    setLoadedDates({
+      startDate: nextStartDate,
+      endDate: nextEndDate,
+      customDatesEnabled: nextCustomDatesEnabled,
+    })
+    setStartDate(nextStartDate)
+    setEndDate(nextEndDate)
+    setCustomDatesEnabled(nextCustomDatesEnabled)
   }
   const [inputMode, setInputMode] = useState<"grid" | "manual">("grid")
   const [gridWorkMode, setGridWorkMode] = useState<WorkMode>("in-person")
@@ -88,6 +134,19 @@ export function ScheduleEditorPanel({
     updateDraftBlocks(blocks)
   }
 
+  const termFromDate = termStartDate ? new Date(`${termStartDate}T00:00:00`) : undefined
+  const termToDate = termEndDate ? new Date(`${termEndDate}T00:00:00`) : undefined
+  const termRangeLabel =
+    termStartDate && termEndDate
+      ? `${formatTermDate(termStartDate)} – ${formatTermDate(termEndDate)}`
+      : null
+
+  const customDatesHelperText = customDatesEnabled
+    ? "Set when this student's schedule is active within the term."
+    : termRangeLabel
+      ? `Using full term (${termRangeLabel}).`
+      : "Schedule follows the full term dates."
+
   const handleSave = async () => {
     const normalizedBlocks = normalizeDraftBlocks(draftBlocks, {
       forceInPerson: !remoteShiftsAllowed,
@@ -98,9 +157,27 @@ export function ScheduleEditorPanel({
       return
     }
 
+    const normalizedStartDate = customDatesEnabled ? startDate.trim() || null : null
+    const normalizedEndDate = customDatesEnabled ? endDate.trim() || null : null
+    const dateValidationError = customDatesEnabled
+      ? validateScheduleDateOverrides(
+          normalizedStartDate,
+          normalizedEndDate,
+          { start_date: termStartDate ?? null, end_date: termEndDate ?? null },
+        )
+      : null
+    if (dateValidationError) {
+      setError(dateValidationError)
+      return
+    }
+
     setIsSaving(true)
     try {
-      await onSave(normalizedBlocks)
+      await onSave({
+        blocks: normalizedBlocks,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
+      })
       setDraftBlocks(normalizedBlocks)
       setError(null)
     } catch (err) {
@@ -139,6 +216,61 @@ export function ScheduleEditorPanel({
           <Save className="size-4" />
           Save schedule
         </Button>
+      </div>
+
+      <div className="rounded-sm border border-border bg-muted/20 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label
+              htmlFor="custom-schedule-dates"
+              className="text-sm font-semibold uppercase tracking-wider"
+            >
+              Custom effective dates
+            </Label>
+            <p className="text-muted-foreground text-sm">{customDatesHelperText}</p>
+          </div>
+          <Switch
+            id="custom-schedule-dates"
+            checked={customDatesEnabled}
+            onCheckedChange={setCustomDatesEnabled}
+            className="mt-0.5 shrink-0"
+          />
+        </div>
+
+        {customDatesEnabled ? (
+          <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label
+                htmlFor="schedule-start-date"
+                className="text-muted-foreground text-xs uppercase tracking-wider"
+              >
+                Start date
+              </Label>
+              <DatePickerField
+                value={startDate}
+                onChange={setStartDate}
+                placeholder="Term start"
+                fromDate={termFromDate}
+                toDate={termToDate}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="schedule-end-date"
+                className="text-muted-foreground text-xs uppercase tracking-wider"
+              >
+                End date
+              </Label>
+              <DatePickerField
+                value={endDate}
+                onChange={setEndDate}
+                placeholder="Term end"
+                fromDate={termFromDate}
+                toDate={termToDate}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <Tabs

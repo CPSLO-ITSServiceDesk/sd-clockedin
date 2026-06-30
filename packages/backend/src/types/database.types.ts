@@ -119,19 +119,25 @@ export type Database = {
         Row: {
           academic_term_id: number | null
           created_at: string
+          end_date: string | null
           id: number
+          start_date: string | null
           student_assistant_id: number | null
         }
         Insert: {
           academic_term_id?: number | null
           created_at?: string
+          end_date?: string | null
           id?: number
+          start_date?: string | null
           student_assistant_id?: number | null
         }
         Update: {
           academic_term_id?: number | null
           created_at?: string
+          end_date?: string | null
           id?: number
+          start_date?: string | null
           student_assistant_id?: number | null
         }
         Relationships: [

@@ -92,6 +92,7 @@ async function replaceScheduleBlocks(
 ): Promise<void> {
   if (dryRun) return;
 
+  // Re-import replaces blocks only; existing start_date/end_date overrides are preserved.
   let schedule = await schedulesService.getByStudentAndTerm(studentId, termId);
 
   if (!schedule) {

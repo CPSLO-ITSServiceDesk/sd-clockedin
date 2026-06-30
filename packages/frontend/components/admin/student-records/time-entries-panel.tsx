@@ -24,6 +24,7 @@ import {
   getEntryDateLabel,
   getEntryDurationMinutes,
   getStudentTermBlockIds,
+  getStudentTermSchedule,
   sortTimeEntries,
 } from "@/components/admin/student-records/student-records-utils"
 import type { ScheduleStudent } from "@/lib/api/schedule-mappers"
@@ -119,12 +120,13 @@ export function TimeEntriesPanel({
     scheduleBlocks,
   )
   const termBlockIds = new Set(studentBlocks.map((block) => block.id))
+  const schedule = getStudentTermSchedule(student.id, termId, schedules)
 
   const studentEntries = sortTimeEntries(
     timeEntries.filter(
       (entry) =>
         entry.student_assistant_id === student.id &&
-        entryMatchesTerm(entry, term, termBlockIds),
+        entryMatchesTerm(entry, term, termBlockIds, schedule),
     ),
   )
 

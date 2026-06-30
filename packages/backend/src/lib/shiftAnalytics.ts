@@ -1,3 +1,4 @@
+import { getEffectiveScheduleDateRange } from './scheduleDateRange';
 import type { Database } from '../types/database.types';
 import { normalizeTimeKey } from './time';
 import {
@@ -343,7 +344,10 @@ export function expandEvaluatedShifts(
       continue;
     }
 
-    for (const date of iterateDates(term.start_date, term.end_date)) {
+    const range = getEffectiveScheduleDateRange(schedule, term);
+    if (!range) continue;
+
+    for (const date of iterateDates(range.startDate, range.endDate)) {
       if (date > today) continue;
       if (isVacationDay(date, offDays)) continue;
 

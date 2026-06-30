@@ -9,7 +9,7 @@ import {
 } from "@/components/admin/schedules/schedule-editor-panel"
 import { ScheduleKpiCards } from "@/components/admin/schedules/schedule-kpi-cards"
 import { ScheduleImportDialog } from "@/components/admin/schedules/schedule-import-dialog"
-import type { DraftScheduleBlock } from "@/components/admin/schedules/schedule-types"
+import type { ScheduleSavePayload } from "@/components/admin/schedules/schedule-editor-panel"
 import {
   STUDENT_TERM_PAGE_GRID,
   StudentSelectionPanel,
@@ -63,7 +63,7 @@ export function SchedulesManager() {
       ? getScheduleForStudentTerm(selectedStudent.id, activeTermId)
       : null
 
-  const handleSaveSchedule = async (draftBlocks: DraftScheduleBlock[]) => {
+  const handleSaveSchedule = async (payload: ScheduleSavePayload) => {
     if (!selectedStudent || !activeTermId) return
 
     const { schedule } = getScheduleForStudentTerm(
@@ -74,11 +74,15 @@ export function SchedulesManager() {
     await saveStudentTermSchedule(
       selectedStudent.id,
       activeTermId,
-      draftBlocks,
+      payload.blocks,
       schedule,
       allBlocks.filter((block) =>
         schedule ? block.schedule_id === schedule.id : false,
       ),
+      {
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+      },
     )
 
     await Promise.all([
@@ -173,6 +177,10 @@ export function SchedulesManager() {
                 key={`${selectedStudent.id}-${activeTermId}`}
                 student={selectedStudent}
                 initialBlocks={selectedScheduleData?.blocks ?? []}
+                initialStartDate={selectedScheduleData?.schedule?.start_date}
+                initialEndDate={selectedScheduleData?.schedule?.end_date}
+                termStartDate={selectedTerm?.start_date}
+                termEndDate={selectedTerm?.end_date}
                 remoteShiftsAllowed={selectedTerm?.remote_shifts_allowed ?? false}
                 onSave={handleSaveSchedule}
               />

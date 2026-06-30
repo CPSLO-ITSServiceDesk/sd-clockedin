@@ -1,7 +1,9 @@
 import type { ScheduleBlock } from "@/lib/api/scheduleBlocks"
+import type { Schedule } from "@/lib/api/schedules"
 import type { Term } from "@/lib/api/terms"
 import type { TimeEntry } from "@/lib/api/time-entries"
 import { formatTime, normalizeTimeKey } from "@/lib/format-time"
+import { getEffectiveScheduleDateRange } from "@/lib/schedules/date-range"
 
 export function toDatetimeLocalValue(iso: string | null): string {
   if (!iso) return ""
@@ -65,6 +67,7 @@ export function entryMatchesTerm(
   entry: TimeEntry,
   term: Term | undefined,
   termBlockIds: Set<number>,
+  schedule?: Pick<Schedule, "start_date" | "end_date"> | null,
 ): boolean {
   if (entry.schedule_block_id && termBlockIds.has(entry.schedule_block_id)) {
     return true
@@ -74,21 +77,35 @@ export function entryMatchesTerm(
     return !term
   }
 
+  const range = schedule
+    ? getEffectiveScheduleDateRange(schedule, term)
+    : { startDate: term.start_date, endDate: term.end_date }
+
+  if (!range) return false
+
   const clockInDate = entry.clock_in.slice(0, 10)
-  return clockInDate >= term.start_date && clockInDate <= term.end_date
+  return clockInDate >= range.startDate && clockInDate <= range.endDate
+}
+
+export function getStudentTermSchedule(
+  studentId: number,
+  termId: number,
+  schedules: Schedule[],
+): Schedule | undefined {
+  return schedules.find(
+    (entry) =>
+      entry.student_assistant_id === studentId &&
+      entry.academic_term_id === termId,
+  )
 }
 
 export function getStudentTermBlockIds(
   studentId: number,
   termId: number,
-  schedules: { id: number; student_assistant_id: number | null; academic_term_id: number | null }[],
+  schedules: Schedule[],
   blocks: ScheduleBlock[],
 ): Set<number> {
-  const schedule = schedules.find(
-    (entry) =>
-      entry.student_assistant_id === studentId &&
-      entry.academic_term_id === termId,
-  )
+  const schedule = getStudentTermSchedule(studentId, termId, schedules)
 
   if (!schedule) return new Set()
 

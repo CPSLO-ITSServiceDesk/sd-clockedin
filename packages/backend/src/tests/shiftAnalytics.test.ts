@@ -30,6 +30,8 @@ const schedules: Schedule[] = [
     id: 10,
     academic_term_id: 1,
     student_assistant_id: 100,
+    start_date: null,
+    end_date: null,
     created_at: '2026-06-01T00:00:00Z',
   },
 ];
@@ -107,6 +109,35 @@ describe('expandEvaluatedShifts', () => {
     const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, [], { now });
 
     expect(shifts[0].status).toBe('absent');
+  });
+
+  it('respects per-schedule start and end date overrides', () => {
+    const extendedTerm: Term = {
+      ...term,
+      start_date: '2026-06-14',
+      end_date: '2026-08-24',
+    };
+    const overrideSchedules: Schedule[] = [
+      {
+        ...schedules[0],
+        start_date: '2026-06-18',
+        end_date: '2026-07-24',
+      },
+    ];
+    const lateJuneNow = new Date('2026-06-25T19:00:00.000Z');
+
+    const shifts = expandEvaluatedShifts(
+      extendedTerm,
+      overrideSchedules,
+      scheduleBlocks,
+      [],
+      { now: lateJuneNow },
+    );
+
+    expect(shifts.map((shift) => shift.date)).toEqual(['2026-06-22']);
+    expect(shifts.every((shift) => shift.status === 'absent')).toBe(true);
+    expect(shifts.some((shift) => shift.date === '2026-06-16')).toBe(false);
+    expect(shifts.some((shift) => shift.date === '2026-07-28')).toBe(false);
   });
 });
 

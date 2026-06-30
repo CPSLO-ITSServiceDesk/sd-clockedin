@@ -1,4 +1,5 @@
 import { resolveNearestBlock } from '../lib/resolveNearestBlock';
+import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
 import {
   addLocalDays,
   getClockInDate,
@@ -10,6 +11,7 @@ import type { Database } from '../types/database.types';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
 import { studentAssistantService } from './studentAssistantService';
+import { termService } from './termService';
 import { getTodayDateString, getTodayDay } from './todayShiftsService';
 
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
@@ -141,11 +143,15 @@ export const timeEntryService = {
 
     const todayDay = getTodayDay(now);
     const todayDate = getTodayDateString(now);
-    const [schedules, scheduleBlocks, timeEntries] = await Promise.all([
+    const [schedules, scheduleBlocks, timeEntries, terms] = await Promise.all([
       schedulesService.getAll(),
       scheduleBlocksService.getAll(),
       this.getAll(),
+      termService.getAll(),
     ]);
+
+    const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+    const termMap = new Map(terms.map((term) => [term.id, term]));
 
     const studentScheduleIds = new Set(
       schedules
@@ -154,12 +160,26 @@ export const timeEntryService = {
     );
 
     const todaysBlocks = todayDay
-      ? scheduleBlocks.filter(
-          (block) =>
-            block.days === todayDay &&
-            block.schedule_id != null &&
-            studentScheduleIds.has(block.schedule_id),
-        )
+      ? scheduleBlocks.filter((block) => {
+          if (
+            block.days !== todayDay ||
+            block.schedule_id == null ||
+            !studentScheduleIds.has(block.schedule_id)
+          ) {
+            return false;
+          }
+
+          const schedule = scheduleMap.get(block.schedule_id);
+          if (!schedule) return false;
+
+          const term =
+            schedule.academic_term_id != null
+              ? termMap.get(schedule.academic_term_id)
+              : undefined;
+          if (!term) return true;
+
+          return isDateInEffectiveScheduleRange(todayDate, schedule, term);
+        })
       : [];
 
     const todaysTimeEntries = timeEntries.filter(

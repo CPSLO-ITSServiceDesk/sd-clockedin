@@ -22,6 +22,7 @@ import {
   entryMatchesTerm,
   getEntryDurationMinutes,
   getStudentTermBlockIds,
+  getStudentTermSchedule,
 } from "@/components/admin/student-records/student-records-utils"
 import type { ScheduleStudent } from "@/lib/api/schedule-mappers"
 import { timeEntriesApi } from "@/lib/api/time-entries"
@@ -99,7 +100,13 @@ export function StudentRecordsManager() {
         scheduleBlocks,
       )
 
-      return entryMatchesTerm(entry, selectedTerm, termBlockIds)
+      const schedule = getStudentTermSchedule(
+        entry.student_assistant_id,
+        activeTermId,
+        schedules,
+      )
+
+      return entryMatchesTerm(entry, selectedTerm, termBlockIds, schedule)
     })
   }, [activeTermId, timeEntries, schedules, scheduleBlocks, selectedTerm])
 
@@ -114,10 +121,12 @@ export function StudentRecordsManager() {
         scheduleBlocks,
       )
 
+      const schedule = getStudentTermSchedule(student.id, activeTermId, schedules)
+
       return timeEntries.some(
         (entry) =>
           entry.student_assistant_id === student.id &&
-          entryMatchesTerm(entry, selectedTerm, termBlockIds),
+          entryMatchesTerm(entry, selectedTerm, termBlockIds, schedule),
       )
     },
     [activeTermId, timeEntries, schedules, scheduleBlocks, selectedTerm],

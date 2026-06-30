@@ -3,14 +3,18 @@ import { apiFetch } from "./client"
 export interface Schedule {
   academic_term_id: number | null
   created_at: string
+  end_date: string | null
   id: number
+  start_date: string | null
   student_assistant_id: number | null
 }
 
 export type ScheduleInput = {
   academic_term_id?: number | null
   created_at?: string
+  end_date?: string | null
   id?: number
+  start_date?: string | null
   student_assistant_id?: number | null
 }
 
