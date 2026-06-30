@@ -40,13 +40,13 @@ const navManage = [
   { title: "Students", href: "/admin/students", icon: GraduationCap },
   { title: "Terms", href: "/admin/terms", icon: BookOpen },
   { title: "Schedules", href: "/admin/schedules", icon: Calendar },
-  { title: "Student Records", href: "/admin/studentrecords", icon: ClipboardList },
   { title: "Timesheet Verification", href: "/admin/timesheet-verification", icon: Clock },
   { title: "Admin Access", href: "/admin/access", icon: ShieldCheck },
 ]
 
 const navAnalytics = [
   { title: "Term Analytics", href: "/admin/analytics/term", icon: BarChart2 },
+  { title: "Student Records", href: "/admin/studentrecords", icon: ClipboardList },
   { title: "Group Schedule", href: "/admin/analytics/group-schedule", icon: CalendarRange },
 ]
 

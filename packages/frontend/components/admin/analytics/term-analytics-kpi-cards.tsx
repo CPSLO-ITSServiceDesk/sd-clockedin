@@ -42,12 +42,12 @@ export function TermAnalyticsKpiCards({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              On-time rate
+              Punctuality rate
             </p>
-            <p className="text-xs text-muted-foreground">in-person shifts</p>
+            <p className="text-xs text-muted-foreground">on time or early</p>
           </div>
           <KpiValue
-            value={summary ? formatPercent(summary.onTimeRate) : "—"}
+            value={summary ? formatPercent(summary.punctualityRate) : "—"}
             isLoading={isLoading}
           />
         </CardContent>

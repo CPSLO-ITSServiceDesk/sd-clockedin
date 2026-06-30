@@ -20,7 +20,8 @@ export interface LateByTimeSlot {
 
 export interface DailyTrendPoint {
   date: string
-  onTime: number
+  /** Shifts with on-time or early status (within punctuality window). */
+  punctual: number
   late: number
   absent: number
 }
@@ -59,6 +60,8 @@ export interface TermAnalytics {
 export interface StudentAnalytics {
   summary: TimelinessSummary
   lateByTimeSlot: LateByTimeSlot[]
+  weekdayPatterns: WeekdayPattern[]
+  dailyTrend: DailyTrendPoint[]
   recentIssues: StudentLateShift[]
 }
 

@@ -34,8 +34,8 @@ import {
 } from "@/components/ui/toggle-group"
 
 const chartConfig = {
-  onTime: {
-    label: "On Time",
+  punctual: {
+    label: "Punctual",
     color: "var(--accent)",
   },
   late: {
@@ -77,7 +77,7 @@ export function OverviewChart({
         <CardTitle>Attendance Trend</CardTitle>
         <CardDescription>
           <span className="hidden @[540px]/card:block">
-            Daily clock-in breakdown — on time vs late vs absent
+            Daily clock-in breakdown — punctual vs late vs absent
           </span>
           <span className="@[540px]/card:hidden">Clock-in breakdown</span>
         </CardDescription>
@@ -126,9 +126,9 @@ export function OverviewChart({
           <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
             <AreaChart data={filteredData}>
               <defs>
-                <linearGradient id="fillOnTime" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-onTime)" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="var(--color-onTime)" stopOpacity={0.05} />
+                <linearGradient id="fillPunctual" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-punctual)" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="var(--color-punctual)" stopOpacity={0.05} />
                 </linearGradient>
                 <linearGradient id="fillLate" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--color-late)" stopOpacity={0.6} />
@@ -171,10 +171,10 @@ export function OverviewChart({
                 }
               />
               <Area
-                dataKey="onTime"
+                dataKey="punctual"
                 type="monotone"
-                fill="url(#fillOnTime)"
-                stroke="var(--color-onTime)"
+                fill="url(#fillPunctual)"
+                stroke="var(--color-punctual)"
                 strokeWidth={2}
               />
               <Area

@@ -80,8 +80,27 @@ describe('expandEvaluatedShifts', () => {
     const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, { now });
 
     expect(shifts).toHaveLength(1);
+    expect(shifts[0].status).toBe('on-time');
+    expect(shifts[0].minutesLate).toBe(0);
+  });
+
+  it('marks clock-ins after the arrival window as late', () => {
+    const timeEntries: TimeEntry[] = [
+      {
+        id: 1,
+        schedule_block_id: 20,
+        student_assistant_id: 100,
+        clock_in: '2026-06-22T16:11:00.000Z',
+        clock_out: '2026-06-22T19:00:00.000Z',
+        created_at: '2026-06-22T09:11:00Z',
+      },
+    ];
+
+    const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, { now });
+
+    expect(shifts).toHaveLength(1);
     expect(shifts[0].status).toBe('late');
-    expect(shifts[0].minutesLate).toBe(5);
+    expect(shifts[0].minutesLate).toBe(1);
   });
 
   it('marks past shifts without clock-in as absent', () => {
@@ -108,12 +127,40 @@ describe('buildTermAnalytics', () => {
 
     expect(result.summary.totalEvaluated).toBe(1);
     expect(result.summary.onTime).toBe(1);
-    expect(result.dailyTrend).toHaveLength(1);
+    expect(result.summary.punctualityRate).toBe(1);
+    expect(result.dailyTrend).toEqual([
+      {
+        date: '2026-06-22',
+        punctual: 1,
+        late: 0,
+        absent: 0,
+      },
+    ]);
     expect(result.lateByTimeSlot[0]).toMatchObject({
       startTime: '09:00',
       lateCount: 0,
       totalShifts: 1,
     });
+  });
+
+  it('counts early shifts in punctual daily trend and punctuality rate', () => {
+    const timeEntries: TimeEntry[] = [
+      {
+        id: 1,
+        schedule_block_id: 20,
+        student_assistant_id: 100,
+        clock_in: '2026-06-22T15:45:00.000Z',
+        clock_out: '2026-06-22T19:00:00.000Z',
+        created_at: '2026-06-22T08:45:00Z',
+      },
+    ];
+
+    const result = buildTermAnalytics(term, schedules, scheduleBlocks, timeEntries, now);
+
+    expect(result.summary.early).toBe(1);
+    expect(result.summary.punctualityRate).toBe(1);
+    expect(result.summary.onTimeRate).toBe(0);
+    expect(result.dailyTrend[0].punctual).toBe(1);
   });
 });
 
@@ -142,6 +189,13 @@ describe('buildStudentAnalytics', () => {
     expect(result.summary.late).toBe(1);
     expect(result.recentIssues).toHaveLength(1);
     expect(result.recentIssues[0].status).toBe('late');
-    expect(result.recentIssues[0].minutesLate).toBe(10);
+    expect(result.recentIssues[0].minutesLate).toBe(5);
+    expect(result.weekdayPatterns).toHaveLength(5);
+    expect(result.dailyTrend).toHaveLength(1);
+    expect(result.dailyTrend[0]).toMatchObject({
+      date: '2026-06-22',
+      late: 1,
+      absent: 0,
+    });
   });
 });

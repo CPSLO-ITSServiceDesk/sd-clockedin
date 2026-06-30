@@ -57,7 +57,7 @@ export function TermLateLeaderboard({
                       {index + 1}
                     </span>
                     <Link
-                      href={`/admin/studentrecords?student=${entry.studentAssistantId}`}
+                      href={`/admin/studentrecords?student=${entry.studentAssistantId}&tab=analytics`}
                       className="truncate text-sm font-medium hover:text-accent"
                     >
                       {name}

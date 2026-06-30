@@ -46,7 +46,8 @@ export interface LateByTimeSlot {
 
 export interface DailyTrendPoint {
   date: string;
-  onTime: number;
+  /** Shifts with on-time or early status (within punctuality window). */
+  punctual: number;
   late: number;
   absent: number;
 }
@@ -97,6 +98,8 @@ export interface StudentLeaderboardEntry {
 export interface StudentAnalyticsResult {
   summary: TimelinessSummary;
   lateByTimeSlot: LateByTimeSlot[];
+  weekdayPatterns: WeekdayPattern[];
+  dailyTrend: DailyTrendPoint[];
   recentIssues: StudentLateShift[];
 }
 
@@ -272,13 +275,13 @@ function aggregateDailyTrend(shifts: EvaluatedShift[]): DailyTrendPoint[] {
   for (const shift of shifts) {
     const current = dayMap.get(shift.date) ?? {
       date: shift.date,
-      onTime: 0,
+      punctual: 0,
       late: 0,
       absent: 0,
     };
 
     if (shift.status === 'on-time' || shift.status === 'early') {
-      current.onTime += 1;
+      current.punctual += 1;
     } else if (shift.status === 'late') {
       current.late += 1;
     } else if (shift.status === 'absent') {
@@ -429,6 +432,8 @@ export function buildStudentAnalytics(
   return {
     summary: summarizeShifts(shifts),
     lateByTimeSlot: aggregateLateByTimeSlot(shifts),
+    weekdayPatterns: aggregateWeekdayPatterns(shifts),
+    dailyTrend: aggregateDailyTrend(shifts),
     recentIssues,
   };
 }

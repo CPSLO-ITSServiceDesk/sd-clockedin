@@ -1,9 +1,10 @@
 "use client"
 
-import type React from "react"
-import { AlertTriangle, CheckCircle2, Clock, UserX } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock, Timer, UserX, Zap } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
+import { OverviewChart } from "@/components/admin/analytics/overview-chart"
+import { TermWeekdayChart } from "@/components/admin/analytics/term-weekday-chart"
 import type { StudentAnalytics } from "@/lib/api/analytics"
 import { formatStartTimeHeader, formatTime } from "@/lib/format-time"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -69,7 +70,8 @@ export function StudentAnalyticsPanel({
     )
   }
 
-  const { summary, lateByTimeSlot, recentIssues } = analytics
+  const { summary, lateByTimeSlot, weekdayPatterns, dailyTrend, recentIssues } =
+    analytics
   const chartData = lateByTimeSlot.map((slot) => ({
     ...slot,
     label: formatStartTimeHeader(slot.startTime),
@@ -77,16 +79,17 @@ export function StudentAnalyticsPanel({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Card className="bg-card border-border">
           <CardContent className="flex items-center gap-3 p-3">
             <CheckCircle2 className="size-4 text-accent" />
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                On-time rate
+                Punctuality rate
               </p>
+              <p className="text-muted-foreground text-[11px]">on time or early</p>
             </div>
-            <p className="text-xl font-bold">{formatPercent(summary.onTimeRate)}</p>
+            <p className="text-xl font-bold">{formatPercent(summary.punctualityRate)}</p>
           </CardContent>
         </Card>
 
@@ -115,13 +118,51 @@ export function StudentAnalyticsPanel({
             <Clock className="size-4 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Evaluated
+                Evaluated shifts
               </p>
             </div>
             <p className="text-xl font-bold">{summary.totalEvaluated}</p>
           </CardContent>
         </Card>
+
+        <Card className="bg-card border-border">
+          <CardContent className="flex items-center gap-3 p-3">
+            <Timer className="size-4 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Avg late
+              </p>
+              <p className="text-muted-foreground text-[11px]">when late</p>
+            </div>
+            <p className="text-xl font-bold">
+              {summary.late > 0 ? `${summary.avgMinutesLate}m` : "—"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardContent className="flex items-center gap-3 p-3">
+            <Zap className="size-4 text-sky-500" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Early arrivals
+              </p>
+              <p className="text-muted-foreground text-[11px]">&gt;10 min before start</p>
+            </div>
+            <p className="text-xl font-bold">{summary.early}</p>
+          </CardContent>
+        </Card>
       </div>
+
+      {dailyTrend.length > 0 ? (
+        <OverviewChart data={dailyTrend} />
+      ) : null}
+
+      <TermWeekdayChart
+        data={weekdayPatterns}
+        isLoading={false}
+        error={null}
+      />
 
       {chartData.length > 0 ? (
         <Card>
