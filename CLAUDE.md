@@ -183,6 +183,11 @@ The Supabase database contains these core tables:
 - `admins`: System administrators
 - `import`: Batch import tracking
 
+**Additional tables/features for enhanced functionality:**
+- Auto clock-out functionality uses cron jobs to automatically clock out students who forget to clock out
+- Schedule date overrides are handled through the scheduleBlocks service with temporary date modifications
+- Enhanced analytics utilizes computed fields and aggregated queries for punctuality metrics and hourly headcounts
+
 ### Key Integration Points
 1. **Frontend → Backend Communication**:
    - Frontend expects API at `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:3001/api`)
@@ -193,19 +198,25 @@ The Supabase database contains these core tables:
    - Schedules contain multiple Schedule Blocks (shift templates)
    - Time entries reference either a Schedule Block or have custom times
    - When schedule blocks are deleted/updated, `clearScheduleBlockReferences` preserves time entries by nullifying references
+   - Schedule date overrides allow temporary modifications to specific schedule instances
+   - Auto clock-out functionality automatically clocks out students who forget to clock out
 
 3. **State Synchronization**:
    - React Query automatically refetches data after mutations
    - Optimistic UI updates in some cases (e.g., schedule block creation)
    - WebSocket or polling mechanisms for real-time updates (currently polling every 30s for today's shifts)
+   - Enhanced analytics with punctuality metrics and hourly headcount charts with location filtering
 
 ### Environment Variables
 **Backend** (`.env` in `packages/backend/`):
 - `SUPABASE_URL`: Supabase project URL
-- `SUPABASE_ANON_KEY`: Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key (for server-side operations)
 - `PORT`: Server port (default: 3001)
 - `NODE_ENV`: Environment (development/production)
 - `ALLOWED_ORIGINS`: CORS allowed origins (comma-separated)
+- `FRONTEND_URL`: Frontend URL for CORS (defaults to `http://localhost:3000`)
+- `AUTO_CLOCK_OUT_TIME`: Time for auto clock-out in HH:mm format (default: `17:00`)
+- `AUTO_CLOCK_OUT_ENABLED`: Enable/disable auto clock-out feature (default: `true`)
 
 **Frontend** (`.env` in `packages/frontend/`):
 - `NEXT_PUBLIC_API_URL`: Base URL for API calls (must include `/api` suffix)
@@ -221,6 +232,13 @@ The Supabase database contains these core tables:
 5. Update frontend API wrapper in `packages/frontend/lib/api/[resource].ts`
 6. Add query keys to `packages/frontend/lib/query-keys.ts` if needed
 7. Create React Query hooks in `packages/frontend/hooks/` as needed
+
+#### Adding a Scheduled Job (e.g., Auto Clock-Out)
+1. Create the job file in `src/jobs/[jobName].ts`
+2. Implement the job logic (e.g., querying for overdue time entries and auto clocking out)
+3. Register the job in `src/index.ts` using cron scheduling logic
+4. Add any necessary environment variables to `.env` and validate in `src/config/environment.ts`
+5. Add tests for the job logic in `src/tests/[jobName].test.ts`
 
 #### Database Changes
 1. Modify Supabase schema directly or through migrations

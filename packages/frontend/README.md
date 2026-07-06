@@ -51,16 +51,23 @@ packages/frontend/
 - Automatic JSON serialization/deserialization
 - Consistent error handling transforming API errors to thrown exceptions
 - Resource-specific modules in `lib/api/` (e.g., `terms.ts`, `scheduleBlocks.ts`)
+- Specialized analytics API module (`lib/api/analytics.ts`) for student metrics
 
 ### Data Transformation
 - Mapper functions in `lib/schedules/` convert between API and UI formats
 - Consistent TypeScript interfaces matching Supabase types
 - Proper handling of nullable fields and JSONB columns
+- Date-range utilities in `lib/schedules/date-range.ts` for schedule overrides
 
 ### UI Components
 - Reusable components in `components/` (built with shadcn/ui)
 - Feature-specific components in route-specific directories
 - Utility functions in `lib/` directory
+- Specialized analytics components:
+  - `overview-chart.tsx`: Visualizes punctuality trends over time
+  - `term-late-leaderboard.tsx`: Shows students with most late arrivals
+  - `term-analytics-kpi-cards.tsx`: Displays key punctuality metrics
+  - `student-analytics-panel.tsx`: Individual student punctuality breakdown
 
 ## Development
 
@@ -120,11 +127,20 @@ Note: The frontend expects the backend API to be available at `NEXT_PUBLIC_API_U
 - Schedules contain multiple Schedule Blocks (shift templates)
 - Time entries reference either a Schedule Block or have custom times
 - When schedule blocks are deleted/updated, references in time entries are nulled (preserving the time entry records)
+- Schedule date overrides allow temporary modification of schedule blocks for specific dates
 
 ### State Synchronization
 - React Query automatically refetches data after mutations
 - Optimistic UI updates in some cases (e.g., schedule block creation)
 - Polling every 30 seconds for real-time updates (today's shifts)
+- Enhanced analytics with punctuality metrics and hourly headcount charts with location filtering
+
+### Analytics Features
+- Punctuality tracking: On-time, early, and late percentage calculations
+- Hourly headcount visualization with location-based filtering
+- Term-based analytics dashboards for administrative oversight
+- Student-specific analytics panels showing individual punctuality trends
+- Enhanced analytics with punctuality metrics and hourly headcount charts with location filtering
 
 ## Architecture Guidelines
 
@@ -178,6 +194,16 @@ Note: The frontend expects the backend API to be available at `NEXT_PUBLIC_API_U
 3. Style with Tailwind CSS
 4. Follow existing component patterns for props and state management
 
+### Adding Analytics Features
+1. Create API endpoint wrapper in `lib/api/` (e.g., `analytics.ts`)
+2. Define TypeScript interfaces for analytics data
+3. Implement data fetching functions using `apiFetch`
+4. Create React Query hooks in `hooks/` for data fetching (e.g., `useStudentAnalytics.ts`)
+5. Add new route in `app/` directory for analytics pages (e.g., `app/admin/analytics/page.tsx`)
+6. Create visualization components in `components/admin/analytics/` using Recharts or similar
+7. Add utility functions for data processing in `lib/` if needed
+8. Update sidebar navigation in `components/admin/layout/app-sidebar.tsx` to include new analytics links
+
 ## Testing
 
 Currently, there are no tests in the frontend package. When adding tests, consider:
@@ -197,6 +223,11 @@ The frontend interacts with these backend resources through the API:
 - `time_entry`: Clock-in/clock-out records
 - `admins`: System administrators
 - `import`: Batch import tracking
+
+**Analytics-specific data:**
+- The frontend leverages aggregated data and computed fields from the above tables for analytics
+- Punctuality metrics are calculated from time_entry data compared to schedule_block times
+- Hourly headcount aggregations are generated from time_entry data grouped by hour and location
 
 ## Debugging
 

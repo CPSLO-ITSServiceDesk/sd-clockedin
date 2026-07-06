@@ -22,6 +22,8 @@ packages/backend/
 │   │   └── environment.ts    # Environment validation and configuration object
 │   ├── lib/                  # Shared utilities
 │   │   └── supabase.ts       # Supabase client initialization
+│   ├── jobs/                 # Scheduled jobs (cron jobs)
+│   │   └── autoClockOut.ts   # Automatic clock-out job for forgotten punch-outs
 │   ├── middleware/           # Custom Express middleware
 │   │   ├── errorHandler.ts   # Centralized error handling
 │   │   └── validate.ts       # Request validation middleware
@@ -55,6 +57,10 @@ packages/backend/
 │   ├── scheduleImport.test.ts
 │   ├── shiftStatus.test.ts
 │   ├── timeEntry.service.test.ts
+│   ├── orgTime.test.ts
+│   ├── resolveNearestBlock.test.ts
+│   ├── scheduleDateRange.test.ts
+│   ├── shiftAnalytics.test.ts
 │   └── ...                   # Other test files
 ├── .env                      # Environment variables (not in repo)
 ├── package.json              # Dependencies and scripts
@@ -86,6 +92,11 @@ packages/backend/
 - Proper ordering and filtering in queries
 - Integer IDs (not UUIDs) as per Supabase schema
 
+### Scheduled Jobs
+- Auto clock-out functionality: Automatically clocks out students who forget to clock out after their shift ends
+- Configurable cron timing and grace period via environment variables
+- Logging and error handling for reliable background processing
+
 ### Security
 - Helmet.js for HTTP header security
 - CORS middleware with configurable origins
@@ -96,6 +107,12 @@ packages/backend/
 - Special handling for schedule block deletions to preserve time entries
 - `clearScheduleBlockReferences` function nullifies schedule_block_id in time_entry table
 - This preserves historical time entry data when schedule templates are modified
+- Schedule date overrides allow temporary modifications to specific schedule instances
+
+### Analytics
+- Enhanced student analytics with punctuality metrics (on-time, early, late percentages)
+- Hourly headcount charts with location filtering capabilities
+- Efficient querying using Supabase aggregates and computed fields
 
 ## Development
 
@@ -110,10 +127,18 @@ Create a `.env` file in `packages/backend/` with:
 
 ```
 SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 PORT=3001
 NODE_ENV=development
-ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+FRONTEND_URL=http://localhost:3000
+# Optional — defaults to America/Los_Angeles
+ORG_TIMEZONE=America/Los_Angeles
+
+# Auto Clock-Out Configuration
+AUTO_CLOCK_OUT_ENABLED=true                    # Enable/disable auto clock-out feature
+AUTO_CLOCK_OUT_CRON="0 * * * *"                # Cron schedule (runs hourly by default)
+AUTO_CLOCK_OUT_GRACE_PERIOD_MINUTES=10         # Minutes after shift end to wait before auto clock-out
+AUTO_CLOCK_OUT_LOOKAHEAD_MINUTES=5             # Minutes ahead to check for upcoming shifts
 ```
 
 ### Development Server
@@ -167,6 +192,24 @@ pnpm --filter backend gen:types
 
 # Verify Supabase connection
 pnpm --filter backend check
+```
+
+### Scheduled Jobs
+The backend includes automated cron jobs for routine tasks:
+
+**Auto Clock-Out Job**
+- Located in `src/jobs/autoClockOut.ts`
+- Runs according to cron schedule (default: hourly)
+- Automatically clocks out students who forget to clock out after their shift ends
+- Configurable via environment variables:
+  - `AUTO_CLOCK_OUT_ENABLED`: Enable/disable the feature
+  - `AUTO_CLOCK_OUT_CRON`: Cron schedule expression
+  - `AUTO_CLOCK_OUT_GRACE_PERIOD_MINUTES`: Wait time after shift end
+  - `AUTO_CLOCK_OUT_LOOKAHEAD_MINUTES`: How far ahead to check for shifts
+
+To run the auto clock-out job manually:
+```bash
+pnpm --filter backend exec tsx src/jobs/autoClockOut.ts
 ```
 
 ## Key Integration Points

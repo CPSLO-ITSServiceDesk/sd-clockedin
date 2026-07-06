@@ -94,6 +94,9 @@ Browser (Next.js)  ──REST──▶  Express API  ──▶  Supabase (Postgr
 
 - **Schedules** belong to a term and student; each schedule has **blocks** (day + start/end time).
 - **Time entries** record clock in/out, optionally linked to a schedule block.
+- **Schedule date overrides** allow temporary modifications to specific schedule instances.
+- **Auto clock-out functionality** automatically clocks out students who forget to clock out after their shift.
+- **Enhanced analytics** provides punctuality metrics and hourly headcount charts with location filtering.
 - Clock-in logic picks the nearest matching block for the day; shift status (early, on-time, late, absent) is computed on the backend using the organization timezone.
 
 API responses follow a consistent shape:
@@ -108,7 +111,7 @@ Errors return `{ "success": false, "error": "..." }` with an appropriate HTTP st
 
 **Frontend:** Next.js (App Router), React, Tailwind CSS, shadcn/ui, TanStack Query & Table, React Hook Form + Zod
 
-**Backend:** Express, TypeScript, Supabase JS client, express-validator, Vitest
+**Backend:** Express, TypeScript, Supabase JS client, express-validator, Vitest, node-cron (for scheduled jobs)
 
 **Database:** Supabase / PostgreSQL
 
@@ -123,14 +126,16 @@ sd-clockin/
 │   │   ├── hooks/         # React Query hooks
 │   │   └── lib/           # API client, utilities
 │   └── backend/           # Express API
-│       └── src/
-│           ├── routes/    # HTTP routes
-│           ├── controllers/
-│           ├── services/  # Business logic + Supabase
-│           ├── lib/       # Shared helpers (time, shifts, import)
-│           └── tests/
-├── package.json           # Workspace scripts
-└── pnpm-workspace.yaml
+│       ├── src/
+│       │   ├── routes/    # HTTP routes
+│       │   ├── controllers/
+│       │   ├── services/  # Business logic + Supabase
+│       │   ├── lib/       # Shared helpers (time, shifts, import)
+│       │   ├── jobs/      # Scheduled jobs (auto clock-out)
+│       │   ├── middleware/
+│       │   └── tests/
+│   ├── package.json           # Workspace scripts
+│   └── pnpm-workspace.yaml
 ```
 
 ## Contributing / extending
@@ -140,6 +145,13 @@ Typical flow for a new feature that touches data:
 1. Schema change in Supabase (if needed) → `pnpm --filter backend gen:types`
 2. Backend service → controller → route
 3. Frontend `lib/api/` wrapper → query hook → UI
+
+For scheduled jobs (like auto clock-out):
+1. Create job file in `backend/src/jobs/`
+2. Implement job logic
+3. Register job in `backend/src/index.ts`
+4. Add environment variables and configuration
+5. Add tests for the job logic
 
 After schema or API changes, run backend tests and smoke-test the affected admin or kiosk screens.
 
