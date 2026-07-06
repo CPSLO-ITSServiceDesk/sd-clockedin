@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { loadEnvironment, config } from './config/environment';
+import { scheduleAutoClockOut } from './jobs/autoClockOut';
 import { registerRoutes } from './routes';
 import { createCorsMiddleware } from './middleware/cors';
 import { errorHandler } from './middleware/errorHandler';
@@ -34,4 +35,5 @@ app.listen(config.port, () => {
   if (config.nodeEnv === 'development') {
     console.log('CORS also allows http://localhost:* and http://127.0.0.1:*');
   }
+  scheduleAutoClockOut();
 });

@@ -2,12 +2,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.timeEntryService = void 0;
 const resolveNearestBlock_1 = require("../lib/resolveNearestBlock");
+const scheduleDateRange_1 = require("../lib/scheduleDateRange");
 const shiftStatus_1 = require("../lib/shiftStatus");
+const orgTime_1 = require("../lib/orgTime");
 const supabase_1 = require("../lib/supabase");
 const errorHandler_1 = require("../middleware/errorHandler");
 const scheduleBlocksService_1 = require("./scheduleBlocksService");
 const schedulesService_1 = require("./schedulesService");
 const studentAssistantService_1 = require("./studentAssistantService");
+const termService_1 = require("./termService");
 const todayShiftsService_1 = require("./todayShiftsService");
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
@@ -67,6 +70,16 @@ exports.timeEntryService = {
         }
         return data;
     },
+    async getAllOpen() {
+        const { data, error } = await supabase_1.supabase
+            .from('time_entry')
+            .select('*')
+            .is('clock_out', null)
+            .order('created_at', { ascending: false });
+        if (error)
+            throw new errorHandler_1.HttpError(500, error.message);
+        return data ?? [];
+    },
     async create(payload) {
         const { data, error } = await supabase_1.supabase
             .from('time_entry')
@@ -111,20 +124,36 @@ exports.timeEntryService = {
         }
         const todayDay = (0, todayShiftsService_1.getTodayDay)(now);
         const todayDate = (0, todayShiftsService_1.getTodayDateString)(now);
-        const [schedules, scheduleBlocks, timeEntries] = await Promise.all([
+        const [schedules, scheduleBlocks, timeEntries, terms] = await Promise.all([
             schedulesService_1.schedulesService.getAll(),
             scheduleBlocksService_1.scheduleBlocksService.getAll(),
             this.getAll(),
+            termService_1.termService.getAll(),
         ]);
+        const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+        const termMap = new Map(terms.map((term) => [term.id, term]));
         const studentScheduleIds = new Set(schedules
             .filter((schedule) => schedule.student_assistant_id === student_assistant_id)
             .map((schedule) => schedule.id));
         const todaysBlocks = todayDay
-            ? scheduleBlocks.filter((block) => block.days === todayDay &&
-                block.schedule_id != null &&
-                studentScheduleIds.has(block.schedule_id))
+            ? scheduleBlocks.filter((block) => {
+                if (block.days !== todayDay ||
+                    block.schedule_id == null ||
+                    !studentScheduleIds.has(block.schedule_id)) {
+                    return false;
+                }
+                const schedule = scheduleMap.get(block.schedule_id);
+                if (!schedule)
+                    return false;
+                const term = schedule.academic_term_id != null
+                    ? termMap.get(schedule.academic_term_id)
+                    : undefined;
+                if (!term)
+                    return true;
+                return (0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term);
+            })
             : [];
-        const todaysTimeEntries = timeEntries.filter((entry) => entry.created_at?.startsWith(todayDate) &&
+        const todaysTimeEntries = timeEntries.filter((entry) => (0, shiftStatus_1.getClockInDate)(entry.clock_in) === todayDate &&
             entry.student_assistant_id === student_assistant_id);
         const timeEntryMap = new Map();
         for (const entry of todaysTimeEntries) {
@@ -171,6 +200,54 @@ exports.timeEntryService = {
             throw new errorHandler_1.HttpError(500, 'Failed to update time entry');
         }
         return updated;
+    },
+    async autoClockOutOpen(clockOut, now = new Date()) {
+        const openEntries = await this.getAllOpen();
+        const today = (0, orgTime_1.getOrgLocalDateString)(now);
+        const clockOutTime = new Date(clockOut).getTime();
+        const eligibleIds = [];
+        let skippedCount = 0;
+        let staleCount = 0;
+        for (const entry of openEntries) {
+            if (!entry.clock_in || entry.student_assistant_id == null) {
+                skippedCount += 1;
+                continue;
+            }
+            const clockInTime = new Date(entry.clock_in).getTime();
+            if (Number.isNaN(clockInTime) || clockInTime > clockOutTime) {
+                skippedCount += 1;
+                continue;
+            }
+            const clockInDate = (0, shiftStatus_1.getClockInDate)(entry.clock_in);
+            if (clockInDate && clockInDate !== today) {
+                staleCount += 1;
+                console.warn(`Auto clock-out: stale entry id=${entry.id} clock_in=${entry.clock_in}`);
+            }
+            eligibleIds.push(entry.id);
+        }
+        if (eligibleIds.length === 0) {
+            return {
+                closedCount: 0,
+                entryIds: [],
+                skippedCount,
+                staleCount,
+            };
+        }
+        const { data, error } = await supabase_1.supabase
+            .from('time_entry')
+            .update({ clock_out: clockOut })
+            .in('id', eligibleIds)
+            .is('clock_out', null)
+            .select('id');
+        if (error)
+            throw new errorHandler_1.HttpError(500, error.message);
+        const entryIds = (data ?? []).map((row) => row.id);
+        return {
+            closedCount: entryIds.length,
+            entryIds,
+            skippedCount,
+            staleCount,
+        };
     },
     async getHoursByDay(studentAssistantId, startDate, endDate) {
         // Widen the query so entries near month boundaries are not missed due to UTC storage.

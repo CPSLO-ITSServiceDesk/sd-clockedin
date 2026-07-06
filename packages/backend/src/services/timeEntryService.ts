@@ -1,5 +1,6 @@
 import { resolveNearestBlock } from '../lib/resolveNearestBlock';
 import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
+import { getOrgLocalDateString } from '../lib/orgTime';
 import {
   addLocalDays,
   getClockInDate,
@@ -25,6 +26,13 @@ export interface ClockInResult {
     startTime: string;
     endTime: string;
   } | null;
+}
+
+export interface AutoClockOutResult {
+  closedCount: number;
+  entryIds: number[];
+  skippedCount: number;
+  staleCount: number;
 }
 
 // PostgREST returns this code when .single() finds no matching row.
@@ -88,6 +96,17 @@ export const timeEntryService = {
       throw new HttpError(500, error.message);
     }
     return data;
+  },
+
+  async getAllOpen(): Promise<TimeEntry[]> {
+    const { data, error } = await supabase
+      .from('time_entry')
+      .select('*')
+      .is('clock_out', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
   },
 
   async create(payload: TimeEntryInsert): Promise<TimeEntry> {
@@ -240,6 +259,69 @@ export const timeEntryService = {
     }
 
     return updated;
+  },
+
+  async autoClockOutOpen(
+    clockOut: string,
+    now: Date = new Date(),
+  ): Promise<AutoClockOutResult> {
+    const openEntries = await this.getAllOpen();
+    const today = getOrgLocalDateString(now);
+    const clockOutTime = new Date(clockOut).getTime();
+
+    const eligibleIds: number[] = [];
+    let skippedCount = 0;
+    let staleCount = 0;
+
+    for (const entry of openEntries) {
+      if (!entry.clock_in || entry.student_assistant_id == null) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const clockInTime = new Date(entry.clock_in).getTime();
+      if (Number.isNaN(clockInTime) || clockInTime > clockOutTime) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const clockInDate = getClockInDate(entry.clock_in);
+      if (clockInDate && clockInDate !== today) {
+        staleCount += 1;
+        console.warn(
+          `Auto clock-out: stale entry id=${entry.id} clock_in=${entry.clock_in}`,
+        );
+      }
+
+      eligibleIds.push(entry.id);
+    }
+
+    if (eligibleIds.length === 0) {
+      return {
+        closedCount: 0,
+        entryIds: [],
+        skippedCount,
+        staleCount,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from('time_entry')
+      .update({ clock_out: clockOut })
+      .in('id', eligibleIds)
+      .is('clock_out', null)
+      .select('id');
+
+    if (error) throw new HttpError(500, error.message);
+
+    const entryIds = (data ?? []).map((row) => row.id);
+
+    return {
+      closedCount: entryIds.length,
+      entryIds,
+      skippedCount,
+      staleCount,
+    };
   },
 
   async getHoursByDay(studentAssistantId: number, startDate: string, endDate: string): Promise<Record<string, number>> {

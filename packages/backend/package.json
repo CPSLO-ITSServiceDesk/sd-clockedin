@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "check": "tsx src/scripts/check-connection.ts",
+    "auto-clock-out": "tsx src/scripts/run-auto-clock-out.ts",
     "gen:types": "supabase gen types typescript --project-id oapecofpwgxamjkpnqsr --schema public > src/types/database.types.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
-  "test": "vitest run",
-  "test:watch": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -19,6 +20,7 @@
     "@types/helmet": "^4.0.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^24.12.4",
+    "@types/node-cron": "^3.0.11",
     "@types/supertest": "^7.2.0",
     "dotenv": "^17.4.2",
     "eslint": "^8.57.0",
@@ -38,6 +40,7 @@
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
     "multer": "^2.2.0",
+    "node-cron": "^4.6.0",
     "xlsx": "^0.18.5"
   }
 }

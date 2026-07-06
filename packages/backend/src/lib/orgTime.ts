@@ -50,3 +50,50 @@ export function getOrgDayOfWeek(now: Date = new Date()): number {
 
   return map[weekday] ?? 0;
 }
+
+/**
+ * UTC instant for a wall-clock time on the org-local calendar day of `now`.
+ * Uses binary search over Intl-derived org-local date/minutes (no extra deps).
+ */
+export function getOrgLocalCutoffInstant(
+  now: Date = new Date(),
+  hour: number = 17,
+  minute: number = 0,
+): Date {
+  const dateStr = getOrgLocalDateString(now);
+  const targetMinutes = hour * 60 + minute;
+
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // LA is UTC-7/UTC-8, so local midnight can fall on the prior UTC calendar day.
+  let low = Date.UTC(y, m - 1, d - 1, 0, 0, 0);
+  let high = Date.UTC(y, m - 1, d + 1, 23, 59, 59);
+
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = new Date(mid);
+    const candidateDate = getOrgLocalDateString(candidate);
+    const candidateMinutes = getOrgLocalMinutes(candidate);
+
+    const isBefore =
+      candidateDate < dateStr ||
+      (candidateDate === dateStr && candidateMinutes < targetMinutes);
+
+    if (isBefore) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  const result = new Date(low);
+  if (
+    getOrgLocalDateString(result) !== dateStr ||
+    getOrgLocalMinutes(result) !== targetMinutes
+  ) {
+    throw new Error(
+      `Could not resolve cutoff instant for ${dateStr} ${hour}:${String(minute).padStart(2, '0')} in ${ORG_TIMEZONE}`,
+    );
+  }
+
+  return result;
+}

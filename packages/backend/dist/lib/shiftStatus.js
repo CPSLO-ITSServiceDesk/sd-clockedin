@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ON_TIME_GRACE_MINUTES = void 0;
+exports.ON_TIME_GRACE_MINUTES = exports.ARRIVAL_WINDOW_MINUTES = void 0;
 exports.computeRemoteShiftStatus = computeRemoteShiftStatus;
 exports.computeShiftStatus = computeShiftStatus;
 exports.toLocalDateString = toLocalDateString;
@@ -9,15 +9,18 @@ exports.isLocalDateInRange = isLocalDateInRange;
 exports.getClockInDate = getClockInDate;
 exports.computeMinutesLate = computeMinutesLate;
 exports.computeHistoricalShiftStatus = computeHistoricalShiftStatus;
+const orgTime_1 = require("./orgTime");
 const time_1 = require("./time");
-/** Minutes after scheduled start that still count as on-time. */
-exports.ON_TIME_GRACE_MINUTES = 5;
+/** Minutes before/after scheduled start that still count as on-time. */
+exports.ARRIVAL_WINDOW_MINUTES = 10;
+/** @deprecated Use ARRIVAL_WINDOW_MINUTES */
+exports.ON_TIME_GRACE_MINUTES = exports.ARRIVAL_WINDOW_MINUTES;
 function computeRemoteShiftStatus(scheduledStartTime, now = new Date()) {
     const startMinutes = (0, time_1.timeToMinutes)(scheduledStartTime);
     if (Number.isNaN(startMinutes)) {
         return 'expected';
     }
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = (0, orgTime_1.getOrgLocalMinutes)(now);
     if (nowMinutes < startMinutes) {
         return 'incoming';
     }
@@ -28,28 +31,31 @@ function computeShiftStatus(scheduledStartTime, clockIn, now = new Date()) {
     if (Number.isNaN(startMinutes)) {
         return 'incoming';
     }
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = (0, orgTime_1.getOrgLocalMinutes)(now);
     if (!clockIn) {
-        return nowMinutes < startMinutes ? 'incoming' : 'absent';
+        return isWithinArrivalWindow(startMinutes, nowMinutes) ? 'incoming' : 'absent';
     }
     const clockInMinutes = (0, time_1.timeToMinutes)(clockIn);
     if (Number.isNaN(clockInMinutes)) {
-        return nowMinutes < startMinutes ? 'incoming' : 'absent';
+        return isWithinArrivalWindow(startMinutes, nowMinutes) ? 'incoming' : 'absent';
     }
-    if (clockInMinutes < startMinutes) {
+    return evaluateClockedInStatus(startMinutes, clockInMinutes);
+}
+function evaluateClockedInStatus(startMinutes, clockInMinutes) {
+    if (clockInMinutes < startMinutes - exports.ARRIVAL_WINDOW_MINUTES) {
         return 'early';
     }
-    if (clockInMinutes <= startMinutes + exports.ON_TIME_GRACE_MINUTES) {
+    if (clockInMinutes <= startMinutes + exports.ARRIVAL_WINDOW_MINUTES) {
         return 'on-time';
     }
     return 'late';
 }
-/** Format a Date as YYYY-MM-DD in local time. */
+function isWithinArrivalWindow(startMinutes, nowMinutes) {
+    return nowMinutes <= startMinutes + exports.ARRIVAL_WINDOW_MINUTES;
+}
+/** Format a Date as YYYY-MM-DD in the organization timezone. */
 function toLocalDateString(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return (0, orgTime_1.getOrgLocalDateString)(date);
 }
 /** Shift a YYYY-MM-DD local date by a number of days. */
 function addLocalDays(dateStr, delta) {
@@ -80,7 +86,7 @@ function computeMinutesLate(scheduledStartTime, clockIn) {
     if (Number.isNaN(startMinutes) || Number.isNaN(clockInMinutes)) {
         return 0;
     }
-    const lateBy = clockInMinutes - startMinutes - exports.ON_TIME_GRACE_MINUTES;
+    const lateBy = clockInMinutes - startMinutes - exports.ARRIVAL_WINDOW_MINUTES;
     return lateBy > 0 ? lateBy : 0;
 }
 /**
@@ -88,7 +94,7 @@ function computeMinutesLate(scheduledStartTime, clockIn) {
  * Returns `skipped` for future dates; `incoming` for today before start with no clock-in.
  */
 function computeHistoricalShiftStatus(scheduledStartTime, clockIn, shiftDate, now = new Date()) {
-    const today = toLocalDateString(now);
+    const today = (0, orgTime_1.getOrgLocalDateString)(now);
     if (shiftDate > today) {
         return { status: 'skipped', minutesLate: 0 };
     }
@@ -100,8 +106,8 @@ function computeHistoricalShiftStatus(scheduledStartTime, clockIn, shiftDate, no
         if (shiftDate < today) {
             return { status: 'absent', minutesLate: 0 };
         }
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (nowMinutes < startMinutes) {
+        const nowMinutes = (0, orgTime_1.getOrgLocalMinutes)(now);
+        if (isWithinArrivalWindow(startMinutes, nowMinutes)) {
             return { status: 'incoming', minutesLate: 0 };
         }
         return { status: 'absent', minutesLate: 0 };
@@ -111,20 +117,17 @@ function computeHistoricalShiftStatus(scheduledStartTime, clockIn, shiftDate, no
         if (shiftDate < today) {
             return { status: 'absent', minutesLate: 0 };
         }
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (nowMinutes < startMinutes) {
+        const nowMinutes = (0, orgTime_1.getOrgLocalMinutes)(now);
+        if (isWithinArrivalWindow(startMinutes, nowMinutes)) {
             return { status: 'incoming', minutesLate: 0 };
         }
         return { status: 'absent', minutesLate: 0 };
     }
-    if (clockInMinutes < startMinutes) {
-        return { status: 'early', minutesLate: 0 };
-    }
-    if (clockInMinutes <= startMinutes + exports.ON_TIME_GRACE_MINUTES) {
-        return { status: 'on-time', minutesLate: 0 };
-    }
+    const status = evaluateClockedInStatus(startMinutes, clockInMinutes);
     return {
-        status: 'late',
-        minutesLate: computeMinutesLate(scheduledStartTime, clockIn),
+        status,
+        minutesLate: status === 'late'
+            ? computeMinutesLate(scheduledStartTime, clockIn)
+            : 0,
     };
 }

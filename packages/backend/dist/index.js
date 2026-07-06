@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const helmet_1 = __importDefault(require("helmet"));
 const environment_1 = require("./config/environment");
+const autoClockOut_1 = require("./jobs/autoClockOut");
 const routes_1 = require("./routes");
 const cors_1 = require("./middleware/cors");
 const errorHandler_1 = require("./middleware/errorHandler");
@@ -32,4 +33,5 @@ app.listen(environment_1.config.port, () => {
     if (environment_1.config.nodeEnv === 'development') {
         console.log('CORS also allows http://localhost:* and http://127.0.0.1:*');
     }
+    (0, autoClockOut_1.scheduleAutoClockOut)();
 });

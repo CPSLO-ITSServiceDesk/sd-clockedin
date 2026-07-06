@@ -43,6 +43,7 @@ async function upsertStudent(entry, dryRun) {
 async function replaceScheduleBlocks(studentId, termId, blocks, dryRun) {
     if (dryRun)
         return;
+    // Re-import replaces blocks only; existing start_date/end_date overrides are preserved.
     let schedule = await schedulesService_1.schedulesService.getByStudentAndTerm(studentId, termId);
     if (!schedule) {
         schedule = await schedulesService_1.schedulesService.create({

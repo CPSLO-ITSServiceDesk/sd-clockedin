@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.expandEvaluatedShifts = expandEvaluatedShifts;
 exports.buildTermAnalytics = buildTermAnalytics;
 exports.buildStudentAnalytics = buildStudentAnalytics;
+const scheduleDateRange_1 = require("./scheduleDateRange");
 const time_1 = require("./time");
 const shiftStatus_1 = require("./shiftStatus");
 const WEEKDAY_DAYS = [
@@ -160,12 +161,12 @@ function aggregateDailyTrend(shifts) {
     for (const shift of shifts) {
         const current = dayMap.get(shift.date) ?? {
             date: shift.date,
-            onTime: 0,
+            punctual: 0,
             late: 0,
             absent: 0,
         };
         if (shift.status === 'on-time' || shift.status === 'early') {
-            current.onTime += 1;
+            current.punctual += 1;
         }
         else if (shift.status === 'late') {
             current.late += 1;
@@ -207,7 +208,10 @@ function expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, opt
             schedule.student_assistant_id !== options.studentAssistantId) {
             continue;
         }
-        for (const date of iterateDates(term.start_date, term.end_date)) {
+        const range = (0, scheduleDateRange_1.getEffectiveScheduleDateRange)(schedule, term);
+        if (!range)
+            continue;
+        for (const date of iterateDates(range.startDate, range.endDate)) {
             if (date > today)
                 continue;
             if (isVacationDay(date, offDays))
@@ -269,6 +273,8 @@ function buildStudentAnalytics(term, studentAssistantId, schedules, scheduleBloc
     return {
         summary: summarizeShifts(shifts),
         lateByTimeSlot: aggregateLateByTimeSlot(shifts),
+        weekdayPatterns: aggregateWeekdayPatterns(shifts),
+        dailyTrend: aggregateDailyTrend(shifts),
         recentIssues,
     };
 }

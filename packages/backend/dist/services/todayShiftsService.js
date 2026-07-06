@@ -3,11 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.todayShiftsService = void 0;
 exports.getTodayDay = getTodayDay;
 exports.getTodayDateString = getTodayDateString;
+const scheduleDateRange_1 = require("../lib/scheduleDateRange");
 const formatStudentRole_1 = require("../lib/formatStudentRole");
+const orgTime_1 = require("../lib/orgTime");
 const shiftStatus_1 = require("../lib/shiftStatus");
 const scheduleBlocksService_1 = require("./scheduleBlocksService");
 const schedulesService_1 = require("./schedulesService");
 const studentAssistantService_1 = require("./studentAssistantService");
+const termService_1 = require("./termService");
 const timeEntryService_1 = require("./timeEntryService");
 const WEEKDAY_DAYS = [
     'monday',
@@ -17,7 +20,7 @@ const WEEKDAY_DAYS = [
     'friday',
 ];
 function getTodayDay(now = new Date()) {
-    const day = now.getDay();
+    const day = (0, orgTime_1.getOrgDayOfWeek)(now);
     if (day === 0 || day === 6)
         return null;
     return WEEKDAY_DAYS[day - 1];
@@ -38,14 +41,16 @@ exports.todayShiftsService = {
             return { shifts: [], remoteOnlyStudentIds: [] };
         }
         const todayDate = getTodayDateString(now);
-        const [schedules, scheduleBlocks, studentAssistants, timeEntries] = await Promise.all([
+        const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] = await Promise.all([
             schedulesService_1.schedulesService.getAll(),
             scheduleBlocksService_1.scheduleBlocksService.getAll(),
             studentAssistantService_1.studentAssistantService.getAll(),
             timeEntryService_1.timeEntryService.getAll(),
+            termService_1.termService.getAll(),
         ]);
+        const termMap = new Map(terms.map((term) => [term.id, term]));
         const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
-        const todaysTimeEntries = timeEntries.filter((entry) => entry.created_at?.startsWith(todayDate));
+        const todaysTimeEntries = timeEntries.filter((entry) => (0, shiftStatus_1.getClockInDate)(entry.clock_in) === todayDate);
         const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
         const studentAssistantMap = new Map(studentAssistants.map((assistant) => [assistant.id, assistant]));
         const inPersonStudentIds = new Set();
@@ -54,6 +59,15 @@ exports.todayShiftsService = {
             const studentId = resolveBlockStudentId(block, scheduleMap);
             if (studentId == null)
                 continue;
+            const schedule = block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
+            const term = schedule?.academic_term_id != null
+                ? termMap.get(schedule.academic_term_id)
+                : undefined;
+            if (schedule &&
+                term &&
+                !(0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term)) {
+                continue;
+            }
             const studentAssistant = studentAssistantMap.get(studentId);
             if (!studentAssistant || studentAssistant.is_active === false)
                 continue;
@@ -76,6 +90,13 @@ exports.todayShiftsService = {
             const schedule = block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
             if (!schedule?.student_assistant_id)
                 return [];
+            const term = schedule.academic_term_id != null
+                ? termMap.get(schedule.academic_term_id)
+                : undefined;
+            if (term &&
+                !(0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term)) {
+                return [];
+            }
             const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
             if (!studentAssistant || studentAssistant.is_active === false)
                 return [];
