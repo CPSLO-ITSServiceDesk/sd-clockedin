@@ -11,6 +11,8 @@ interface StudentRecordsKpiCardsProps {
   totalEntries: number
   totalMinutes: number
   openEntries: number
+  studentName?: string
+  hasSchedule?: boolean
 }
 
 export function StudentRecordsKpiCards({
@@ -20,7 +22,11 @@ export function StudentRecordsKpiCards({
   totalEntries,
   totalMinutes,
   openEntries,
-}: StudentRecordsKpiCardsProps) {
+  studentName,
+  hasSchedule,
+}: Readonly<StudentRecordsKpiCardsProps>) {
+  const isStudentView = Boolean(studentName)
+
   return (
     <div className="grid gap-3 md:grid-cols-4">
       <Card className="bg-card border-border relative overflow-hidden">
@@ -31,11 +37,15 @@ export function StudentRecordsKpiCards({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Term
+              {isStudentView ? "Student" : "Term"}
             </p>
-            <p className="text-xs text-muted-foreground">attendance context</p>
+            <p className="text-xs text-muted-foreground">
+              {isStudentView ? termName : "attendance context"}
+            </p>
           </div>
-          <p className="shrink-0 text-lg font-bold tracking-tight">{termName}</p>
+          <p className="max-w-[9rem] shrink-0 truncate text-lg font-bold tracking-tight">
+            {isStudentView ? studentName : termName}
+          </p>
         </CardContent>
       </Card>
 
@@ -47,12 +57,18 @@ export function StudentRecordsKpiCards({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              With entries
+              {isStudentView ? "Schedule" : "With entries"}
             </p>
-            <p className="text-xs text-muted-foreground">students clocked in</p>
+            <p className="text-xs text-muted-foreground">
+              {isStudentView ? "in selected term" : "students clocked in"}
+            </p>
           </div>
           <p className="shrink-0 text-2xl font-bold tracking-tight">
-            {studentsWithEntries}/{totalStudents}
+            {isStudentView
+              ? hasSchedule
+                ? "Yes"
+                : "No"
+              : `${studentsWithEntries}/${totalStudents}`}
           </p>
         </CardContent>
       </Card>

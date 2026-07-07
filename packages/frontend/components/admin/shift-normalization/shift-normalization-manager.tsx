@@ -2,9 +2,15 @@
 
 import { useCallback, useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, Link2, Search } from "lucide-react"
+import { Link2, Search } from "lucide-react"
 import { toast } from "sonner"
 import { TermPageHeader } from "@/components/admin/student-term/term-page-header"
+import { ShiftNormalizationKpiCards } from "@/components/admin/shift-normalization/shift-normalization-kpi-cards"
+import {
+  normalizationTableCellClassName,
+  normalizationTableHeadClassName,
+  ShiftNormalizationTableSection,
+} from "@/components/admin/shift-normalization/shift-normalization-table-section"
 import {
   applyNormalizationMatches,
   fetchNormalizationPreview,
@@ -27,13 +33,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -56,29 +57,6 @@ const UNMATCHED_REASON_LABELS: Record<UnmatchedReason, string> = {
 
 function formatBlockDay(day: string): string {
   return day.charAt(0).toUpperCase() + day.slice(1)
-}
-
-function SummaryCard({
-  label,
-  value,
-  className,
-}: {
-  label: string
-  value: number
-  className?: string
-}) {
-  return (
-    <Card className={cn("border-border", className)}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-muted-foreground text-sm font-medium">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
-  )
 }
 
 export function ShiftNormalizationManager() {
@@ -218,83 +196,115 @@ export function ShiftNormalizationManager() {
 
       {preview ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <SummaryCard
-              label="Unscheduled entries"
-              value={preview.summary.totalUnscheduled}
-            />
-            <SummaryCard
-              label="Proposed matches"
-              value={preview.summary.proposedMatches}
-            />
-            <SummaryCard label="No match" value={preview.summary.noMatch} />
-          </div>
+          <ShiftNormalizationKpiCards summary={preview.summary} isLoading={loading} />
 
           {proposals.length > 0 ? (
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="text-lg">Proposed matches</CardTitle>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">
+            <ShiftNormalizationTableSection
+              title="Proposed matches"
+              description="Review and select entries to link to schedule blocks"
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead
+                      className={cn(
+                        normalizationTableHeadClassName,
+                        "w-10 px-4",
+                      )}
+                    >
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={(checked) =>
+                          toggleAll(checked === true)
+                        }
+                        aria-label="Select all proposals"
+                      />
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Student
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Date
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Clock in
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Clock out
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Proposed block
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {proposals.map((proposal: NormalizationProposal) => (
+                    <TableRow
+                      key={proposal.timeEntryId}
+                      className="border-border hover:bg-secondary/50 transition-colors"
+                    >
+                      <TableCell
+                        className={cn(normalizationTableCellClassName, "w-10 px-4")}
+                      >
                         <Checkbox
-                          checked={allSelected}
+                          checked={selectedIds.has(proposal.timeEntryId)}
                           onCheckedChange={(checked) =>
-                            toggleAll(checked === true)
+                            toggleProposal(
+                              proposal.timeEntryId,
+                              checked === true,
+                            )
                           }
-                          aria-label="Select all proposals"
+                          aria-label={`Select entry ${proposal.timeEntryId}`}
                         />
-                      </TableHead>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Clock in</TableHead>
-                      <TableHead>Clock out</TableHead>
-                      <TableHead>Proposed block</TableHead>
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          normalizationTableCellClassName,
+                          "font-medium text-card-foreground",
+                        )}
+                      >
+                        {proposal.studentName}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          normalizationTableCellClassName,
+                          "text-muted-foreground tabular-nums",
+                        )}
+                      >
+                        {proposal.date}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          normalizationTableCellClassName,
+                          "text-muted-foreground tabular-nums",
+                        )}
+                      >
+                        {formatTime(proposal.clockIn)}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          normalizationTableCellClassName,
+                          "text-muted-foreground tabular-nums",
+                        )}
+                      >
+                        {proposal.clockOut
+                          ? formatTime(proposal.clockOut)
+                          : "—"}
+                      </TableCell>
+                      <TableCell className={normalizationTableCellClassName}>
+                        {formatBlockDay(proposal.blockDay)}{" "}
+                        {formatTimeRange(
+                          proposal.blockStartTime,
+                          proposal.blockEndTime,
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {proposals.map((proposal: NormalizationProposal) => (
-                      <TableRow key={proposal.timeEntryId}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.has(proposal.timeEntryId)}
-                            onCheckedChange={(checked) =>
-                              toggleProposal(
-                                proposal.timeEntryId,
-                                checked === true,
-                              )
-                            }
-                            aria-label={`Select entry ${proposal.timeEntryId}`}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {proposal.studentName}
-                        </TableCell>
-                        <TableCell>{proposal.date}</TableCell>
-                        <TableCell>{formatTime(proposal.clockIn)}</TableCell>
-                        <TableCell>
-                          {proposal.clockOut
-                            ? formatTime(proposal.clockOut)
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {formatBlockDay(proposal.blockDay)}{" "}
-                          {formatTimeRange(
-                            proposal.blockStartTime,
-                            proposal.blockEndTime,
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </ShiftNormalizationTableSection>
           ) : (
-            <Card className="border-border">
+            <Card className="bg-card border-border">
               <CardContent className="text-muted-foreground py-10 text-center text-sm">
                 {preview.summary.totalUnscheduled === 0
                   ? `No unscheduled entries found for ${selectedTerm?.name ?? "this term"}.`
@@ -304,63 +314,74 @@ export function ShiftNormalizationManager() {
           )}
 
           {preview.unmatched.length > 0 ? (
-            <Collapsible open={unmatchedOpen} onOpenChange={setUnmatchedOpen}>
-              <Card className="border-border">
-                <CardHeader className="pb-3">
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="flex h-auto w-full items-center justify-between px-0 hover:bg-transparent"
+            <ShiftNormalizationTableSection
+              title={`Unmatched (${preview.unmatched.length})`}
+              description="Entries that could not be linked to a schedule block"
+              collapsible
+              open={unmatchedOpen}
+              onOpenChange={setUnmatchedOpen}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Student
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Date
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Clock in
+                    </TableHead>
+                    <TableHead className={normalizationTableHeadClassName}>
+                      Reason
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.unmatched.map((entry) => (
+                    <TableRow
+                      key={entry.timeEntryId}
+                      className="border-border hover:bg-secondary/50 transition-colors"
                     >
-                      <CardTitle className="text-lg">
-                        Unmatched ({preview.unmatched.length})
-                      </CardTitle>
-                      <ChevronDown
+                      <TableCell
                         className={cn(
-                          "text-muted-foreground size-4 transition-transform",
-                          unmatchedOpen && "rotate-180",
+                          normalizationTableCellClassName,
+                          "font-medium text-card-foreground",
                         )}
-                      />
-                    </Button>
-                  </CollapsibleTrigger>
-                </CardHeader>
-                <CollapsibleContent>
-                  <CardContent className="overflow-x-auto pt-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Student</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Clock in</TableHead>
-                          <TableHead>Reason</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {preview.unmatched.map((entry) => (
-                          <TableRow key={entry.timeEntryId}>
-                            <TableCell className="font-medium">
-                              {entry.studentName}
-                            </TableCell>
-                            <TableCell>{entry.date || "—"}</TableCell>
-                            <TableCell>{formatTime(entry.clockIn)}</TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">
-                                {UNMATCHED_REASON_LABELS[entry.reason]}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
+                      >
+                        {entry.studentName}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          normalizationTableCellClassName,
+                          "text-muted-foreground tabular-nums",
+                        )}
+                      >
+                        {entry.date || "—"}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          normalizationTableCellClassName,
+                          "text-muted-foreground tabular-nums",
+                        )}
+                      >
+                        {formatTime(entry.clockIn)}
+                      </TableCell>
+                      <TableCell className={normalizationTableCellClassName}>
+                        <Badge variant="secondary">
+                          {UNMATCHED_REASON_LABELS[entry.reason]}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ShiftNormalizationTableSection>
           ) : null}
         </>
       ) : (
-        <Card className="border-border">
+        <Card className="bg-card border-border">
           <CardContent className="text-muted-foreground flex min-h-[280px] flex-col items-center justify-center gap-3 text-center text-sm">
             <Link2 className="size-8 opacity-40" />
             <p>

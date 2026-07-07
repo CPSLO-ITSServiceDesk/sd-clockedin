@@ -148,13 +148,21 @@ export function StudentRecordsManager() {
     return sum + (minutes ?? 0)
   }, 0)
 
-  const selectedStudentOpenCount =
+  const selectedStudentEntries =
     selectedStudent && activeTermId
       ? termScopedEntries.filter(
-          (entry) =>
-            entry.student_assistant_id === selectedStudent.id && !entry.clock_out,
-        ).length
-      : 0
+          (entry) => entry.student_assistant_id === selectedStudent.id,
+        )
+      : []
+
+  const selectedStudentMinutes = selectedStudentEntries.reduce((sum, entry) => {
+    const minutes = getEntryDurationMinutes(entry)
+    return sum + (minutes ?? 0)
+  }, 0)
+
+  const selectedStudentOpenCount = selectedStudentEntries.filter(
+    (entry) => !entry.clock_out,
+  ).length
 
   const {
     data: studentAnalytics,
@@ -185,14 +193,26 @@ export function StudentRecordsManager() {
         onTermChange={changeTerm}
       />
 
-      {!selectedStudent ? (
+      {activeTermId ? (
         <StudentRecordsKpiCards
           termName={selectedTerm?.name ?? "—"}
           studentsWithEntries={studentsWithEntries}
           totalStudents={activeStudents.length}
-          totalEntries={termScopedEntries.length}
-          totalMinutes={totalMinutes}
-          openEntries={openEntries}
+          totalEntries={
+            selectedStudent ? selectedStudentEntries.length : termScopedEntries.length
+          }
+          totalMinutes={
+            selectedStudent ? selectedStudentMinutes : totalMinutes
+          }
+          openEntries={
+            selectedStudent ? selectedStudentOpenCount : openEntries
+          }
+          studentName={
+            selectedStudent ? formatStudentName(selectedStudent) : undefined
+          }
+          hasSchedule={
+            selectedStudent ? hasSchedule(selectedStudent) : undefined
+          }
         />
       ) : null}
 
