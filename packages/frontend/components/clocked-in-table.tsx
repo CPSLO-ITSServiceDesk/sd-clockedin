@@ -32,8 +32,15 @@ import {
   getShiftInitials,
   type TodayShift,
 } from "@/lib/shifts/today-shifts"
+import { cn } from "@/lib/utils"
 
-export function ClockedInTable({ showActions = true }: Readonly<{ showActions?: boolean }>) {
+type TableVariant = "default" | "display"
+
+export function ClockedInTable({
+  showActions = true,
+  variant = "default",
+}: Readonly<{ showActions?: boolean; variant?: TableVariant }>) {
+  const isDisplay = variant === "display"
   const queryClient = useQueryClient()
   const { shifts, isLoading, error } = useTodayShiftList()
   const clockedIn = getClockedInStudents(shifts)
@@ -93,9 +100,149 @@ export function ClockedInTable({ showActions = true }: Readonly<{ showActions?: 
     }
   }
 
+  const colSpan = showActions ? 5 : 4
+
+  const displayMidpoint = Math.ceil(clockedIn.length / 2)
+  const displayColumns = isDisplay
+    ? [clockedIn.slice(0, displayMidpoint), clockedIn.slice(displayMidpoint)]
+    : []
+
+  const renderClockedInRow = (shift: TodayShift) => {
+    const name = formatShiftName(shift)
+    return (
+      <TableRow
+        key={shift.studentAssistantId}
+        className="border-border hover:bg-secondary/50 transition-colors"
+      >
+        <TableCell className="font-medium text-card-foreground">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
+              {getShiftInitials(shift)}
+            </div>
+            {name}
+          </div>
+        </TableCell>
+        <TableCell className="text-muted-foreground">{shift.role}</TableCell>
+        <TableCell className="text-muted-foreground tabular-nums">
+          {shift.clockInActual ? formatTime(shift.clockInActual) : "--"}
+        </TableCell>
+        <TableCell className="text-muted-foreground tabular-nums">
+          {shift.scheduleBlockId == null
+            ? "Unscheduled"
+            : formatTime(shift.endTime)}
+        </TableCell>
+        {showActions ? (
+          <TableCell className="text-right">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setSubmitError(null)
+                setConfirmTarget(shift)
+              }}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              aria-label={`Clock out ${name}`}
+            >
+              <DoorOpen className="h-4 w-4" />
+            </Button>
+          </TableCell>
+        ) : null}
+      </TableRow>
+    )
+  }
+
+  const tableHeader = (
+    <TableHeader>
+      <TableRow className="hover:bg-transparent border-border">
+        <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+          Name
+        </TableHead>
+        <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+          Role
+        </TableHead>
+        <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+          Clock In
+        </TableHead>
+        <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+          Shift End
+        </TableHead>
+        {showActions ? (
+          <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
+            Action
+          </TableHead>
+        ) : null}
+      </TableRow>
+    </TableHeader>
+  )
+
+  const displayTableContent =
+    isLoading ? (
+      <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
+    ) : error ? (
+      <p className="py-8 text-center text-sm text-destructive">
+        Failed to load clocked-in employees
+      </p>
+    ) : clockedIn.length === 0 ? (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        No one is currently clocked in
+      </p>
+    ) : (
+      <div className="grid min-h-0 grid-cols-2 gap-4">
+        {displayColumns.map((column, index) => (
+          <Table key={index === 0 ? "left" : "right"}>
+            {tableHeader}
+            <TableBody>{column.map(renderClockedInRow)}</TableBody>
+          </Table>
+        ))}
+      </div>
+    )
+
+  const tableContent = (
+    <Table>
+      {tableHeader}
+      <TableBody>
+        {isLoading ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={colSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              Loading...
+            </TableCell>
+          </TableRow>
+        ) : error ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={colSpan}
+              className="py-8 text-center text-sm text-destructive"
+            >
+              Failed to load clocked-in employees
+            </TableCell>
+          </TableRow>
+        ) : clockedIn.length === 0 ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={colSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              No one is currently clocked in
+            </TableCell>
+          </TableRow>
+        ) : (
+          clockedIn.map(renderClockedInRow)
+        )}
+      </TableBody>
+    </Table>
+  )
+
   return (
     <>
-      <div className="rounded-md border border-border bg-card">
+      <div
+        className={cn(
+          "rounded-md border border-border bg-card",
+          isDisplay && "flex min-h-0 flex-1 flex-col",
+        )}
+      >
         <div className="border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -135,94 +282,13 @@ export function ClockedInTable({ showActions = true }: Readonly<{ showActions?: 
             </div>
           </div>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-                Name
-              </TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-                Role
-              </TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-                Clock In
-              </TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-                Shift End
-              </TableHead>
-              {showActions ? (
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
-                  Action
-                </TableHead>
-              ) : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow className="border-border">
-                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : error ? (
-              <TableRow className="border-border">
-                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-destructive">
-                  Failed to load clocked-in employees
-                </TableCell>
-              </TableRow>
-            ) : clockedIn.length === 0 ? (
-              <TableRow className="border-border">
-                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
-                  No one is currently clocked in
-                </TableCell>
-              </TableRow>
-            ) : (
-              clockedIn.map((shift) => {
-                const name = formatShiftName(shift)
-                return (
-                  <TableRow
-                    key={shift.studentAssistantId}
-                    className="border-border hover:bg-secondary/50 transition-colors"
-                  >
-                    <TableCell className="font-medium text-card-foreground">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
-                          {getShiftInitials(shift)}
-                        </div>
-                        {name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {shift.role}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {shift.clockInActual ? formatTime(shift.clockInActual) : "--"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {shift.scheduleBlockId == null ? "Unscheduled" : formatTime(shift.endTime)}
-                    </TableCell>
-                    {showActions ? (
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSubmitError(null)
-                            setConfirmTarget(shift)
-                          }}
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          aria-label={`Clock out ${name}`}
-                        >
-                          <DoorOpen className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    ) : null}
-                  </TableRow>
-                )
-              })
-            )}
-          </TableBody>
-        </Table>
+        {isDisplay ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2">
+            {displayTableContent}
+          </div>
+        ) : (
+          tableContent
+        )}
       </div>
 
       {showActions ? (

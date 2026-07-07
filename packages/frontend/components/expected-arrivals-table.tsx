@@ -22,10 +22,15 @@ import {
   getShiftInitials,
   getTodayDay,
 } from "@/lib/shifts/today-shifts"
+import { cn } from "@/lib/utils"
+
+type TableVariant = "default" | "display"
 
 export function ExpectedArrivalsTable({
   showActions = true,
-}: Readonly<{ showActions?: boolean }>) {
+  variant = "default",
+}: Readonly<{ showActions?: boolean; variant?: TableVariant }>) {
+  const isDisplay = variant === "display"
   const queryClient = useQueryClient()
   const { shifts, isLoading, error } = useTodayShiftList()
   const expectedArrivals = getExpectedArrivalStudents(shifts)
@@ -56,8 +61,187 @@ export function ExpectedArrivalsTable({
 
   const todayDay = getTodayDay()
 
+  const defaultColSpan = showActions ? 4 : 3
+  const displayColSpan = 2
+
+  const tableContent = isDisplay ? (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent border-border">
+          <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+            Name
+          </TableHead>
+          <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
+            Schedule
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={displayColSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              Loading...
+            </TableCell>
+          </TableRow>
+        ) : error ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={displayColSpan}
+              className="py-8 text-center text-sm text-destructive"
+            >
+              Failed to load expected arrivals
+            </TableCell>
+          </TableRow>
+        ) : !todayDay ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={displayColSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              No shifts scheduled for weekends
+            </TableCell>
+          </TableRow>
+        ) : expectedArrivals.length === 0 ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={displayColSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              No pending arrivals for today
+            </TableCell>
+          </TableRow>
+        ) : (
+          expectedArrivals.map((shift) => {
+            const name = formatShiftName(shift)
+            return (
+              <TableRow
+                key={shift.studentAssistantId}
+                className="border-border hover:bg-secondary/50 transition-colors"
+              >
+                <TableCell className="max-w-0 font-medium text-card-foreground">
+                  <span className="truncate">{name}</span>
+                </TableCell>
+                <TableCell className="text-right text-muted-foreground tabular-nums whitespace-nowrap">
+                  {formatTimeRange(shift.startTime, shift.endTime)}
+                </TableCell>
+              </TableRow>
+            )
+          })
+        )}
+      </TableBody>
+    </Table>
+  ) : (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent border-border">
+          <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+            Name
+          </TableHead>
+          <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+            Role
+          </TableHead>
+          <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
+            Schedule
+          </TableHead>
+          {showActions ? (
+            <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
+              Action
+            </TableHead>
+          ) : null}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={defaultColSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              Loading...
+            </TableCell>
+          </TableRow>
+        ) : error ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={defaultColSpan}
+              className="py-8 text-center text-sm text-destructive"
+            >
+              Failed to load expected arrivals
+            </TableCell>
+          </TableRow>
+        ) : !todayDay ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={defaultColSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              No shifts scheduled for weekends
+            </TableCell>
+          </TableRow>
+        ) : expectedArrivals.length === 0 ? (
+          <TableRow className="border-border">
+            <TableCell
+              colSpan={defaultColSpan}
+              className="py-8 text-center text-sm text-muted-foreground"
+            >
+              No pending arrivals for today
+            </TableCell>
+          </TableRow>
+        ) : (
+          expectedArrivals.map((shift) => {
+            const name = formatShiftName(shift)
+            const isSubmitting = submittingId === shift.studentAssistantId
+            return (
+              <TableRow
+                key={shift.studentAssistantId}
+                className="border-border hover:bg-secondary/50 transition-colors"
+              >
+                <TableCell className="font-medium text-card-foreground">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
+                      {getShiftInitials(shift)}
+                    </div>
+                    {name}
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {shift.role}
+                </TableCell>
+                <TableCell className="text-muted-foreground tabular-nums">
+                  {formatTimeRange(shift.startTime, shift.endTime)}
+                </TableCell>
+                {showActions ? (
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleClockInClick(shift.studentAssistantId)}
+                      disabled={isSubmitting}
+                      className="text-accent hover:bg-accent/10 hover:text-accent"
+                      aria-label={`Clock in ${name}`}
+                    >
+                      <DoorOpen className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            )
+          })
+        )}
+      </TableBody>
+    </Table>
+  )
+
   return (
-    <div className="rounded-md border border-border bg-card">
+    <div
+      className={cn(
+        "rounded-md border border-border bg-card",
+        isDisplay && "flex min-h-0 flex-1 flex-col",
+      )}
+    >
       <div className="border-b border-border px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
@@ -68,100 +252,18 @@ export function ExpectedArrivalsTable({
               In-person staff arriving within the next 2 hours
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {expectedArrivals.length} PENDING
-            </span>
-          </div>
+          <span className="text-sm text-muted-foreground tabular-nums uppercase">
+            {expectedArrivals.length} PENDING
+          </span>
         </div>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent border-border">
-            <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-              Name
-            </TableHead>
-            <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-              Role
-            </TableHead>
-            <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium">
-              Schedule
-            </TableHead>
-            {showActions ? (
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-medium text-right">
-                Action
-              </TableHead>
-            ) : null}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {isLoading ? (
-            <TableRow className="border-border">
-              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-muted-foreground">
-                Loading...
-              </TableCell>
-            </TableRow>
-          ) : error ? (
-            <TableRow className="border-border">
-              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-destructive">
-                Failed to load expected arrivals
-              </TableCell>
-            </TableRow>
-          ) : !todayDay ? (
-            <TableRow className="border-border">
-              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-muted-foreground">
-                No shifts scheduled for weekends
-              </TableCell>
-            </TableRow>
-          ) : expectedArrivals.length === 0 ? (
-            <TableRow className="border-border">
-              <TableCell colSpan={showActions ? 4 : 3} className="py-8 text-center text-sm text-muted-foreground">
-                No pending arrivals for today
-              </TableCell>
-            </TableRow>
-          ) : (
-            expectedArrivals.map((shift) => {
-              const name = formatShiftName(shift)
-              const isSubmitting = submittingId === shift.studentAssistantId
-              return (
-                <TableRow
-                  key={shift.studentAssistantId}
-                  className="border-border hover:bg-secondary/50 transition-colors"
-                >
-                  <TableCell className="font-medium text-card-foreground">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-bold text-secondary-foreground">
-                        {getShiftInitials(shift)}
-                      </div>
-                      {name}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {shift.role}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {formatTimeRange(shift.startTime, shift.endTime)}
-                  </TableCell>
-                  {showActions ? (
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleClockInClick(shift.studentAssistantId)}
-                        disabled={isSubmitting}
-                        className="text-accent hover:bg-accent/10 hover:text-accent"
-                        aria-label={`Clock in ${name}`}
-                      >
-                        <DoorOpen className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  ) : null}
-                </TableRow>
-              )
-            })
-          )}
-        </TableBody>
-      </Table>
+      {isDisplay ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {tableContent}
+        </div>
+      ) : (
+        tableContent
+      )}
       {showActions && submitError && (
         <div className="border-t border-border px-6 py-3 text-sm text-destructive">
           {submitError}
