@@ -11,12 +11,10 @@ export interface BlockCandidate {
   clockInActual: string | null;
 }
 
-export function resolveNearestBlock(
+export function resolveNearestBlockFromMinutes(
   blocks: BlockCandidate[],
-  now: Date = new Date(),
+  referenceMinutes: number,
 ): BlockCandidate | null {
-  const nowMin = getOrgLocalMinutes(now);
-
   const pending = blocks.filter((block) => !block.clockInActual);
   if (pending.length === 0) return null;
 
@@ -25,8 +23,8 @@ export function resolveNearestBlock(
     const end = timeToMinutes(block.endTime);
     if (Number.isNaN(start) || Number.isNaN(end)) return false;
     return (
-      nowMin >= start - EARLY_CLOCK_IN_WINDOW_MINUTES &&
-      nowMin < end
+      referenceMinutes >= start - EARLY_CLOCK_IN_WINDOW_MINUTES &&
+      referenceMinutes < end
     );
   });
 
@@ -34,7 +32,7 @@ export function resolveNearestBlock(
 
   const inWindow = eligible.filter((block) => {
     const start = timeToMinutes(block.startTime);
-    return nowMin >= start;
+    return referenceMinutes >= start;
   });
 
   const pool = inWindow.length > 0 ? inWindow : eligible;
@@ -44,12 +42,19 @@ export function resolveNearestBlock(
     const start = timeToMinutes(block.startTime);
     if (Number.isNaN(start)) return best;
 
-    const dist = useStartTieBreak ? start : Math.abs(nowMin - start);
+    const dist = useStartTieBreak ? start : Math.abs(referenceMinutes - start);
     if (best === null) return block;
 
     const bestStart = timeToMinutes(best.startTime);
-    const bestDist = useStartTieBreak ? bestStart : Math.abs(nowMin - bestStart);
+    const bestDist = useStartTieBreak ? bestStart : Math.abs(referenceMinutes - bestStart);
 
     return dist < bestDist ? block : best;
   }, null);
+}
+
+export function resolveNearestBlock(
+  blocks: BlockCandidate[],
+  now: Date = new Date(),
+): BlockCandidate | null {
+  return resolveNearestBlockFromMinutes(blocks, getOrgLocalMinutes(now));
 }

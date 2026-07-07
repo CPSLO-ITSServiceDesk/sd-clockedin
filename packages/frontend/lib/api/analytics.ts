@@ -6,6 +6,7 @@ export interface TimelinessSummary {
   early: number
   late: number
   absent: number
+  unscheduled: number
   onTimeRate: number
   punctualityRate: number
   avgMinutesLate: number
@@ -46,7 +47,7 @@ export interface StudentLateShift {
   endTime: string
   clockIn: string | null
   minutesLate: number
-  status: "late" | "absent"
+  status: "late" | "absent" | "unscheduled"
 }
 
 export interface TermAnalytics {

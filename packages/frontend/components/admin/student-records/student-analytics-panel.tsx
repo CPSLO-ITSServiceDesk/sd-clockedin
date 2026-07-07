@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, Clock, Timer, UserX, Zap } from "lucide-react"
+import { AlertTriangle, CalendarClock, CheckCircle2, UserX } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import { OverviewChart } from "@/components/admin/analytics/overview-chart"
@@ -62,7 +62,10 @@ export function StudentAnalyticsPanel({
     )
   }
 
-  if (!analytics || analytics.summary.totalEvaluated === 0) {
+  if (
+    !analytics ||
+    (analytics.summary.totalEvaluated === 0 && analytics.summary.unscheduled === 0)
+  ) {
     return (
       <div className="text-muted-foreground py-6 text-center text-sm">
         No evaluated in-person shifts for this student in the selected term.
@@ -79,7 +82,7 @@ export function StudentAnalyticsPanel({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="bg-card border-border">
           <CardContent className="flex items-center gap-3 p-3">
             <CheckCircle2 className="size-4 text-accent" />
@@ -98,6 +101,9 @@ export function StudentAnalyticsPanel({
             <AlertTriangle className="size-4 text-yellow-500" />
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">Late</p>
+              <p className="text-muted-foreground text-[11px]">
+                {summary.late > 0 ? `avg ${summary.avgMinutesLate}m` : "after 10 min window"}
+              </p>
             </div>
             <p className="text-xl font-bold">{summary.late}</p>
           </CardContent>
@@ -108,6 +114,7 @@ export function StudentAnalyticsPanel({
             <UserX className="size-4 text-destructive" />
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">Absent</p>
+              <p className="text-muted-foreground text-[11px]">missed scheduled shifts</p>
             </div>
             <p className="text-xl font-bold">{summary.absent}</p>
           </CardContent>
@@ -115,41 +122,14 @@ export function StudentAnalyticsPanel({
 
         <Card className="bg-card border-border">
           <CardContent className="flex items-center gap-3 p-3">
-            <Clock className="size-4 text-muted-foreground" />
+            <CalendarClock className="size-4 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Evaluated shifts
+                Unscheduled
               </p>
+              <p className="text-muted-foreground text-[11px]">unmatched clock-ins</p>
             </div>
-            <p className="text-xl font-bold">{summary.totalEvaluated}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border">
-          <CardContent className="flex items-center gap-3 p-3">
-            <Timer className="size-4 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Avg late
-              </p>
-              <p className="text-muted-foreground text-[11px]">when late</p>
-            </div>
-            <p className="text-xl font-bold">
-              {summary.late > 0 ? `${summary.avgMinutesLate}m` : "—"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border">
-          <CardContent className="flex items-center gap-3 p-3">
-            <Zap className="size-4 text-sky-500" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Early arrivals
-              </p>
-              <p className="text-muted-foreground text-[11px]">&gt;10 min before start</p>
-            </div>
-            <p className="text-xl font-bold">{summary.early}</p>
+            <p className="text-xl font-bold">{summary.unscheduled}</p>
           </CardContent>
         </Card>
       </div>
@@ -219,7 +199,7 @@ export function StudentAnalyticsPanel({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-wider">
-              Recent Late & Absent
+              Recent Late, Absent & Unscheduled
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -231,9 +211,17 @@ export function StudentAnalyticsPanel({
                 <div className="min-w-0">
                   <p className="font-medium">{formatIssueDate(issue.date)}</p>
                   <p className="text-muted-foreground text-xs">
-                    {formatStartTimeHeader(issue.startTime)} –{" "}
-                    {formatStartTimeHeader(issue.endTime)}
-                    {issue.clockIn ? ` · in ${formatTime(issue.clockIn)}` : ""}
+                    {issue.status === "unscheduled"
+                      ? issue.clockIn
+                        ? `Clocked in ${formatTime(issue.clockIn)}`
+                        : "Unmatched clock-in"
+                      : (
+                        <>
+                          {formatStartTimeHeader(issue.startTime)} –{" "}
+                          {formatStartTimeHeader(issue.endTime)}
+                          {issue.clockIn ? ` · in ${formatTime(issue.clockIn)}` : ""}
+                        </>
+                      )}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -247,10 +235,16 @@ export function StudentAnalyticsPanel({
                     className={
                       issue.status === "late"
                         ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
-                        : "bg-destructive/15 text-destructive"
+                        : issue.status === "unscheduled"
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-destructive/15 text-destructive"
                     }
                   >
-                    {issue.status === "late" ? "Late" : "Absent"}
+                    {issue.status === "late"
+                      ? "Late"
+                      : issue.status === "unscheduled"
+                        ? "Unscheduled"
+                        : "Absent"}
                   </Badge>
                 </div>
               </div>

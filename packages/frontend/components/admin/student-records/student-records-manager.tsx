@@ -38,7 +38,7 @@ const BASE_PATH = "/admin/studentrecords"
 type StudentRecordsTab = "analytics" | "entries"
 
 function parseTab(value: string | null): StudentRecordsTab {
-  return value === "analytics" ? "analytics" : "entries"
+  return value === "entries" ? "entries" : "analytics"
 }
 
 export function StudentRecordsManager() {
@@ -76,7 +76,7 @@ export function StudentRecordsManager() {
   const setActiveTab = useCallback(
     (tab: StudentRecordsTab) => {
       const params = new URLSearchParams(searchParams.toString())
-      if (tab === "entries") {
+      if (tab === "analytics") {
         params.delete("tab")
       } else {
         params.set("tab", tab)
@@ -185,14 +185,16 @@ export function StudentRecordsManager() {
         onTermChange={changeTerm}
       />
 
-      <StudentRecordsKpiCards
-        termName={selectedTerm?.name ?? "—"}
-        studentsWithEntries={studentsWithEntries}
-        totalStudents={activeStudents.length}
-        totalEntries={termScopedEntries.length}
-        totalMinutes={totalMinutes}
-        openEntries={openEntries}
-      />
+      {!selectedStudent ? (
+        <StudentRecordsKpiCards
+          termName={selectedTerm?.name ?? "—"}
+          studentsWithEntries={studentsWithEntries}
+          totalStudents={activeStudents.length}
+          totalEntries={termScopedEntries.length}
+          totalMinutes={totalMinutes}
+          openEntries={openEntries}
+        />
+      ) : null}
 
       <div
         className={cn(

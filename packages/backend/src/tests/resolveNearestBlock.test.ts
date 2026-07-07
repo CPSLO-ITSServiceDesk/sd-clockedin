@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { resolveNearestBlock, type BlockCandidate } from '../lib/resolveNearestBlock';
+import {
+  resolveNearestBlock,
+  resolveNearestBlockFromMinutes,
+  type BlockCandidate,
+} from '../lib/resolveNearestBlock';
 
 function block(
   id: number,
@@ -70,5 +74,24 @@ describe('resolveNearestBlock', () => {
     expect(
       resolveNearestBlock([thursdayMorning, thursdayAfternoon], PT.jun25_820am),
     ).toEqual(thursdayMorning);
+  });
+});
+
+describe('resolveNearestBlockFromMinutes', () => {
+  const morning = block(1, '09:00', '12:00');
+  const afternoon = block(2, '13:00', '16:00');
+
+  it('matches using minutes directly', () => {
+    expect(resolveNearestBlockFromMinutes([morning], 9 * 60 + 30)).toEqual(morning);
+  });
+
+  it('returns null when reference minutes are too early', () => {
+    expect(resolveNearestBlockFromMinutes([afternoon], 8 * 60 + 20)).toBeNull();
+  });
+
+  it('picks closest block when between shifts', () => {
+    expect(resolveNearestBlockFromMinutes([morning, afternoon], 12 * 60 + 30)).toEqual(
+      afternoon,
+    );
   });
 });

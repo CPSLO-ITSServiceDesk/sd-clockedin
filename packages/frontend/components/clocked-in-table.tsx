@@ -30,7 +30,6 @@ import {
   formatShiftName,
   getClockedInStudents,
   getShiftInitials,
-  getTodayDay,
   type TodayShift,
 } from "@/lib/shifts/today-shifts"
 
@@ -93,8 +92,6 @@ export function ClockedInTable({ showActions = true }: Readonly<{ showActions?: 
       setSubmitting(false)
     }
   }
-
-  const todayDay = getTodayDay()
 
   return (
     <>
@@ -171,12 +168,6 @@ export function ClockedInTable({ showActions = true }: Readonly<{ showActions?: 
               <TableRow className="border-border">
                 <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-destructive">
                   Failed to load clocked-in employees
-                </TableCell>
-              </TableRow>
-            ) : !todayDay ? (
-              <TableRow className="border-border">
-                <TableCell colSpan={showActions ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
-                  No shifts scheduled for weekends
                 </TableCell>
               </TableRow>
             ) : clockedIn.length === 0 ? (

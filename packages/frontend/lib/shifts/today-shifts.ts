@@ -83,18 +83,14 @@ export function getClockedInStudentIds(shifts: TodayShift[]): Set<number> {
 export function getClockInStudentOptions(
   students: StudentAssistant[],
   shifts: TodayShift[],
-  remoteOnlyStudentIds: number[] = [],
 ): ClockInStudentOption[] {
   const clockedInIds = getClockedInStudentIds(shifts)
-  const remoteOnlyIds = new Set(remoteOnlyStudentIds)
   const roleOrder = (role: string) => (role === "Student Lead" ? 0 : 1)
 
   return students
     .filter(
       (student) =>
-        student.is_active !== false &&
-        !clockedInIds.has(student.id) &&
-        !remoteOnlyIds.has(student.id),
+        student.is_active !== false && !clockedInIds.has(student.id),
     )
     .map((student) => ({
       studentAssistantId: student.id,

@@ -14,6 +14,7 @@ import {
   ClipboardList,
   CalendarRange,
   Sparkles,
+  Link2,
 } from "lucide-react"
 import {
   Sidebar,
@@ -41,6 +42,7 @@ const navManage = [
   { title: "Terms", href: "/admin/terms", icon: BookOpen },
   { title: "Schedules", href: "/admin/schedules", icon: Calendar },
   { title: "Timesheet Verification", href: "/admin/timesheet-verification", icon: Clock },
+  { title: "Shift Normalization", href: "/admin/shift-normalization", icon: Link2 },
   { title: "Admin Access", href: "/admin/access", icon: ShieldCheck },
 ]
 

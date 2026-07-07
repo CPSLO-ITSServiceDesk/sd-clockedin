@@ -33,6 +33,7 @@ export interface TimelinessSummary {
   early: number;
   late: number;
   absent: number;
+  unscheduled: number;
   onTimeRate: number;
   punctualityRate: number;
   avgMinutesLate: number;
@@ -59,18 +60,20 @@ export interface StudentLateShift {
   endTime: string;
   clockIn: string | null;
   minutesLate: number;
-  status: 'late' | 'absent';
+  status: 'late' | 'absent' | 'unscheduled';
 }
+
+export type EvaluatedShiftStatus = EvaluatableShiftStatus | 'unscheduled';
 
 export interface EvaluatedShift {
   date: string;
   studentAssistantId: number;
-  scheduleBlockId: number;
+  scheduleBlockId: number | null;
   day: ScheduleBlockDay;
   startTime: string;
   endTime: string;
   clockIn: string | null;
-  status: EvaluatableShiftStatus;
+  status: EvaluatedShiftStatus;
   minutesLate: number;
 }
 
@@ -171,6 +174,7 @@ function emptySummary(): TimelinessSummary {
     early: 0,
     late: 0,
     absent: 0,
+    unscheduled: 0,
     onTimeRate: 0,
     punctualityRate: 0,
     avgMinutesLate: 0,
@@ -186,7 +190,8 @@ function summarizeShifts(shifts: EvaluatedShift[]): TimelinessSummary {
   const early = shifts.filter((shift) => shift.status === 'early').length;
   const late = shifts.filter((shift) => shift.status === 'late').length;
   const absent = shifts.filter((shift) => shift.status === 'absent').length;
-  const totalEvaluated = shifts.length;
+  const unscheduled = shifts.filter((shift) => shift.status === 'unscheduled').length;
+  const totalEvaluated = onTime + early + late + absent;
 
   const lateShifts = shifts.filter((shift) => shift.status === 'late');
   const avgMinutesLate =
@@ -200,8 +205,9 @@ function summarizeShifts(shifts: EvaluatedShift[]): TimelinessSummary {
     early,
     late,
     absent,
-    onTimeRate: onTime / totalEvaluated,
-    punctualityRate: (onTime + early) / totalEvaluated,
+    unscheduled,
+    onTimeRate: totalEvaluated > 0 ? onTime / totalEvaluated : 0,
+    punctualityRate: totalEvaluated > 0 ? (onTime + early) / totalEvaluated : 0,
     avgMinutesLate: Math.round(avgMinutesLate * 10) / 10,
   };
 }
@@ -210,6 +216,8 @@ function aggregateLateByTimeSlot(shifts: EvaluatedShift[]): LateByTimeSlot[] {
   const slotMap = new Map<string, { late: number; total: number }>();
 
   for (const shift of shifts) {
+    if (shift.status === 'unscheduled') continue;
+
     const startTime = normalizeTimeKey(shift.startTime);
     const current = slotMap.get(startTime) ?? { late: 0, total: 0 };
     current.total += 1;
@@ -237,6 +245,8 @@ function aggregateWeekdayPatterns(shifts: EvaluatedShift[]): WeekdayPattern[] {
   );
 
   for (const shift of shifts) {
+    if (shift.status === 'unscheduled') continue;
+
     const current = map.get(shift.day);
     if (!current) continue;
     current.total += 1;
@@ -254,6 +264,8 @@ function aggregateLateLeaderboard(shifts: EvaluatedShift[]): StudentLeaderboardE
   const map = new Map<number, { late: number; absent: number; total: number }>();
 
   for (const shift of shifts) {
+    if (shift.status === 'unscheduled') continue;
+
     const current = map.get(shift.studentAssistantId) ?? { late: 0, absent: 0, total: 0 };
     current.total += 1;
     if (shift.status === 'late') current.late += 1;
@@ -295,6 +307,127 @@ function aggregateDailyTrend(shifts: EvaluatedShift[]): DailyTrendPoint[] {
   return [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+function findUnmatchedEntries(
+  timeEntries: TimeEntry[],
+  term: Term,
+  termSchedules: Schedule[],
+  usedEntryKeys: Set<string>,
+  today: string,
+  options: { studentAssistantId?: number } = {},
+): TimeEntry[] {
+  const scheduleByStudent = new Map(
+    termSchedules
+      .filter((schedule) => schedule.student_assistant_id != null)
+      .map((schedule) => [schedule.student_assistant_id!, schedule]),
+  );
+
+  return timeEntries.filter((entry) => {
+    if (!entry.student_assistant_id || !entry.clock_in) return false;
+
+    if (
+      options.studentAssistantId != null &&
+      entry.student_assistant_id !== options.studentAssistantId
+    ) {
+      return false;
+    }
+
+    const date = getEntryDate(entry);
+    if (!date || date > today) return false;
+
+    const schedule = scheduleByStudent.get(entry.student_assistant_id);
+    if (!schedule) return entry.schedule_block_id == null;
+
+    const range = getEffectiveScheduleDateRange(schedule, term);
+    if (!range || date < range.startDate || date > range.endDate) return false;
+
+    if (entry.schedule_block_id == null) return true;
+
+    const entryKey = `${entry.schedule_block_id}-${entry.student_assistant_id}-${date}`;
+    return !usedEntryKeys.has(entryKey);
+  });
+}
+
+function groupEntriesByStudentDate(
+  entries: TimeEntry[],
+): Map<string, TimeEntry[]> {
+  const map = new Map<string, TimeEntry[]>();
+
+  for (const entry of entries) {
+    if (!entry.student_assistant_id) continue;
+
+    const date = getEntryDate(entry);
+    if (!date) continue;
+
+    const key = `${entry.student_assistant_id}-${date}`;
+    const list = map.get(key) ?? [];
+    list.push(entry);
+    map.set(key, list);
+  }
+
+  return map;
+}
+
+function applyUnscheduledShifts(
+  evaluated: EvaluatedShift[],
+  unmatchedEntries: TimeEntry[],
+): EvaluatedShift[] {
+  const entriesByStudentDate = groupEntriesByStudentDate(unmatchedEntries);
+  const consumedEntryIds = new Set<number>();
+  const result: EvaluatedShift[] = [];
+
+  for (const shift of evaluated) {
+    if (shift.status !== 'absent') {
+      result.push(shift);
+      continue;
+    }
+
+    const key = `${shift.studentAssistantId}-${shift.date}`;
+    const available = (entriesByStudentDate.get(key) ?? []).filter(
+      (entry) => entry.id != null && !consumedEntryIds.has(entry.id),
+    );
+
+    if (available.length === 0) {
+      result.push(shift);
+      continue;
+    }
+
+    const entry = available[0];
+    consumedEntryIds.add(entry.id);
+    result.push({
+      ...shift,
+      status: 'unscheduled',
+      clockIn: entry.clock_in,
+    });
+  }
+
+  for (const entry of unmatchedEntries) {
+    if (entry.id != null && consumedEntryIds.has(entry.id)) continue;
+    if (!entry.student_assistant_id || !entry.clock_in) continue;
+
+    const date = getEntryDate(entry);
+    const weekday = date ? getWeekdayForDate(date) : null;
+    if (!date || !weekday) continue;
+
+    if (entry.id != null) {
+      consumedEntryIds.add(entry.id);
+    }
+
+    result.push({
+      date,
+      studentAssistantId: entry.student_assistant_id,
+      scheduleBlockId: null,
+      day: weekday,
+      startTime: normalizeTimeKey(entry.clock_in),
+      endTime: entry.clock_out ? normalizeTimeKey(entry.clock_out) : '',
+      clockIn: entry.clock_in,
+      status: 'unscheduled',
+      minutesLate: 0,
+    });
+  }
+
+  return result;
+}
+
 export function expandEvaluatedShifts(
   term: Term,
   schedules: Schedule[],
@@ -327,6 +460,7 @@ export function expandEvaluatedShifts(
   });
 
   const timeEntryMap = buildTimeEntryMap(timeEntries);
+  const usedEntryKeys = new Set<string>();
   const evaluated: EvaluatedShift[] = [];
 
   for (const block of inPersonBlocks) {
@@ -356,6 +490,9 @@ export function expandEvaluatedShifts(
 
       const entryKey = `${block.id}-${schedule.student_assistant_id}-${date}`;
       const entry = timeEntryMap.get(entryKey) ?? null;
+      if (entry) {
+        usedEntryKeys.add(entryKey);
+      }
       const clockIn = entry?.clock_in ?? null;
       const result = computeHistoricalShiftStatus(
         block.start_time,
@@ -386,7 +523,16 @@ export function expandEvaluatedShifts(
     }
   }
 
-  return evaluated;
+  const unmatchedEntries = findUnmatchedEntries(
+    timeEntries,
+    term,
+    termSchedules,
+    usedEntryKeys,
+    today,
+    options,
+  );
+
+  return applyUnscheduledShifts(evaluated, unmatchedEntries);
 }
 
 export function buildTermAnalytics(
@@ -421,7 +567,12 @@ export function buildStudentAnalytics(
   });
 
   const recentIssues = shifts
-    .filter((shift) => shift.status === 'late' || shift.status === 'absent')
+    .filter(
+      (shift) =>
+        shift.status === 'late' ||
+        shift.status === 'absent' ||
+        shift.status === 'unscheduled',
+    )
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 20)
     .map((shift) => ({
@@ -430,7 +581,7 @@ export function buildStudentAnalytics(
       endTime: shift.endTime,
       clockIn: shift.clockIn,
       minutesLate: shift.minutesLate,
-      status: shift.status as 'late' | 'absent',
+      status: shift.status as 'late' | 'absent' | 'unscheduled',
     }));
 
   return {

@@ -7,6 +7,7 @@ import scheduleBlocksRoutes from './scheduleBlocks';
 import importRoutes from './import';
 import todayShiftsRoutes from './todayShifts';
 import analyticsRoutes from './analytics';
+import shiftNormalizationRoutes from './shiftNormalization';
 import timesheetRoutes from './timesheet';
 import adminRoutes from './admins';
 
@@ -24,6 +25,7 @@ router.use('/schedule-blocks', scheduleBlocksRoutes);
 router.use('/import', importRoutes);
 router.use('/shifts', todayShiftsRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/normalization', shiftNormalizationRoutes);
 router.use('/timesheet', timesheetRoutes);
 router.use('/admins', adminRoutes);
 

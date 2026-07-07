@@ -37,8 +37,7 @@ export function ClockModal({
   prefillName = "",
 }: ClockModalProps) {
   const queryClient = useQueryClient()
-  const { shifts, remoteOnlyStudentIds, isLoading: shiftsLoading } =
-    useTodayShiftList()
+  const { shifts, isLoading: shiftsLoading } = useTodayShiftList()
   const { data: students = [], isLoading: studentsLoading } = useQuery({
     queryKey: queryKeys.students.all,
     queryFn: studentAssistantsApi.list,
@@ -59,7 +58,7 @@ export function ClockModal({
   const isLoading = isClockIn ? shiftsLoading || studentsLoading : shiftsLoading
 
   const eligibleStudents = isClockIn
-    ? getClockInStudentOptions(students, shifts, remoteOnlyStudentIds)
+    ? getClockInStudentOptions(students, shifts)
     : getClockedInStudents(shifts)
 
   const filtered = query.trim().length === 0
