@@ -21,7 +21,15 @@ packages/backend/
 │   ├── config/               # Environment configuration
 │   │   └── environment.ts    # Environment validation and configuration object
 │   ├── lib/                  # Shared utilities
-│   │   └── supabase.ts       # Supabase client initialization
+│   │   ├── supabase.ts       # Supabase client initialization
+│   │   ├── orgTime.ts        # Organization timezone helpers
+│   │   ├── shiftStatus.ts    # Early/on-time/late/absent logic
+│   │   ├── shiftAnalytics.ts # Punctuality aggregations
+│   │   ├── shiftNormalization.ts
+│   │   ├── resolveNearestBlock.ts
+│   │   ├── scheduleDateRange.ts
+│   │   ├── scheduleImportParser.ts
+│   │   └── clearScheduleBlockReferences.ts
 │   ├── jobs/                 # Scheduled jobs (cron jobs)
 │   │   └── autoClockOut.ts   # Automatic clock-out job for forgotten punch-outs
 │   ├── middleware/           # Custom Express middleware
@@ -35,33 +43,49 @@ packages/backend/
 │   │   ├── timeEntries.ts    # CRUD endpoints for time entries
 │   │   ├── studentAssistants.ts # CRUD endpoints for student assistants
 │   │   ├── admins.ts         # CRUD endpoints for admins
-│   │   ├── import.ts         # Batch import endpoints
-│   │   └── todayShifts.ts    # Today's shifts endpoints
+│   │   ├── import.ts         # Schedule import (Excel/CSV upload)
+│   │   ├── todayShifts.ts    # Today's shifts endpoint
+│   │   ├── analytics.ts      # Term and student analytics
+│   │   ├── timesheet.ts      # Timesheet verification
+│   │   └── shiftNormalization.ts # Match time entries to blocks
 │   ├── controllers/          # Request handlers
 │   │   ├── termController.ts
-│   │   ├── scheduleController.ts
+│   │   ├── schedulesController.ts
 │   │   ├── scheduleBlocksController.ts
 │   │   ├── timeEntryController.ts
-│   │   └── studentAssistantController.ts
+│   │   ├── studentAssistantController.ts
+│   │   ├── adminController.ts
+│   │   ├── todayShiftsController.ts
+│   │   ├── analyticsController.ts
+│   │   ├── timesheetController.ts
+│   │   ├── shiftNormalizationController.ts
+│   │   └── scheduleImportController.ts
 │   ├── services/             # Business logic and Supabase interactions
 │   │   ├── termService.ts
-│   │   ├── scheduleService.ts
+│   │   ├── schedulesService.ts
 │   │   ├── scheduleBlocksService.ts
 │   │   ├── timeEntryService.ts
-│   │   └── studentAssistantService.ts
+│   │   ├── studentAssistantService.ts
+│   │   ├── adminService.ts
+│   │   ├── todayShiftsService.ts
+│   │   ├── analyticsService.ts
+│   │   ├── shiftNormalizationService.ts
+│   │   └── scheduleImportService.ts
 │   ├── scripts/              # Utility scripts
-│   │   └── check-connection.ts # Supabase connection verification
-│   └── types/                # TypeScript type definitions
-│       └── database.types.ts # Auto-generated Supabase database types
-├── tests/                    # Test files
-│   ├── scheduleImport.test.ts
-│   ├── shiftStatus.test.ts
-│   ├── timeEntry.service.test.ts
-│   ├── orgTime.test.ts
-│   ├── resolveNearestBlock.test.ts
-│   ├── scheduleDateRange.test.ts
-│   ├── shiftAnalytics.test.ts
-│   └── ...                   # Other test files
+│   │   ├── check-connection.ts      # Supabase connection verification
+│   │   └── run-auto-clock-out.ts    # Manual auto clock-out run
+│   ├── types/                # TypeScript type definitions
+│   │   └── database.types.ts # Auto-generated Supabase database types
+│   └── tests/                # Test files (Vitest)
+│       ├── scheduleImport.test.ts
+│       ├── shiftStatus.test.ts
+│       ├── timeEntry.service.test.ts
+│       ├── orgTime.test.ts
+│       ├── resolveNearestBlock.test.ts
+│       ├── scheduleDateRange.test.ts
+│       ├── shiftAnalytics.test.ts
+│       ├── shiftNormalization.test.ts
+│       └── studentAssistant.service.test.ts
 ├── .env                      # Environment variables (not in repo)
 ├── package.json              # Dependencies and scripts
 └── tsconfig.json             # TypeScript configuration
@@ -93,9 +117,9 @@ packages/backend/
 - Integer IDs (not UUIDs) as per Supabase schema
 
 ### Scheduled Jobs
-- Auto clock-out functionality: Automatically clocks out students who forget to clock out after their shift ends
-- Configurable cron timing and grace period via environment variables
-- Logging and error handling for reliable background processing
+- Auto clock-out runs **once daily** at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE`
+- Closes open time entries whose shifts ended before the cutoff
+- Configurable via `AUTO_CLOCK_OUT_ENABLED` and `AUTO_CLOCK_OUT_TIME`
 
 ### Security
 - Helmet.js for HTTP header security
@@ -131,14 +155,11 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 PORT=3001
 NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
-# Optional — defaults to America/Los_Angeles
 ORG_TIMEZONE=America/Los_Angeles
 
-# Auto Clock-Out Configuration
-AUTO_CLOCK_OUT_ENABLED=true                    # Enable/disable auto clock-out feature
-AUTO_CLOCK_OUT_CRON="0 * * * *"                # Cron schedule (runs hourly by default)
-AUTO_CLOCK_OUT_GRACE_PERIOD_MINUTES=10         # Minutes after shift end to wait before auto clock-out
-AUTO_CLOCK_OUT_LOOKAHEAD_MINUTES=5             # Minutes ahead to check for upcoming shifts
+# Auto clock-out (daily at this time in ORG_TIMEZONE)
+AUTO_CLOCK_OUT_ENABLED=true
+AUTO_CLOCK_OUT_TIME=17:00
 ```
 
 ### Development Server
@@ -170,9 +191,6 @@ pnpm --filter backend test
 pnpm --filter backend test:watch
 
 # Run a specific test file
-pnpm --filter backend test:run -- packages/backend/src/tests/<filename>.test.ts
-
-# Run with Vitest directly
 pnpm --filter backend exec vitest run src/tests/<filename>.test.ts
 ```
 
@@ -199,17 +217,13 @@ The backend includes automated cron jobs for routine tasks:
 
 **Auto Clock-Out Job**
 - Located in `src/jobs/autoClockOut.ts`
-- Runs according to cron schedule (default: hourly)
-- Automatically clocks out students who forget to clock out after their shift ends
-- Configurable via environment variables:
-  - `AUTO_CLOCK_OUT_ENABLED`: Enable/disable the feature
-  - `AUTO_CLOCK_OUT_CRON`: Cron schedule expression
-  - `AUTO_CLOCK_OUT_GRACE_PERIOD_MINUTES`: Wait time after shift end
-  - `AUTO_CLOCK_OUT_LOOKAHEAD_MINUTES`: How far ahead to check for shifts
+- Runs daily at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE`
+- Automatically closes open time entries past the cutoff
 
 To run the auto clock-out job manually:
+
 ```bash
-pnpm --filter backend exec tsx src/jobs/autoClockOut.ts
+pnpm --filter backend auto-clock-out
 ```
 
 ## Key Integration Points
@@ -237,60 +251,75 @@ pnpm --filter backend exec tsx src/jobs/autoClockOut.ts
 
 ## API Endpoints
 
+All routes are mounted under `/api`.
+
 ### Health Check
-- `GET /api/health` - Returns server status and timestamp
+- `GET /health` — Returns server status and timestamp
 
-### Academic Terms (`/api/terms`)
-- `GET /` - List all terms
-- `GET /:id` - Get term by ID
-- `POST /` - Create new term
-- `PUT /:id` - Update term
-- `DELETE /:id` - Delete term
+### Academic Terms (`/terms`)
+- `GET /` — List all terms
+- `GET /:id` — Get term by ID
+- `POST /` — Create new term
+- `PUT /:id` — Update term
+- `DELETE /:id` — Delete term
 
-### Student Assistants (`/api/student-assistants`)
-- `GET /` - List all student assistants
-- `GET /:id` - Get student assistant by ID
-- `POST /` - Create new student assistant
-- `PUT /:id` - Update student assistant
-- `DELETE /:id` - Delete student assistant
+### Student Assistants (`/student-assistants`)
+- `GET /` — List all student assistants
+- `GET /:id` — Get student assistant by ID
+- `POST /` — Create new student assistant
+- `PUT /:id` — Update student assistant
+- `DELETE /:id` — Delete student assistant
 
-### Schedules (`/api/schedules`)
-- `GET /` - List all schedules
-- `GET /:id` - Get schedule by ID
-- `POST /` - Create new schedule
-- `PUT /:id` - Update schedule
-- `DELETE /:id` - Delete schedule
+### Schedules (`/schedules`)
+- `GET /` — List all schedules
+- `GET /:id` — Get schedule by ID
+- `GET /:id/blocks` — Get blocks for a schedule
+- `POST /` — Create new schedule
+- `PUT /:id` — Update schedule
+- `DELETE /:id` — Delete schedule
 
-### Schedule Blocks (`/api/schedule-blocks`)
-- `GET /` - List all schedule blocks
-- `GET /:id` - Get schedule block by ID
-- `POST /` - Create new schedule block
-- `PUT /:id` - Update schedule block
-- `DELETE /:id` - Delete schedule block
-- `GET /schedule/:scheduleId/blocks` - Get blocks for a specific schedule
+### Schedule Blocks (`/schedule-blocks`)
+- `GET /` — List all schedule blocks
+- `GET /:id` — Get schedule block by ID
+- `POST /` — Create new schedule block
+- `PUT /:id` — Update schedule block
+- `DELETE /:id` — Delete schedule block
 
-### Time Entries (`/api/time-entries`)
-- `GET /` - List all time entries
-- `GET /:id` - Get time entry by ID
-- `POST /` - Create new time entry
-- `PUT /:id` - Update time entry
-- `DELETE /:id` - Delete time entry
+### Time Entries (`/time-entries`)
+- `GET /` — List all time entries
+- `GET /:id` — Get time entry by ID
+- `POST /clock-in` — Clock in a student assistant
+- `PATCH /close-open` — Close open entry for a student + block
+- `PATCH /close-open-by-assistant` — Close open entry for a student
+- `POST /` — Create time entry (admin)
+- `PUT /:id` — Update time entry
+- `PATCH /:id` — Partial update
+- `DELETE /:id` — Delete time entry
 
-### Admins (`/api/admins`)
-- `GET /` - List all admins
-- `GET /:id` - Get admin by ID
-- `POST /` - Create new admin
-- `PUT /:id` - Update admin
-- `DELETE /:id` - Delete admin
+### Admins (`/admins`)
+- `GET /` — List all admins
+- `GET /:id` — Get admin by ID
+- `POST /authorize` — Check if email is allowed (used by frontend auth)
+- `POST /` — Create admin
+- `PUT /:id` — Update admin
+- `DELETE /:id` — Delete admin
 
-### Import (`/api/import`)
-- `GET /` - List import records
-- `POST /` - Create import record
-- Other endpoints as needed
+### Import (`/import`)
+- `POST /schedules` — Upload `.xlsx`, `.xls`, or `.csv` schedule file (multipart form)
 
-### Today's Shifts (`/api/shifts`)
-- `GET /` - Get today's shifts
-- Other endpoints as needed
+### Today's Shifts (`/shifts`)
+- `GET /today` — Get today's shifts with status
+
+### Analytics (`/analytics`)
+- `GET /terms/:termId` — Term-level punctuality analytics
+- `GET /students/:studentId?termId=` — Student-level analytics for a term
+
+### Timesheet (`/timesheet`)
+- `GET /hours-by-day` — Aggregated hours by day for verification
+
+### Shift Normalization (`/normalization`)
+- `GET /terms/:termId/preview` — Preview unmatched time entries for a term
+- `POST /terms/:termId/apply` — Apply block matches to time entries
 
 ## Database Schema Overview
 

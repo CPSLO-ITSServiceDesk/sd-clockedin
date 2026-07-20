@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 This is a monorepo managed by pnpm containing two packages:
-- `frontend`: A Next.js 16.2.6 application with React 19
+- `frontend`: A Next.js 16.2.9 application with React 19
 - `backend`: A Node.js Express API with TypeScript, connected to Supabase
 
 The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components via Radix UI primitives.
@@ -82,9 +82,6 @@ pnpm --filter backend test
 pnpm --filter backend test:watch
 
 # Run a specific test file
-pnpm --filter backend test:run -- packages/backend/src/tests/<filename>.test.ts
-
-# Run with Vitest directly
 pnpm --filter backend exec vitest run src/tests/<filename>.test.ts
 ```
 
@@ -95,6 +92,9 @@ pnpm --filter backend gen:types
 
 # Verify Supabase connection
 pnpm --filter backend check
+
+# Run auto clock-out job once (manual)
+pnpm --filter backend auto-clock-out
 ```
 
 ### Frontend-Specific
@@ -112,7 +112,7 @@ pnpm --filter frontend exec next cache clear
   - `src/routes/` - API route definitions with Express.Router
   - `src/controllers/` - Request handlers coordinating between services and responses
   - `src/services/` - Business logic and direct Supabase interactions
-  - `src/lib/` - Shared utilities (Supabase client initialization)
+  - `src/lib/` - Shared utilities (Supabase client, org timezone, shift status, import parsing)
   - `src/middleware/` - Custom Express middleware (error handling, validation, CORS)
   - `src/scripts/` - Utility scripts (connection testing, type generation)
 
@@ -142,7 +142,8 @@ pnpm --filter frontend exec next cache clear
    - Appropriate HTTP status codes for different operations
 
 ### Frontend Architecture
-- **Next.js 13+** with App Router (`app/` directory)
+- **Next.js 16** with App Router (`app/` directory)
+- **Supabase Auth** for admin login (`lib/supabase/`, `lib/auth/`, `proxy.ts` for session refresh)
 - **React Query** for server state management and caching
 - **React Table** for complex table UIs with sorting, filtering, pagination
 - **React Hook Form** with Zod for form validation
@@ -184,9 +185,11 @@ The Supabase database contains these core tables:
 - `import`: Batch import tracking
 
 **Additional tables/features for enhanced functionality:**
-- Auto clock-out functionality uses cron jobs to automatically clock out students who forget to clock out
+- Auto clock-out runs daily at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE` via a cron job in `src/jobs/autoClockOut.ts`
 - Schedule date overrides are handled through the scheduleBlocks service with temporary date modifications
-- Enhanced analytics utilizes computed fields and aggregated queries for punctuality metrics and hourly headcounts
+- Analytics endpoints under `/api/analytics` serve term- and student-level punctuality metrics
+- Timesheet verification under `/api/timesheet` aggregates hours by day
+- Shift normalization under `/api/normalization` matches orphaned time entries to schedule blocks
 
 ### Key Integration Points
 1. **Frontend → Backend Communication**:
@@ -213,14 +216,15 @@ The Supabase database contains these core tables:
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key (for server-side operations)
 - `PORT`: Server port (default: 3001)
 - `NODE_ENV`: Environment (development/production)
-- `ALLOWED_ORIGINS`: CORS allowed origins (comma-separated)
-- `FRONTEND_URL`: Frontend URL for CORS (defaults to `http://localhost:3000`)
-- `AUTO_CLOCK_OUT_TIME`: Time for auto clock-out in HH:mm format (default: `17:00`)
+- `FRONTEND_URL`: CORS allowed origin(s), comma-separated (defaults to `http://localhost:3000`)
+- `ORG_TIMEZONE`: IANA timezone for shift logic and auto clock-out (default: `America/Los_Angeles`)
+- `AUTO_CLOCK_OUT_TIME`: Daily auto clock-out time in HH:mm format (default: `17:00`)
 - `AUTO_CLOCK_OUT_ENABLED`: Enable/disable auto clock-out feature (default: `true`)
 
 **Frontend** (`.env` in `packages/frontend/`):
 - `NEXT_PUBLIC_API_URL`: Base URL for API calls (must include `/api` suffix)
-- Other Next.js environment variables as needed
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL (admin auth)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon key (admin auth)
 
 ### Common Development Tasks
 
