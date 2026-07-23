@@ -7,8 +7,13 @@ export interface TodayShiftsResponse {
 }
 
 export const todayShiftsApi = {
-  listToday: (options?: { includeRemote?: boolean }) => {
-    const params = options?.includeRemote ? "?include_remote=1" : ""
-    return apiFetch<TodayShiftsResponse>(`/shifts/today${params}`)
+  listToday: (options?: { includeRemote?: boolean; date?: string }) => {
+    const params = new URLSearchParams()
+    if (options?.includeRemote) params.set("include_remote", "1")
+    if (options?.date) params.set("date", options.date)
+    const query = params.toString()
+    return apiFetch<TodayShiftsResponse>(
+      `/shifts/today${query ? `?${query}` : ""}`,
+    )
   },
 }

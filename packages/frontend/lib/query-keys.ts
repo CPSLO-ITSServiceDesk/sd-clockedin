@@ -18,6 +18,8 @@ export const queryKeys = {
   },
   todayShifts: {
     all: ["today-shifts"] as const,
+    byDate: (includeRemote: boolean, date?: string) =>
+      ["today-shifts", includeRemote, date ?? "today"] as const,
   },
   analytics: {
     term: (termId: number) => ["analytics", "term", termId] as const,

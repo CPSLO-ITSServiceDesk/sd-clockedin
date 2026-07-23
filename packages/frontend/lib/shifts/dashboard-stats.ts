@@ -1,6 +1,7 @@
 import { GRID_START_HOUR } from "@/components/admin/schedules/schedule-types"
 import { timeToMinutes } from "@/components/admin/schedules/schedule-utils"
 import { formatStartTimeHeader } from "@/lib/format-time"
+import { getOrgLocalMinutes, toOrgWallClockMinutes } from "@/lib/org-time"
 import type { TodayShift } from "@/lib/shifts/today-shifts"
 import { getExpectedArrivalShifts } from "@/lib/shifts/today-shifts"
 
@@ -10,7 +11,7 @@ export const DASHBOARD_CHART_END_HOUR = 16
 export const LAST_WORKING_HOUR_START = `${String(DASHBOARD_CHART_END_HOUR).padStart(2, "0")}:00`
 
 export function isDuringLastWorkingHour(now: Date = new Date()): boolean {
-  return now.getHours() === DASHBOARD_CHART_END_HOUR
+  return Math.floor(getOrgLocalMinutes(now) / 60) === DASHBOARD_CHART_END_HOUR
 }
 
 export interface DashboardKpis {
@@ -58,17 +59,17 @@ export function isWorkingDuringHour(
   now: Date = new Date(),
 ): boolean {
   const { start: hourStart, end: hourEnd } = getHourWindow(hour)
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  const nowMinutes = getOrgLocalMinutes(now)
 
   if (nowMinutes < hourStart) return false
   if (!shift.clockInActual) return false
 
-  const clockIn = timeToMinutes(shift.clockInActual)
+  const clockIn = toOrgWallClockMinutes(shift.clockInActual)
   if (Number.isNaN(clockIn) || clockIn >= hourEnd) return false
 
   if (!shift.clockOutActual) return true
 
-  const clockOut = timeToMinutes(shift.clockOutActual)
+  const clockOut = toOrgWallClockMinutes(shift.clockOutActual)
   if (Number.isNaN(clockOut)) return true
 
   return clockOut > hourStart
@@ -83,7 +84,7 @@ export function isRemoteWorkingDuringHour(
   if (!shift.isRemote || !isScheduledDuringHour(shift, hour)) return false
 
   const { start: hourStart, end: hourEnd } = getHourWindow(hour)
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  const nowMinutes = getOrgLocalMinutes(now)
   if (nowMinutes < hourStart) return false
 
   const shiftEnd = timeToMinutes(shift.endTime)

@@ -52,15 +52,14 @@ export function getOrgDayOfWeek(now: Date = new Date()): number {
 }
 
 /**
- * UTC instant for a wall-clock time on the org-local calendar day of `now`.
+ * UTC instant for a wall-clock time on an org-local calendar day (YYYY-MM-DD).
  * Uses binary search over Intl-derived org-local date/minutes (no extra deps).
  */
-export function getOrgLocalCutoffInstant(
-  now: Date = new Date(),
-  hour: number = 17,
+export function getOrgLocalInstant(
+  dateStr: string,
+  hour: number = 0,
   minute: number = 0,
 ): Date {
-  const dateStr = getOrgLocalDateString(now);
   const targetMinutes = hour * 60 + minute;
 
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -96,4 +95,47 @@ export function getOrgLocalCutoffInstant(
   }
 
   return result;
+}
+
+/**
+ * UTC instant for a wall-clock time on the org-local calendar day of `now`.
+ */
+export function getOrgLocalCutoffInstant(
+  now: Date = new Date(),
+  hour: number = 17,
+  minute: number = 0,
+): Date {
+  return getOrgLocalInstant(getOrgLocalDateString(now), hour, minute);
+}
+
+const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True when value is a real calendar YYYY-MM-DD. */
+export function isValidOrgLocalDateString(value: string): boolean {
+  if (!LOCAL_DATE_RE.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  return (
+    probe.getUTCFullYear() === year &&
+    probe.getUTCMonth() === month - 1 &&
+    probe.getUTCDate() === day
+  );
+}
+
+/**
+ * Resolve the `now` instant used for shift lookups.
+ * - omitted / today → live clock
+ * - past date → 4 PM org-local (all daytime hours elapsed)
+ * - future date → midnight org-local (no hours started)
+ */
+export function resolveShiftsReferenceNow(
+  dateParam: string | undefined,
+  now: Date = new Date(),
+): Date {
+  if (!dateParam) return now;
+
+  const today = getOrgLocalDateString(now);
+  if (dateParam === today) return now;
+  if (dateParam < today) return getOrgLocalInstant(dateParam, 16, 0);
+  return getOrgLocalInstant(dateParam, 0, 0);
 }

@@ -12,9 +12,9 @@ import {
   ShieldCheck,
   BarChart2,
   ClipboardList,
-  CalendarRange,
   Sparkles,
   Link2,
+  Users,
 } from "lucide-react"
 import {
   Sidebar,
@@ -49,7 +49,7 @@ const navManage = [
 const navAnalytics = [
   { title: "Term Analytics", href: "/admin/analytics/term", icon: BarChart2 },
   { title: "Student Records", href: "/admin/studentrecords", icon: ClipboardList },
-  { title: "Group Schedule", href: "/admin/analytics/group-schedule", icon: CalendarRange },
+  { title: "Hourly Staffing", href: "/admin/analytics/hourly-staffing", icon: Users },
 ]
 
 export function AppSidebar() {

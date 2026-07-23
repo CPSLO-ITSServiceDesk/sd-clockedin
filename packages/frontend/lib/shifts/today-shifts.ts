@@ -49,7 +49,7 @@ export function getTodayDay(): "monday" | "tuesday" | "wednesday" | "thursday" |
 }
 
 export async function fetchTodayShifts(
-  options?: { includeRemote?: boolean },
+  options?: { includeRemote?: boolean; date?: string },
 ): Promise<TodayShiftsResponse> {
   return todayShiftsApi.listToday(options)
 }
