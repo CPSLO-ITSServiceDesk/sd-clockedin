@@ -22,6 +22,8 @@
     "@types/node": "^24.12.4",
     "@types/node-cron": "^3.0.11",
     "@types/supertest": "^7.2.0",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "dotenv": "^17.4.2",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
@@ -34,6 +36,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "@scalar/express-api-reference": "^0.10.11",
     "@supabase/supabase-js": "^2.108.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",
@@ -41,6 +44,8 @@
     "helmet": "^7.1.0",
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "xlsx": "^0.18.5"
   }
 }

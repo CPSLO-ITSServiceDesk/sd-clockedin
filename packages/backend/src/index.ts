@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { loadEnvironment, config } from './config/environment';
+import { docsPath, referencePath, mountApiDocs } from './config/swagger';
 import { scheduleAutoClockOut } from './jobs/autoClockOut';
 import { registerRoutes } from './routes';
 import { createCorsMiddleware } from './middleware/cors';
@@ -10,6 +11,9 @@ import { errorHandler } from './middleware/errorHandler';
 loadEnvironment();
 
 const app = express();
+
+// Must precede helmet(), whose default CSP blocks the docs UIs' inline scripts.
+mountApiDocs(app);
 
 // Security & parsing middleware
 app.use(helmet());
@@ -30,6 +34,8 @@ app.use(errorHandler);
 
 app.listen(config.port, () => {
   console.log(`Server running on port ${config.port}`);
+  console.log(`API docs: http://localhost:${config.port}${docsPath}`);
+  console.log(`API reference: http://localhost:${config.port}${referencePath}`);
   console.log(`Environment: ${config.nodeEnv}`);
   console.log(`CORS allowed origins: ${config.allowedOrigins.join(', ')}`);
   if (config.nodeEnv === 'development') {

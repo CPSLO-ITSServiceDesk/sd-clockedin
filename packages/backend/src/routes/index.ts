@@ -13,6 +13,23 @@ import adminRoutes from './admins';
 
 const router = Router();
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     tags: [System]
+ *     summary: Liveness check
+ *     responses:
+ *       200:
+ *         description: Service is up
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: OK }
+ *                 timestamp: { type: string, format: date-time }
+ */
 router.get('/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
