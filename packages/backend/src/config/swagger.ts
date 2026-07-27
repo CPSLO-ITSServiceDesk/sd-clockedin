@@ -2,11 +2,10 @@ import path from 'path';
 import { apiReference } from '@scalar/express-api-reference';
 import { Application } from 'express';
 import swaggerJSDoc, { OAS3Definition } from 'swagger-jsdoc';
-import swaggerUi from 'swagger-ui-express';
 import { responses, schemas } from './openapiSchemas';
 
 export const docsPath = '/api/docs';
-export const referencePath = '/api/reference';
+export const specPath = `${docsPath}.json`;
 
 const definition: OAS3Definition = {
   openapi: '3.0.3',
@@ -54,25 +53,21 @@ const spec = swaggerJSDoc({
 });
 
 /**
- * Serves the raw spec at /api/docs.json plus two renderers of it:
- * Swagger UI at /api/docs and Scalar at /api/reference. Register before
- * helmet(), whose default CSP blocks the inline scripts both UIs rely on.
+ * Serves the raw spec at /api/docs.json and Scalar's renderer at /api/docs.
+ * Scalar fetches its own bundle from a CDN, so no static assets need to ship
+ * with the deployment — the reason it survives serverless bundling where
+ * swagger-ui-express, which resolves swagger-ui-dist off disk, does not.
+ * Register before helmet(), whose default CSP blocks Scalar's inline script.
  */
 export function mountApiDocs(app: Application): void {
-  app.get(`${docsPath}.json`, (_req, res) => {
+  app.get(specPath, (_req, res) => {
     res.json(spec);
   });
 
   app.use(
     docsPath,
-    swaggerUi.serve,
-    swaggerUi.setup(spec, { customSiteTitle: 'SD Clock-In API' }),
-  );
-
-  app.use(
-    referencePath,
     apiReference({
-      url: `${docsPath}.json`,
+      url: specPath,
       pageTitle: 'SD Clock-In API',
     }),
   );
