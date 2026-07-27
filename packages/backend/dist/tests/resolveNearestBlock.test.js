@@ -54,3 +54,16 @@ const PT = {
         (0, vitest_1.expect)((0, resolveNearestBlock_1.resolveNearestBlock)([thursdayMorning, thursdayAfternoon], PT.jun25_820am)).toEqual(thursdayMorning);
     });
 });
+(0, vitest_1.describe)('resolveNearestBlockFromMinutes', () => {
+    const morning = block(1, '09:00', '12:00');
+    const afternoon = block(2, '13:00', '16:00');
+    (0, vitest_1.it)('matches using minutes directly', () => {
+        (0, vitest_1.expect)((0, resolveNearestBlock_1.resolveNearestBlockFromMinutes)([morning], 9 * 60 + 30)).toEqual(morning);
+    });
+    (0, vitest_1.it)('returns null when reference minutes are too early', () => {
+        (0, vitest_1.expect)((0, resolveNearestBlock_1.resolveNearestBlockFromMinutes)([afternoon], 8 * 60 + 20)).toBeNull();
+    });
+    (0, vitest_1.it)('picks closest block when between shifts', () => {
+        (0, vitest_1.expect)((0, resolveNearestBlock_1.resolveNearestBlockFromMinutes)([morning, afternoon], 12 * 60 + 30)).toEqual(afternoon);
+    });
+});

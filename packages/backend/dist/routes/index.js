@@ -13,9 +13,27 @@ const scheduleBlocks_1 = __importDefault(require("./scheduleBlocks"));
 const import_1 = __importDefault(require("./import"));
 const todayShifts_1 = __importDefault(require("./todayShifts"));
 const analytics_1 = __importDefault(require("./analytics"));
+const shiftNormalization_1 = __importDefault(require("./shiftNormalization"));
 const timesheet_1 = __importDefault(require("./timesheet"));
 const admins_1 = __importDefault(require("./admins"));
 const router = (0, express_1.Router)();
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     tags: [System]
+ *     summary: Liveness check
+ *     responses:
+ *       200:
+ *         description: Service is up
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: OK }
+ *                 timestamp: { type: string, format: date-time }
+ */
 router.get('/health', (_req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -27,6 +45,7 @@ router.use('/schedule-blocks', scheduleBlocks_1.default);
 router.use('/import', import_1.default);
 router.use('/shifts', todayShifts_1.default);
 router.use('/analytics', analytics_1.default);
+router.use('/normalization', shiftNormalization_1.default);
 router.use('/timesheet', timesheet_1.default);
 router.use('/admins', admins_1.default);
 /** Mounts all API routes under the /api prefix. */

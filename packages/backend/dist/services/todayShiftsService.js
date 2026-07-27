@@ -33,14 +33,39 @@ function resolveBlockStudentId(block, scheduleMap) {
         return null;
     return scheduleMap.get(block.schedule_id)?.student_assistant_id ?? null;
 }
+function buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap) {
+    const unscheduledShifts = [];
+    for (const entry of todaysTimeEntries) {
+        if (entry.schedule_block_id != null ||
+            entry.clock_out != null ||
+            entry.student_assistant_id == null) {
+            continue;
+        }
+        const studentAssistant = studentAssistantMap.get(entry.student_assistant_id);
+        if (!studentAssistant || studentAssistant.is_active === false)
+            continue;
+        unscheduledShifts.push({
+            scheduleBlockId: null,
+            studentAssistantId: entry.student_assistant_id,
+            firstName: studentAssistant.first_name ?? '',
+            lastName: studentAssistant.last_name ?? '',
+            role: (0, formatStudentRole_1.formatStudentRole)(studentAssistant.position),
+            startTime: '',
+            endTime: '',
+            clockInActual: entry.clock_in ?? null,
+            clockOutActual: null,
+            timeEntryId: entry.id ?? null,
+            status: 'on-time',
+            isRemote: false,
+        });
+    }
+    return unscheduledShifts;
+}
 exports.todayShiftsService = {
     async getTodayShifts(now = new Date(), options = {}) {
         const includeRemote = options.includeRemote ?? false;
-        const todayDay = getTodayDay(now);
-        if (!todayDay) {
-            return { shifts: [], remoteOnlyStudentIds: [] };
-        }
         const todayDate = getTodayDateString(now);
+        const todayDay = getTodayDay(now);
         const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] = await Promise.all([
             schedulesService_1.schedulesService.getAll(),
             scheduleBlocksService_1.scheduleBlocksService.getAll(),
@@ -48,11 +73,17 @@ exports.todayShiftsService = {
             timeEntryService_1.timeEntryService.getAll(),
             termService_1.termService.getAll(),
         ]);
-        const termMap = new Map(terms.map((term) => [term.id, term]));
-        const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
-        const todaysTimeEntries = timeEntries.filter((entry) => (0, shiftStatus_1.getClockInDate)(entry.clock_in) === todayDate);
-        const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
         const studentAssistantMap = new Map(studentAssistants.map((assistant) => [assistant.id, assistant]));
+        const todaysTimeEntries = timeEntries.filter((entry) => (0, shiftStatus_1.getClockInDate)(entry.clock_in) === todayDate);
+        if (!todayDay) {
+            return {
+                shifts: buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap),
+                remoteOnlyStudentIds: [],
+            };
+        }
+        const termMap = new Map(terms.map((term) => [term.id, term]));
+        const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+        const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
         const inPersonStudentIds = new Set();
         const remoteStudentIds = new Set();
         for (const block of todaysBlocks) {
@@ -120,31 +151,7 @@ exports.todayShiftsService = {
                     isRemote: block.is_remote ?? false,
                 }];
         });
-        const unscheduledShifts = [];
-        for (const entry of todaysTimeEntries) {
-            if (entry.schedule_block_id != null ||
-                entry.clock_out != null ||
-                entry.student_assistant_id == null) {
-                continue;
-            }
-            const studentAssistant = studentAssistantMap.get(entry.student_assistant_id);
-            if (!studentAssistant || studentAssistant.is_active === false)
-                continue;
-            unscheduledShifts.push({
-                scheduleBlockId: null,
-                studentAssistantId: entry.student_assistant_id,
-                firstName: studentAssistant.first_name ?? '',
-                lastName: studentAssistant.last_name ?? '',
-                role: (0, formatStudentRole_1.formatStudentRole)(studentAssistant.position),
-                startTime: '',
-                endTime: '',
-                clockInActual: entry.clock_in ?? null,
-                clockOutActual: null,
-                timeEntryId: entry.id ?? null,
-                status: 'on-time',
-                isRemote: false,
-            });
-        }
+        const unscheduledShifts = buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap);
         return {
             shifts: [...scheduledShifts, ...unscheduledShifts],
             remoteOnlyStudentIds,

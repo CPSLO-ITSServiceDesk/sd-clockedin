@@ -4,7 +4,10 @@ exports.ORG_TIMEZONE = void 0;
 exports.getOrgLocalMinutes = getOrgLocalMinutes;
 exports.getOrgLocalDateString = getOrgLocalDateString;
 exports.getOrgDayOfWeek = getOrgDayOfWeek;
+exports.getOrgLocalInstant = getOrgLocalInstant;
 exports.getOrgLocalCutoffInstant = getOrgLocalCutoffInstant;
+exports.isValidOrgLocalDateString = isValidOrgLocalDateString;
+exports.resolveShiftsReferenceNow = resolveShiftsReferenceNow;
 /** IANA timezone for campus wall-clock times (schedule blocks, shift windows). */
 exports.ORG_TIMEZONE = process.env.ORG_TIMEZONE ?? 'America/Los_Angeles';
 function getPart(parts, type) {
@@ -50,11 +53,10 @@ function getOrgDayOfWeek(now = new Date()) {
     return map[weekday] ?? 0;
 }
 /**
- * UTC instant for a wall-clock time on the org-local calendar day of `now`.
+ * UTC instant for a wall-clock time on an org-local calendar day (YYYY-MM-DD).
  * Uses binary search over Intl-derived org-local date/minutes (no extra deps).
  */
-function getOrgLocalCutoffInstant(now = new Date(), hour = 17, minute = 0) {
-    const dateStr = getOrgLocalDateString(now);
+function getOrgLocalInstant(dateStr, hour = 0, minute = 0) {
     const targetMinutes = hour * 60 + minute;
     const [y, m, d] = dateStr.split('-').map(Number);
     // LA is UTC-7/UTC-8, so local midnight can fall on the prior UTC calendar day.
@@ -80,4 +82,37 @@ function getOrgLocalCutoffInstant(now = new Date(), hour = 17, minute = 0) {
         throw new Error(`Could not resolve cutoff instant for ${dateStr} ${hour}:${String(minute).padStart(2, '0')} in ${exports.ORG_TIMEZONE}`);
     }
     return result;
+}
+/**
+ * UTC instant for a wall-clock time on the org-local calendar day of `now`.
+ */
+function getOrgLocalCutoffInstant(now = new Date(), hour = 17, minute = 0) {
+    return getOrgLocalInstant(getOrgLocalDateString(now), hour, minute);
+}
+const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** True when value is a real calendar YYYY-MM-DD. */
+function isValidOrgLocalDateString(value) {
+    if (!LOCAL_DATE_RE.test(value))
+        return false;
+    const [year, month, day] = value.split('-').map(Number);
+    const probe = new Date(Date.UTC(year, month - 1, day));
+    return (probe.getUTCFullYear() === year &&
+        probe.getUTCMonth() === month - 1 &&
+        probe.getUTCDate() === day);
+}
+/**
+ * Resolve the `now` instant used for shift lookups.
+ * - omitted / today → live clock
+ * - past date → 4 PM org-local (all daytime hours elapsed)
+ * - future date → midnight org-local (no hours started)
+ */
+function resolveShiftsReferenceNow(dateParam, now = new Date()) {
+    if (!dateParam)
+        return now;
+    const today = getOrgLocalDateString(now);
+    if (dateParam === today)
+        return now;
+    if (dateParam < today)
+        return getOrgLocalInstant(dateParam, 16, 0);
+    return getOrgLocalInstant(dateParam, 0, 0);
 }

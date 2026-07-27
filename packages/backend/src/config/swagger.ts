@@ -1,5 +1,4 @@
 import path from 'path';
-import { apiReference } from '@scalar/express-api-reference';
 import { Application } from 'express';
 import swaggerJSDoc, { OAS3Definition } from 'swagger-jsdoc';
 import { responses, schemas } from './openapiSchemas';
@@ -52,23 +51,39 @@ const spec = swaggerJSDoc({
   ],
 });
 
+// The page Scalar's own Express middleware would return. That package is
+// ESM-only, and this backend compiles to CommonJS, so requiring it aborts
+// startup with ERR_REQUIRE_ESM; a dynamic import() is no escape either,
+// because tsc downlevels it back into a require() under module: commonjs.
+// Inlining the shell keeps the renderer with no dependency to load at all.
+const docsPage = `<!doctype html>
+<html>
+  <head>
+    <title>SD Clock-In API</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script type="text/javascript">
+      Scalar.createApiReference('#app', ${JSON.stringify({ url: specPath })})
+    </script>
+  </body>
+</html>`;
+
 /**
  * Serves the raw spec at /api/docs.json and Scalar's renderer at /api/docs.
- * Scalar fetches its own bundle from a CDN, so no static assets need to ship
- * with the deployment — the reason it survives serverless bundling where
- * swagger-ui-express, which resolves swagger-ui-dist off disk, does not.
- * Register before helmet(), whose default CSP blocks Scalar's inline script.
+ * Scalar pulls its bundle from a CDN, so nothing is read off disk and nothing
+ * has to survive serverless file tracing. Register before helmet(), whose
+ * default CSP blocks the inline script that boots the renderer.
  */
 export function mountApiDocs(app: Application): void {
   app.get(specPath, (_req, res) => {
     res.json(spec);
   });
 
-  app.use(
-    docsPath,
-    apiReference({
-      url: specPath,
-      pageTitle: 'SD Clock-In API',
-    }),
-  );
+  app.get(docsPath, (_req, res) => {
+    res.type('html').send(docsPage);
+  });
 }

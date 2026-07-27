@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const helmet_1 = __importDefault(require("helmet"));
 const environment_1 = require("./config/environment");
+const swagger_1 = require("./config/swagger");
 const autoClockOut_1 = require("./jobs/autoClockOut");
 const routes_1 = require("./routes");
 const cors_1 = require("./middleware/cors");
@@ -13,6 +14,8 @@ const errorHandler_1 = require("./middleware/errorHandler");
 // Validate env before doing anything else.
 (0, environment_1.loadEnvironment)();
 const app = (0, express_1.default)();
+// Must precede helmet(), whose default CSP blocks the docs UI's inline script.
+(0, swagger_1.mountApiDocs)(app);
 // Security & parsing middleware
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.createCorsMiddleware)());
@@ -28,6 +31,7 @@ app.use((_req, res) => {
 app.use(errorHandler_1.errorHandler);
 app.listen(environment_1.config.port, () => {
     console.log(`Server running on port ${environment_1.config.port}`);
+    console.log(`API docs: http://localhost:${environment_1.config.port}${swagger_1.docsPath}`);
     console.log(`Environment: ${environment_1.config.nodeEnv}`);
     console.log(`CORS allowed origins: ${environment_1.config.allowedOrigins.join(', ')}`);
     if (environment_1.config.nodeEnv === 'development') {

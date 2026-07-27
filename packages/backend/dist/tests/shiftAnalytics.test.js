@@ -88,6 +88,44 @@ const now = new Date('2026-06-23T19:00:00.000Z');
         const shifts = (0, shiftAnalytics_1.expandEvaluatedShifts)(term, schedules, scheduleBlocks, [], { now });
         (0, vitest_1.expect)(shifts[0].status).toBe('absent');
     });
+    (0, vitest_1.it)('reclassifies absent scheduled shifts when an unscheduled clock-in exists', () => {
+        const timeEntries = [
+            {
+                id: 2,
+                schedule_block_id: null,
+                student_assistant_id: 100,
+                clock_in: '2026-06-22T16:05:00.000Z',
+                clock_out: '2026-06-22T19:00:00.000Z',
+                created_at: '2026-06-22T09:05:00Z',
+            },
+        ];
+        const shifts = (0, shiftAnalytics_1.expandEvaluatedShifts)(term, schedules, scheduleBlocks, timeEntries, { now });
+        (0, vitest_1.expect)(shifts).toHaveLength(1);
+        (0, vitest_1.expect)(shifts[0].status).toBe('unscheduled');
+        (0, vitest_1.expect)(shifts[0].clockIn).toBe(timeEntries[0].clock_in);
+    });
+    (0, vitest_1.it)('tracks standalone unscheduled clock-ins on days without scheduled shifts', () => {
+        const tuesdayBlock = {
+            ...scheduleBlocks[0],
+            id: 22,
+            days: 'tuesday',
+        };
+        const timeEntries = [
+            {
+                id: 3,
+                schedule_block_id: null,
+                student_assistant_id: 100,
+                clock_in: '2026-06-23T16:05:00.000Z',
+                clock_out: '2026-06-23T19:00:00.000Z',
+                created_at: '2026-06-23T09:05:00Z',
+            },
+        ];
+        const shifts = (0, shiftAnalytics_1.expandEvaluatedShifts)(term, schedules, [scheduleBlocks[0], tuesdayBlock], timeEntries, { now });
+        const unscheduled = shifts.filter((shift) => shift.status === 'unscheduled');
+        (0, vitest_1.expect)(unscheduled).toHaveLength(1);
+        (0, vitest_1.expect)(unscheduled[0].date).toBe('2026-06-23');
+        (0, vitest_1.expect)(shifts.filter((shift) => shift.status === 'absent')).toHaveLength(1);
+    });
     (0, vitest_1.it)('respects per-schedule start and end date overrides', () => {
         const extendedTerm = {
             ...term,
@@ -171,6 +209,7 @@ const now = new Date('2026-06-23T19:00:00.000Z');
         ];
         const result = (0, shiftAnalytics_1.buildStudentAnalytics)(term, 100, schedules, scheduleBlocks, timeEntries, now);
         (0, vitest_1.expect)(result.summary.late).toBe(1);
+        (0, vitest_1.expect)(result.summary.unscheduled).toBe(0);
         (0, vitest_1.expect)(result.recentIssues).toHaveLength(1);
         (0, vitest_1.expect)(result.recentIssues[0].status).toBe('late');
         (0, vitest_1.expect)(result.recentIssues[0].minutesLate).toBe(5);
