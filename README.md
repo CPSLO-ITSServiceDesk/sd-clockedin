@@ -89,7 +89,7 @@ pnpm --filter backend gen:types     # Regenerate Supabase TypeScript types
 
 ## CI/CD
 
-The GitHub Actions workflow at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pushes and pull requests targeting `main` or `staging`.
+The GitHub Actions workflow at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pushes and pull requests targeting `main` or `staging`. It also handles Vercel's `vercel.deployment.ready` repository dispatch event.
 
 The CI job:
 
@@ -97,6 +97,8 @@ The CI job:
 2. Installs dependencies from `pnpm-lock.yaml`
 3. Runs the backend tests in `src/tests`
 4. Builds the frontend and backend
+
+For a Vercel repository dispatch, the workflow checks out the exact deployed commit and reports the build result as the unique deployment check `Vercel - sd-clockedin: build`.
 
 Deployments are handled externally by Vercel. After a deployment reports a successful GitHub deployment status, the workflow checks both deployed `/api/health` endpoints. The smoke test can also be started manually from the Actions tab by selecting a GitHub Environment.
 

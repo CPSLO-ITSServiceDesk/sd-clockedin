@@ -140,7 +140,7 @@ The production frontend is deployed on Vercel:
 - Application: [https://sd-clockedin.vercel.app](https://sd-clockedin.vercel.app)
 - Health check: [https://sd-clockedin.vercel.app/api/health](https://sd-clockedin.vercel.app/api/health)
 
-The health endpoint returns JSON containing `status: "OK"` and a timestamp. The repository GitHub Actions workflow uses it for post-deployment smoke testing.
+The health endpoint returns JSON containing `status: "OK"` and a timestamp. The repository GitHub Actions workflow uses it for post-deployment smoke testing and reports the monorepo build to Vercel as `Vercel - sd-clockedin: build`.
 
 For production builds, set `NEXT_PUBLIC_API_URL` to:
 

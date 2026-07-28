@@ -5,6 +5,8 @@ on:
     branches: [main, staging]
   pull_request:
     branches: [main, staging]
+  repository_dispatch:
+    types: [vercel.deployment.ready]
   deployment_status:
   workflow_dispatch:
     inputs:
@@ -14,19 +16,26 @@ on:
         type: environment
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref || github.event.deployment.environment }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'repository_dispatch' && github.run_id || github.ref || github.event.deployment.environment }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch'
     name: Test and build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
+      statuses: write
     steps:
       - name: Check out repository
+        if: github.event_name != 'repository_dispatch'
         uses: actions/checkout@v5
+
+      - name: Check out deployed commit
+        if: github.event_name == 'repository_dispatch'
+        uses: vercel/repository-dispatch/actions/checkout@v1
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -48,6 +57,12 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Notify Vercel
+        if: always() && github.event_name == 'repository_dispatch'
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: 'Vercel - sd-clockedin: build'
 
   smoke-test:
     if: >-
