@@ -11,6 +11,8 @@ This is a monorepo managed by pnpm containing two packages:
 The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components via Radix UI primitives.
 For state management, the frontend uses React Query (@tanstack/react-query) and React Table (@tanstack/react-table).
 
+The application includes API documentation via Scalar/Swagger and enhanced CI/CD workflows for Vercel deployment.
+
 ## Development Commands
 
 ### Package Management
@@ -174,6 +176,13 @@ pnpm --filter frontend exec next cache clear
    - Custom hooks in `hooks/` directory
    - Utility functions in `lib/` directory
 
+### API Documentation
+The backend includes API documentation via Scalar and Swagger:
+- **Scalar API Explorer**: Available at `/api-docs` in development and production
+- **Swagger JSON**: Available at `/api-docs/json`
+- Documentation is automatically generated from JSDoc comments in route files
+- Configured to work with Vercel serverless deployments
+
 ### Database Schema Overview
 The Supabase database contains these core tables:
 - `academic_term`: School terms/semesters
@@ -266,3 +275,37 @@ The Supabase database contains these core tables:
 - **Error Handling**: 
   - Backend: Services throw `HttpError`, middleware formats responses
   - Frontend: API errors thrown as `ApiRequestError`, caught by React Query/error boundaries
+
+### CI/CD & Deployment
+The project uses GitHub Actions for CI/CD with Vercel deployments:
+
+#### GitHub Actions Workflow (`.github/workflows/ci.yml`)
+- Runs on pushes and PRs targeting `main` or `staging`
+- Uses Node.js 24 and pnpm version from root `package.json`
+- Installs dependencies from `pnpm-lock.yaml`
+- Runs backend tests in `src/tests`
+- Builds both frontend and backend for production
+- Handles Vercel's `vercel.deployment.ready` repository dispatch events
+
+#### Vercel Deployment Checks
+- After deployment, workflow checks both `/api/health` endpoints:
+  - Frontend: `https://sd-clockedin.vercel.app/api/health`
+  - Backend: `https://sd-clockedin-express-backend.vercel.app/api/health`
+- Can be triggered manually from GitHub Actions tab using Environments
+- Reports build status to Vercel as:
+  - `Vercel - sd-clockedin: build` (frontend)
+  - `Vercel - sd-clockedin-express-backend: build` (backend)
+
+#### Environment Variables for GitHub Environments
+Create `production` and `staging` environments in GitHub Settings → Environments:
+```text
+FRONTEND_URL=https://sd-clockedin.vercel.app
+BACKEND_URL=https://sd-clockedin-express-backend.vercel.app
+```
+(Note: Workflow automatically appends `/api/health` to BACKEND_URL)
+
+#### Scalar/Swagger Documentation Validation
+CI includes validation of API documentation:
+- Checks that Scalar/Swagger endpoints are accessible
+- Validates OpenAPI specification format
+- Ensures documentation is properly deployed with Vercel
