@@ -233,7 +233,7 @@ The production backend is deployed on Vercel:
 - API base: [https://sd-clockedin-express-backend.vercel.app/api](https://sd-clockedin-express-backend.vercel.app/api)
 - Health check: [https://sd-clockedin-express-backend.vercel.app/api/health](https://sd-clockedin-express-backend.vercel.app/api/health)
 
-The health endpoint returns JSON containing `status: "OK"` and a timestamp. The repository GitHub Actions workflow checks it after successful deployments, runs the backend build as part of the Vercel build check, and supports manually triggered smoke tests.
+The health endpoint returns JSON containing `status: "OK"` and a timestamp. The repository GitHub Actions workflow checks it after successful deployments, reports `Vercel - sd-clockedin-express-backend: build` to the backend Vercel project, and supports manually triggered smoke tests.
 
 Set the non-secret `BACKEND_URL` variable in the GitHub `production` Environment to `https://sd-clockedin-express-backend.vercel.app`. The workflow appends `/api/health`.
 

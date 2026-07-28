@@ -58,11 +58,23 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Notify Vercel
-        if: always() && github.event_name == 'repository_dispatch'
+      - name: Notify frontend Vercel project
+        if: >-
+          always() &&
+          github.event_name == 'repository_dispatch' &&
+          github.event.client_payload.project.name == 'sd-clockedin'
         uses: vercel/repository-dispatch/actions/status@v1
         with:
           name: 'Vercel - sd-clockedin: build'
+
+      - name: Notify backend Vercel project
+        if: >-
+          always() &&
+          github.event_name == 'repository_dispatch' &&
+          github.event.client_payload.project.name == 'sd-clockedin-express-backend'
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: 'Vercel - sd-clockedin-express-backend: build'
 
   smoke-test:
     if: >-

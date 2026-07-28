@@ -98,7 +98,10 @@ The CI job:
 3. Runs the backend tests in `src/tests`
 4. Builds the frontend and backend
 
-For a Vercel repository dispatch, the workflow checks out the exact deployed commit and reports the build result as the unique deployment check `Vercel - sd-clockedin: build`.
+For a Vercel repository dispatch, the workflow checks out the exact deployed commit and reports one project-specific build check:
+
+- `Vercel - sd-clockedin: build`
+- `Vercel - sd-clockedin-express-backend: build`
 
 Deployments are handled externally by Vercel. After a deployment reports a successful GitHub deployment status, the workflow checks both deployed `/api/health` endpoints. The smoke test can also be started manually from the Actions tab by selecting a GitHub Environment.
 
