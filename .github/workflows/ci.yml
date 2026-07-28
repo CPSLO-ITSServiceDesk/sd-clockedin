@@ -1,0 +1,99 @@
+name: CI and deployment smoke tests
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment containing the deployed URLs
+        required: true
+        type: environment
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref || github.event.deployment.environment }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    name: Test and build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test backend
+        run: pnpm --filter backend exec vitest run src/tests
+
+      - name: Build
+        run: pnpm build
+
+  smoke-test:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success')
+    name: Check deployed services
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: ${{ github.event.deployment.environment || inputs.environment }}
+    env:
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+      BACKEND_URL: ${{ vars.BACKEND_URL }}
+    steps:
+      - name: Validate deployment URLs
+        run: |
+          if [ -z "$FRONTEND_URL" ] || [ -z "$BACKEND_URL" ]; then
+            echo "::error::Set FRONTEND_URL and BACKEND_URL variables in this GitHub Environment."
+            exit 1
+          fi
+
+      - name: Check frontend health
+        run: |
+          response="$(curl \
+            --fail \
+            --show-error \
+            --silent \
+            --retry 30 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            --retry-max-time 300 \
+            --max-time 15 \
+            "${FRONTEND_URL%/}/api/health")"
+          jq -e '.status == "OK"' <<< "$response"
+
+      - name: Check backend health
+        run: |
+          response="$(curl \
+            --fail \
+            --show-error \
+            --silent \
+            --retry 30 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            --retry-max-time 300 \
+            --max-time 15 \
+            "${BACKEND_URL%/}/api/health")"
+          jq -e '.status == "OK"' <<< "$response"
