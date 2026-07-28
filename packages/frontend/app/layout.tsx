@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist_Mono, Hanken_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { QueryProvider } from '@/components/providers/query-provider'
 import { RootThemeToggle } from '@/components/root-theme-toggle'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -68,6 +69,7 @@ export default function RootLayout({
           </QueryProvider>
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NODE_ENV === 'production' && <SpeedInsights />}
       </body>
     </html>
   )
