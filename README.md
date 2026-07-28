@@ -109,6 +109,8 @@ BACKEND_URL=https://sd-clockedin-express-backend.vercel.app
 
 Do not include `/api` or a trailing slash; the workflow appends `/api/health`. If a deployment provider does not publish GitHub deployment statuses, run the workflow manually after deployment.
 
+Optionally add `SUPABASE_URL` under **GitHub → Settings → Secrets and variables → Actions → Variables**. Backend unit tests read this repository variable and otherwise use a local placeholder URL. They never receive the production service-role key.
+
 Production health checks:
 
 - [Frontend health](https://sd-clockedin.vercel.app/api/health)
