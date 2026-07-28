@@ -133,6 +133,23 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 Note: The frontend expects the backend API at `NEXT_PUBLIC_API_URL` (must include `/api` suffix). Supabase env vars are required for admin login.
 
+### Deployment and Health Check
+
+The production frontend is deployed on Vercel:
+
+- Application: [https://sd-clockedin.vercel.app](https://sd-clockedin.vercel.app)
+- Health check: [https://sd-clockedin.vercel.app/api/health](https://sd-clockedin.vercel.app/api/health)
+
+The health endpoint returns JSON containing `status: "OK"` and a timestamp. The repository GitHub Actions workflow uses it for post-deployment smoke testing.
+
+For production builds, set `NEXT_PUBLIC_API_URL` to:
+
+```text
+https://sd-clockedin-express-backend.vercel.app/api
+```
+
+The GitHub `production` Environment also requires a non-secret `FRONTEND_URL` variable set to `https://sd-clockedin.vercel.app`. See the root README for the complete CI/CD configuration.
+
 ## Key Integration Points
 
 ### Authentication

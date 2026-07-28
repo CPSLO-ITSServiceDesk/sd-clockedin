@@ -21,7 +21,7 @@ For package-level detail, see [packages/frontend/README.md](packages/frontend/RE
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+
+- [Node.js](https://nodejs.org/) 24+
 - [pnpm](https://pnpm.io/) 10+ (see `packageManager` in root `package.json`)
 - A [Supabase](https://supabase.com/) project with the app schema
 
@@ -86,6 +86,33 @@ pnpm --filter backend test          # Backend unit tests (Vitest)
 pnpm --filter backend test:watch    # Tests in watch mode
 pnpm --filter backend gen:types     # Regenerate Supabase TypeScript types
 ```
+
+## CI/CD
+
+The GitHub Actions workflow at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pushes and pull requests targeting `main` or `staging`.
+
+The CI job:
+
+1. Uses Node.js 24 and the pnpm version pinned in the root `package.json`
+2. Installs dependencies from `pnpm-lock.yaml`
+3. Runs the backend tests in `src/tests`
+4. Builds the frontend and backend
+
+Deployments are handled externally by Vercel. After a deployment reports a successful GitHub deployment status, the workflow checks both deployed `/api/health` endpoints. The smoke test can also be started manually from the Actions tab by selecting a GitHub Environment.
+
+Create `production` and, when applicable, `staging` under **GitHub → Settings → Environments**. Add these non-secret environment variables to each environment:
+
+```text
+FRONTEND_URL=https://sd-clockedin.vercel.app
+BACKEND_URL=https://sd-clockedin-express-backend.vercel.app
+```
+
+Do not include `/api` or a trailing slash; the workflow appends `/api/health`. If a deployment provider does not publish GitHub deployment statuses, run the workflow manually after deployment.
+
+Production health checks:
+
+- [Frontend health](https://sd-clockedin.vercel.app/api/health)
+- [Backend health](https://sd-clockedin-express-backend.vercel.app/api/health)
 
 ## How the pieces fit together
 

@@ -184,8 +184,8 @@ pnpm --filter backend start
 
 ### Testing
 ```bash
-# Run all backend tests
-pnpm --filter backend test
+# Run the source backend tests (the same command used by CI)
+pnpm --filter backend exec vitest run src/tests
 
 # Run backend tests in watch mode
 pnpm --filter backend test:watch
@@ -226,6 +226,17 @@ To run the auto clock-out job manually:
 pnpm --filter backend auto-clock-out
 ```
 
+### Deployment and Health Check
+
+The production backend is deployed on Vercel:
+
+- API base: [https://sd-clockedin-express-backend.vercel.app/api](https://sd-clockedin-express-backend.vercel.app/api)
+- Health check: [https://sd-clockedin-express-backend.vercel.app/api/health](https://sd-clockedin-express-backend.vercel.app/api/health)
+
+The health endpoint returns JSON containing `status: "OK"` and a timestamp. The repository GitHub Actions workflow checks it after successful deployments and during manually triggered smoke tests.
+
+Set the non-secret `BACKEND_URL` variable in the GitHub `production` Environment to `https://sd-clockedin-express-backend.vercel.app`. The workflow appends `/api/health`.
+
 ## Key Integration Points
 
 ### Frontend Communication
@@ -254,7 +265,7 @@ pnpm --filter backend auto-clock-out
 All routes are mounted under `/api`.
 
 ### Health Check
-- `GET /health` — Returns server status and timestamp
+- `GET /api/health` — Returns server status and timestamp
 
 ### Academic Terms (`/terms`)
 - `GET /` — List all terms
