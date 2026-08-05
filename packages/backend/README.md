@@ -160,6 +160,13 @@ ORG_TIMEZONE=America/Los_Angeles
 # Auto clock-out (daily at this time in ORG_TIMEZONE)
 AUTO_CLOCK_OUT_ENABLED=true
 AUTO_CLOCK_OUT_TIME=17:00
+
+# Optional: Upstash / Vercel KV (enables short-TTL cache for GET /api/shifts/today)
+# Either naming style works:
+UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_upstash_token
+# KV_REST_API_URL=https://xxxx.upstash.io
+# KV_REST_API_TOKEN=your_kv_token
 ```
 
 ### Development Server
@@ -419,9 +426,10 @@ The Supabase database contains these core tables:
 - Use Supabase's built-in filtering and ordering
 
 ### Caching
-- Consider implementing caching layer for frequently accessed data
-- Use Supabase's real-time features for subscriptions when needed
-- Implement ETags and conditional requests for static-ish data
+- `GET /api/shifts/today` is cached in Upstash Redis (15s TTL) when
+  `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set
+- Cache is invalidated on time-entry and schedule-block mutations
+- Without Redis env vars, the endpoint hits Supabase directly (no hard dependency)
 
 ### Security
 - Validate all inputs with express-validator

@@ -229,6 +229,8 @@ The Supabase database contains these core tables:
 - `ORG_TIMEZONE`: IANA timezone for shift logic and auto clock-out (default: `America/Los_Angeles`)
 - `AUTO_CLOCK_OUT_TIME`: Daily auto clock-out time in HH:mm format (default: `17:00`)
 - `AUTO_CLOCK_OUT_ENABLED`: Enable/disable auto clock-out feature (default: `true`)
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST credentials (optional; enables caching for `/api/shifts/today`)
+- `KV_REST_API_URL` / `KV_REST_API_TOKEN`: Vercel KV equivalents of the above (either pair works; caching is disabled if neither pair is fully set). `KV_URL` / `REDIS_URL` are not used (TCP, not REST).
 
 **Frontend** (`.env` in `packages/frontend/`):
 - `NEXT_PUBLIC_API_URL`: Base URL for API calls (must include `/api` suffix)

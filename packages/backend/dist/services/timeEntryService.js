@@ -11,9 +11,14 @@ const scheduleBlocksService_1 = require("./scheduleBlocksService");
 const schedulesService_1 = require("./schedulesService");
 const studentAssistantService_1 = require("./studentAssistantService");
 const termService_1 = require("./termService");
+const todayShiftsCache_1 = require("../lib/todayShiftsCache");
 const todayShiftsService_1 = require("./todayShiftsService");
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
+/** Resolves the shift-board date a time entry affects, for cache invalidation. */
+function resolveEntryDate(clockIn) {
+    return (0, shiftStatus_1.getClockInDate)(clockIn ?? null) ?? (0, todayShiftsService_1.getTodayDateString)(new Date());
+}
 exports.timeEntryService = {
     async getAll() {
         const { data, error } = await supabase_1.supabase
@@ -88,6 +93,7 @@ exports.timeEntryService = {
             .single();
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCache)(resolveEntryDate(data.clock_in));
         return data;
     },
     async update(id, payload) {
@@ -102,15 +108,18 @@ exports.timeEntryService = {
                 return null;
             throw new errorHandler_1.HttpError(500, error.message);
         }
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCache)(resolveEntryDate(data.clock_in));
         return data;
     },
     async remove(id) {
+        const existing = await this.getById(id);
         const { error } = await supabase_1.supabase
             .from('time_entry')
             .delete()
             .eq('id', id);
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCache)(resolveEntryDate(existing?.clock_in));
     },
     async clockIn(params, now = new Date()) {
         const { student_assistant_id, clock_in } = params;
@@ -242,6 +251,9 @@ exports.timeEntryService = {
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
         const entryIds = (data ?? []).map((row) => row.id);
+        if (entryIds.length > 0) {
+            await (0, todayShiftsCache_1.invalidateTodayShiftsCache)(today);
+        }
         return {
             closedCount: entryIds.length,
             entryIds,

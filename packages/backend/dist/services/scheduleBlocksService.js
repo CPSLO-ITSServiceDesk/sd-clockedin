@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.scheduleBlocksService = void 0;
-const supabase_1 = require("../lib/supabase");
 const clearScheduleBlockReferences_1 = require("../lib/clearScheduleBlockReferences");
+const todayShiftsCache_1 = require("../lib/todayShiftsCache");
+const supabase_1 = require("../lib/supabase");
 const errorHandler_1 = require("../middleware/errorHandler");
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
@@ -37,6 +38,7 @@ exports.scheduleBlocksService = {
             .single();
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCacheForNow)();
         return data;
     },
     async update(id, payload) {
@@ -51,6 +53,7 @@ exports.scheduleBlocksService = {
                 return null;
             throw new errorHandler_1.HttpError(500, error.message);
         }
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCacheForNow)();
         return data;
     },
     async remove(id) {
@@ -61,6 +64,7 @@ exports.scheduleBlocksService = {
             .eq('id', id);
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCacheForNow)();
     },
     async removeMany(ids) {
         if (ids.length === 0)
@@ -72,6 +76,7 @@ exports.scheduleBlocksService = {
             .in('id', ids);
         if (error)
             throw new errorHandler_1.HttpError(500, error.message);
+        await (0, todayShiftsCache_1.invalidateTodayShiftsCacheForNow)();
     },
     async getByScheduleId(schedule_id) {
         const { data, error } = await supabase_1.supabase

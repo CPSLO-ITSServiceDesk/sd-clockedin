@@ -13,6 +13,7 @@ import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
 import { studentAssistantService } from './studentAssistantService';
 import { termService } from './termService';
+import { invalidateTodayShiftsCache } from '../lib/todayShiftsCache';
 import { getTodayDateString, getTodayDay } from './todayShiftsService';
 
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
@@ -37,6 +38,11 @@ export interface AutoClockOutResult {
 
 // PostgREST returns this code when .single() finds no matching row.
 const NO_ROWS = 'PGRST116';
+
+/** Resolves the shift-board date a time entry affects, for cache invalidation. */
+function resolveEntryDate(clockIn: string | null | undefined): string {
+  return getClockInDate(clockIn ?? null) ?? getTodayDateString(new Date());
+}
 
 export const timeEntryService = {
   async getAll(): Promise<TimeEntry[]> {
@@ -117,6 +123,7 @@ export const timeEntryService = {
       .single();
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateTodayShiftsCache(resolveEntryDate(data.clock_in));
     return data;
   },
 
@@ -132,16 +139,20 @@ export const timeEntryService = {
       if (error.code === NO_ROWS) return null;
       throw new HttpError(500, error.message);
     }
+    await invalidateTodayShiftsCache(resolveEntryDate(data.clock_in));
     return data;
   },
 
   async remove(id: number): Promise<void> {
+    const existing = await this.getById(id);
+
     const { error } = await supabase
       .from('time_entry')
       .delete()
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateTodayShiftsCache(resolveEntryDate(existing?.clock_in));
   },
 
   async clockIn(
@@ -315,6 +326,9 @@ export const timeEntryService = {
     if (error) throw new HttpError(500, error.message);
 
     const entryIds = (data ?? []).map((row) => row.id);
+    if (entryIds.length > 0) {
+      await invalidateTodayShiftsCache(today);
+    }
 
     return {
       closedCount: entryIds.length,

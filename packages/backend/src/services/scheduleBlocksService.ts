@@ -1,5 +1,6 @@
-import { supabase } from '../lib/supabase';
 import { clearScheduleBlockReferences } from '../lib/clearScheduleBlockReferences';
+import { invalidateTodayShiftsCacheForNow } from '../lib/todayShiftsCache';
+import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
 
@@ -43,6 +44,7 @@ export const scheduleBlocksService = {
       .single();
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateTodayShiftsCacheForNow();
     return data;
   },
 
@@ -58,6 +60,7 @@ export const scheduleBlocksService = {
       if (error.code === NO_ROWS) return null;
       throw new HttpError(500, error.message);
     }
+    await invalidateTodayShiftsCacheForNow();
     return data;
   },
 
@@ -70,6 +73,7 @@ export const scheduleBlocksService = {
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateTodayShiftsCacheForNow();
   },
 
   async removeMany(ids: number[]): Promise<void> {
@@ -83,6 +87,7 @@ export const scheduleBlocksService = {
       .in('id', ids);
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateTodayShiftsCacheForNow();
   },
 
   async getByScheduleId(schedule_id: number): Promise<ScheduleBlock[]> {

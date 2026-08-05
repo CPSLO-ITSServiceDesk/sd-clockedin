@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.todayShiftsService = void 0;
 exports.getTodayDay = getTodayDay;
 exports.getTodayDateString = getTodayDateString;
+const todayShiftsCache_1 = require("../lib/todayShiftsCache");
 const scheduleDateRange_1 = require("../lib/scheduleDateRange");
 const formatStudentRole_1 = require("../lib/formatStudentRole");
 const orgTime_1 = require("../lib/orgTime");
@@ -65,96 +66,99 @@ exports.todayShiftsService = {
     async getTodayShifts(now = new Date(), options = {}) {
         const includeRemote = options.includeRemote ?? false;
         const todayDate = getTodayDateString(now);
-        const todayDay = getTodayDay(now);
-        const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] = await Promise.all([
-            schedulesService_1.schedulesService.getAll(),
-            scheduleBlocksService_1.scheduleBlocksService.getAll(),
-            studentAssistantService_1.studentAssistantService.getAll(),
-            timeEntryService_1.timeEntryService.getAll(),
-            termService_1.termService.getAll(),
-        ]);
-        const studentAssistantMap = new Map(studentAssistants.map((assistant) => [assistant.id, assistant]));
-        const todaysTimeEntries = timeEntries.filter((entry) => (0, shiftStatus_1.getClockInDate)(entry.clock_in) === todayDate);
-        if (!todayDay) {
-            return {
-                shifts: buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap),
-                remoteOnlyStudentIds: [],
-            };
-        }
-        const termMap = new Map(terms.map((term) => [term.id, term]));
-        const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
-        const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
-        const inPersonStudentIds = new Set();
-        const remoteStudentIds = new Set();
-        for (const block of todaysBlocks) {
-            const studentId = resolveBlockStudentId(block, scheduleMap);
-            if (studentId == null)
-                continue;
-            const schedule = block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
-            const term = schedule?.academic_term_id != null
-                ? termMap.get(schedule.academic_term_id)
-                : undefined;
-            if (schedule &&
-                term &&
-                !(0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term)) {
-                continue;
-            }
-            const studentAssistant = studentAssistantMap.get(studentId);
-            if (!studentAssistant || studentAssistant.is_active === false)
-                continue;
-            if (block.is_remote) {
-                remoteStudentIds.add(studentId);
-            }
-            else {
-                inPersonStudentIds.add(studentId);
-            }
-        }
-        const remoteOnlyStudentIds = [...remoteStudentIds].filter((studentId) => !inPersonStudentIds.has(studentId));
-        const timeEntryMap = new Map();
-        for (const entry of todaysTimeEntries) {
-            const key = `${entry.schedule_block_id}-${entry.student_assistant_id}`;
-            timeEntryMap.set(key, entry);
-        }
-        const scheduledShifts = todaysBlocks.flatMap((block) => {
-            if (block.is_remote && !includeRemote)
-                return [];
-            const schedule = block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
-            if (!schedule?.student_assistant_id)
-                return [];
-            const term = schedule.academic_term_id != null
-                ? termMap.get(schedule.academic_term_id)
-                : undefined;
-            if (term &&
-                !(0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term)) {
-                return [];
-            }
-            const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
-            if (!studentAssistant || studentAssistant.is_active === false)
-                return [];
-            const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`;
-            const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
-            const startTime = block.start_time ?? '00:00';
-            return [{
-                    scheduleBlockId: block.id,
-                    studentAssistantId: schedule.student_assistant_id,
-                    firstName: studentAssistant.first_name ?? '',
-                    lastName: studentAssistant.last_name ?? '',
-                    role: (0, formatStudentRole_1.formatStudentRole)(studentAssistant.position),
-                    startTime,
-                    endTime: block.end_time ?? '00:00',
-                    clockInActual: timeEntry?.clock_in ?? null,
-                    clockOutActual: timeEntry?.clock_out ?? null,
-                    timeEntryId: timeEntry?.id ?? null,
-                    status: block.is_remote
-                        ? (0, shiftStatus_1.computeRemoteShiftStatus)(startTime, now)
-                        : (0, shiftStatus_1.computeShiftStatus)(startTime, timeEntry?.clock_in ?? null, now),
-                    isRemote: block.is_remote ?? false,
-                }];
-        });
-        const unscheduledShifts = buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap);
-        return {
-            shifts: [...scheduledShifts, ...unscheduledShifts],
-            remoteOnlyStudentIds,
-        };
+        return (0, todayShiftsCache_1.withTodayShiftsCache)(todayDate, includeRemote, () => computeTodayShifts(now, todayDate, includeRemote));
     },
 };
+async function computeTodayShifts(now, todayDate, includeRemote) {
+    const todayDay = getTodayDay(now);
+    const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] = await Promise.all([
+        schedulesService_1.schedulesService.getAll(),
+        scheduleBlocksService_1.scheduleBlocksService.getAll(),
+        studentAssistantService_1.studentAssistantService.getAll(),
+        timeEntryService_1.timeEntryService.getAll(),
+        termService_1.termService.getAll(),
+    ]);
+    const studentAssistantMap = new Map(studentAssistants.map((assistant) => [assistant.id, assistant]));
+    const todaysTimeEntries = timeEntries.filter((entry) => (0, shiftStatus_1.getClockInDate)(entry.clock_in) === todayDate);
+    if (!todayDay) {
+        return {
+            shifts: buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap),
+            remoteOnlyStudentIds: [],
+        };
+    }
+    const termMap = new Map(terms.map((term) => [term.id, term]));
+    const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+    const todaysBlocks = scheduleBlocks.filter((block) => block.days === todayDay);
+    const inPersonStudentIds = new Set();
+    const remoteStudentIds = new Set();
+    for (const block of todaysBlocks) {
+        const studentId = resolveBlockStudentId(block, scheduleMap);
+        if (studentId == null)
+            continue;
+        const schedule = block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
+        const term = schedule?.academic_term_id != null
+            ? termMap.get(schedule.academic_term_id)
+            : undefined;
+        if (schedule &&
+            term &&
+            !(0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term)) {
+            continue;
+        }
+        const studentAssistant = studentAssistantMap.get(studentId);
+        if (!studentAssistant || studentAssistant.is_active === false)
+            continue;
+        if (block.is_remote) {
+            remoteStudentIds.add(studentId);
+        }
+        else {
+            inPersonStudentIds.add(studentId);
+        }
+    }
+    const remoteOnlyStudentIds = [...remoteStudentIds].filter((studentId) => !inPersonStudentIds.has(studentId));
+    const timeEntryMap = new Map();
+    for (const entry of todaysTimeEntries) {
+        const key = `${entry.schedule_block_id}-${entry.student_assistant_id}`;
+        timeEntryMap.set(key, entry);
+    }
+    const scheduledShifts = todaysBlocks.flatMap((block) => {
+        if (block.is_remote && !includeRemote)
+            return [];
+        const schedule = block.schedule_id != null ? scheduleMap.get(block.schedule_id) : undefined;
+        if (!schedule?.student_assistant_id)
+            return [];
+        const term = schedule.academic_term_id != null
+            ? termMap.get(schedule.academic_term_id)
+            : undefined;
+        if (term &&
+            !(0, scheduleDateRange_1.isDateInEffectiveScheduleRange)(todayDate, schedule, term)) {
+            return [];
+        }
+        const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
+        if (!studentAssistant || studentAssistant.is_active === false)
+            return [];
+        const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`;
+        const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
+        const startTime = block.start_time ?? '00:00';
+        return [{
+                scheduleBlockId: block.id,
+                studentAssistantId: schedule.student_assistant_id,
+                firstName: studentAssistant.first_name ?? '',
+                lastName: studentAssistant.last_name ?? '',
+                role: (0, formatStudentRole_1.formatStudentRole)(studentAssistant.position),
+                startTime,
+                endTime: block.end_time ?? '00:00',
+                clockInActual: timeEntry?.clock_in ?? null,
+                clockOutActual: timeEntry?.clock_out ?? null,
+                timeEntryId: timeEntry?.id ?? null,
+                status: block.is_remote
+                    ? (0, shiftStatus_1.computeRemoteShiftStatus)(startTime, now)
+                    : (0, shiftStatus_1.computeShiftStatus)(startTime, timeEntry?.clock_in ?? null, now),
+                isRemote: block.is_remote ?? false,
+            }];
+    });
+    const unscheduledShifts = buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap);
+    return {
+        shifts: [...scheduledShifts, ...unscheduledShifts],
+        remoteOnlyStudentIds,
+    };
+}
