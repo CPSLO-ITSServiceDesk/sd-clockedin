@@ -6,6 +6,12 @@ import {
 } from './resolveNearestBlock';
 import { getClockInDate, toLocalDateString } from './shiftStatus';
 import { timeToMinutes } from './time';
+import {
+  isTimeOffCoveringOrgLocalDate,
+  isVacationDay,
+  parseOffDays,
+  type TimeOffInterval,
+} from './timeOffCoverage';
 import type { Database } from '../types/database.types';
 
 type ScheduleBlockDay = Database['public']['Enums']['days'];
@@ -22,11 +28,6 @@ const WEEKDAY_DAYS: ScheduleBlockDay[] = [
   'thursday',
   'friday',
 ];
-
-type TermOffDays = {
-  vacations?: { date: string }[];
-  special_schedules?: { date: string; swap_to_day: string }[];
-};
 
 export type UnmatchedReason =
   | 'no_schedule'
@@ -88,17 +89,7 @@ export interface NormalizationContext {
   scheduleBlocks: ScheduleBlock[];
   timeEntries: TimeEntry[];
   students: StudentAssistant[];
-}
-
-function parseOffDays(term: Term): TermOffDays | null {
-  if (!term.off_days || typeof term.off_days !== 'object' || Array.isArray(term.off_days)) {
-    return null;
-  }
-  return term.off_days as TermOffDays;
-}
-
-function isVacationDay(date: string, offDays: TermOffDays | null): boolean {
-  return offDays?.vacations?.some((vacation) => vacation.date === date) ?? false;
+  studentTimeOff?: TimeOffInterval[];
 }
 
 function getWeekdayForDate(dateStr: string): ScheduleBlockDay | null {
@@ -176,6 +167,7 @@ export function buildNormalizationPreview(
   timeEntries: TimeEntry[],
   students: StudentAssistant[],
   now: Date = new Date(),
+  studentTimeOff: TimeOffInterval[] = [],
 ): NormalizationPreview {
   const today = getOrgLocalDateString(now);
   const offDays = parseOffDays(term);
@@ -246,6 +238,18 @@ export function buildNormalizationPreview(
     }
 
     if (isVacationDay(date, offDays)) {
+      unmatched.push({
+        timeEntryId: entry.id,
+        studentAssistantId: studentId,
+        studentName,
+        date,
+        clockIn: entry.clock_in!,
+        reason: 'no_blocks_that_day',
+      });
+      continue;
+    }
+
+    if (isTimeOffCoveringOrgLocalDate(studentTimeOff, studentId, date)) {
       unmatched.push({
         timeEntryId: entry.id,
         studentAssistantId: studentId,
@@ -423,6 +427,12 @@ export function validateNormalizationMatch(
   const offDays = parseOffDays(context.term);
   if (isVacationDay(date, offDays)) {
     return { valid: false, reason: 'Entry date is a vacation day' };
+  }
+
+  if (
+    isTimeOffCoveringOrgLocalDate(context.studentTimeOff ?? [], entry.student_assistant_id, date)
+  ) {
+    return { valid: false, reason: 'Entry date is covered by student time off' };
   }
 
   const weekday = getWeekdayForDate(date);

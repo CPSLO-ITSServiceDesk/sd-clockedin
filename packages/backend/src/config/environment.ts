@@ -1,5 +1,60 @@
 import 'dotenv/config';
 
+export const DEFAULT_TEAMS_SCHEDULING_GROUP = 'Service Desk';
+
+export const MICROSOFT_GRAPH_REQUIRED_VARS = [
+  'MICROSOFT_TENANT_ID',
+  'MICROSOFT_CLIENT_ID',
+  'MICROSOFT_CLIENT_SECRET',
+  'TEAMS_TEAM_ID',
+] as const;
+
+export interface MicrosoftGraphConfig {
+  enabled: boolean;
+  tenantId: string | undefined;
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+  teamId: string | undefined;
+  schedulingGroup: string;
+  missingVars: string[];
+}
+
+function emptyToUndefined(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/** Graph is optional: enabled only when tenant, client, secret, and team id are all set. */
+export function resolveMicrosoftGraphConfig(
+  env: NodeJS.Dict<string | undefined> = process.env,
+): MicrosoftGraphConfig {
+  const tenantId = emptyToUndefined(env.MICROSOFT_TENANT_ID);
+  const clientId = emptyToUndefined(env.MICROSOFT_CLIENT_ID);
+  const clientSecret = emptyToUndefined(env.MICROSOFT_CLIENT_SECRET);
+  const teamId = emptyToUndefined(env.TEAMS_TEAM_ID);
+  const schedulingGroup =
+    emptyToUndefined(env.TEAMS_SCHEDULING_GROUP) ?? DEFAULT_TEAMS_SCHEDULING_GROUP;
+
+  const values: Record<(typeof MICROSOFT_GRAPH_REQUIRED_VARS)[number], string | undefined> = {
+    MICROSOFT_TENANT_ID: tenantId,
+    MICROSOFT_CLIENT_ID: clientId,
+    MICROSOFT_CLIENT_SECRET: clientSecret,
+    TEAMS_TEAM_ID: teamId,
+  };
+
+  const missingVars = MICROSOFT_GRAPH_REQUIRED_VARS.filter((name) => !values[name]);
+
+  return {
+    enabled: missingVars.length === 0,
+    tenantId,
+    clientId,
+    clientSecret,
+    teamId,
+    schedulingGroup,
+    missingVars: [...missingVars],
+  };
+}
+
 /**
  * Validates that all required environment variables are present.
  * Call this once at startup, before the server begins listening.
@@ -12,6 +67,13 @@ export function loadEnvironment(): void {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variable(s): ${missing.join(', ')}`,
+    );
+  }
+
+  const graph = config.microsoftGraph;
+  if (!graph.enabled && graph.missingVars.length < MICROSOFT_GRAPH_REQUIRED_VARS.length) {
+    console.warn(
+      `Microsoft Graph partially configured (missing ${graph.missingVars.join(', ')}) — Teams sync disabled.`,
     );
   }
 }
@@ -54,4 +116,5 @@ export const config = {
     enabled: parseAutoClockOutEnabled(),
     ...parseAutoClockOutTime(),
   },
+  microsoftGraph: resolveMicrosoftGraphConfig(),
 };

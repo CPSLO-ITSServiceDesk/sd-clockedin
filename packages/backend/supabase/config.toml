@@ -58,6 +58,8 @@ max_client_conn = 100
 
 [db.migrations]
 # If disabled, migrations will be skipped during a db push or reset.
+# Forward only: migrations/<timestamp>_*.sql. Rollbacks live in down/*.down.sql
+# (SQL editor / db query -f, newest-first — never db push those files).
 enabled = true
 # Specifies an ordered list of schema files that describe your database.
 # Supports glob patterns relative to supabase directory: "./schemas/*.sql"

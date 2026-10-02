@@ -15,6 +15,7 @@ import {
   toTermOffDays,
   type TermFormValues,
 } from "@/components/admin/terms/term-form"
+import { TeamsSyncPanel } from "@/components/admin/terms/teams-sync-panel"
 import {
   countOffDays,
   formatTermDate,
@@ -84,12 +85,14 @@ export function TermsTable() {
   const [deleteTarget, setDeleteTarget] = useState<AcademicTerm | null>(null)
 
   const sortedTerms = useMemo(() => sortTermsByActiveStatus(terms), [terms])
+  const activeTerm = sortedTerms.find((term) => term.is_active)
 
   const invalidateTerms = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.terms.all }),
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules.all }),
       queryClient.invalidateQueries({ queryKey: queryKeys.scheduleBlocks.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.teamsSync.all }),
     ])
 
   const handleAdd = async (values: TermFormValues) => {
@@ -169,6 +172,10 @@ export function TermsTable() {
           Add Term
         </Button>
       </div>
+
+      {activeTerm ? (
+        <TeamsSyncPanel termId={activeTerm.id} termName={activeTerm.name ?? undefined} />
+      ) : null}
 
       <Card className="bg-card border-border">
         <CardHeader>

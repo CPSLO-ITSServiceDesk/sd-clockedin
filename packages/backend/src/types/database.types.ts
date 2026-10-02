@@ -160,6 +160,7 @@ export type Database = {
       student_assistant: {
         Row: {
           created_at: string
+          entra_user_id: string | null
           first_name: string | null
           id: number
           is_active: boolean | null
@@ -170,6 +171,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          entra_user_id?: string | null
           first_name?: string | null
           id?: number
           is_active?: boolean | null
@@ -180,6 +182,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          entra_user_id?: string | null
           first_name?: string | null
           id?: number
           is_active?: boolean | null
@@ -189,6 +192,116 @@ export type Database = {
           work_email?: string | null
         }
         Relationships: []
+      }
+      student_time_off: {
+        Row: {
+          academic_term_id: number
+          created_at: string
+          ends_at: string
+          id: number
+          starts_at: string
+          student_assistant_id: number
+          teams_time_off_id: string
+          time_off_reason: string | null
+        }
+        Insert: {
+          academic_term_id: number
+          created_at?: string
+          ends_at: string
+          id?: number
+          starts_at: string
+          student_assistant_id: number
+          teams_time_off_id: string
+          time_off_reason?: string | null
+        }
+        Update: {
+          academic_term_id?: number
+          created_at?: string
+          ends_at?: string
+          id?: number
+          starts_at?: string
+          student_assistant_id?: number
+          teams_time_off_id?: string
+          time_off_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_time_off_academic_term_id_fkey"
+            columns: ["academic_term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_term"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_time_off_student_assistant_id_fkey"
+            columns: ["student_assistant_id"]
+            isOneToOne: false
+            referencedRelation: "student_assistant"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams_sync_status: {
+        Row: {
+          academic_term_id: number
+          created_at: string
+          error_message: string | null
+          finished_at: string
+          remote_blocks: number
+          scheduling_group: string | null
+          schedules_updated: number
+          started_at: string | null
+          status: string
+          students_created: number
+          students_deactivated: number
+          students_matched: number
+          team_id: string | null
+          time_off_upserted: number
+          total_blocks: number
+        }
+        Insert: {
+          academic_term_id: number
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string
+          remote_blocks?: number
+          scheduling_group?: string | null
+          schedules_updated?: number
+          started_at?: string | null
+          status: string
+          students_created?: number
+          students_deactivated?: number
+          students_matched?: number
+          team_id?: string | null
+          time_off_upserted?: number
+          total_blocks?: number
+        }
+        Update: {
+          academic_term_id?: number
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string
+          remote_blocks?: number
+          scheduling_group?: string | null
+          schedules_updated?: number
+          started_at?: string | null
+          status?: string
+          students_created?: number
+          students_deactivated?: number
+          students_matched?: number
+          team_id?: string | null
+          time_off_upserted?: number
+          total_blocks?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_sync_status_academic_term_id_fkey"
+            columns: ["academic_term_id"]
+            isOneToOne: true
+            referencedRelation: "academic_term"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       time_entry: {
         Row: {

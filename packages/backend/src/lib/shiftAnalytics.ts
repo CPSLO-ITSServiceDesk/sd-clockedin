@@ -2,6 +2,12 @@ import { getEffectiveScheduleDateRange } from './scheduleDateRange';
 import type { Database } from '../types/database.types';
 import { normalizeTimeKey } from './time';
 import {
+  isTimeOffCoveringOrgLocalDate,
+  isVacationDay,
+  parseOffDays,
+  type TimeOffInterval,
+} from './timeOffCoverage';
+import {
   computeHistoricalShiftStatus,
   getClockInDate,
   toLocalDateString,
@@ -21,11 +27,6 @@ const WEEKDAY_DAYS: ScheduleBlockDay[] = [
   'thursday',
   'friday',
 ];
-
-type TermOffDays = {
-  vacations?: { date: string }[];
-  special_schedules?: { date: string; swap_to_day: string }[];
-};
 
 export interface TimelinessSummary {
   totalEvaluated: number;
@@ -105,17 +106,6 @@ export interface StudentAnalyticsResult {
   weekdayPatterns: WeekdayPattern[];
   dailyTrend: DailyTrendPoint[];
   recentIssues: StudentLateShift[];
-}
-
-function parseOffDays(term: Term): TermOffDays | null {
-  if (!term.off_days || typeof term.off_days !== 'object' || Array.isArray(term.off_days)) {
-    return null;
-  }
-  return term.off_days as TermOffDays;
-}
-
-function isVacationDay(date: string, offDays: TermOffDays | null): boolean {
-  return offDays?.vacations?.some((vacation) => vacation.date === date) ?? false;
 }
 
 function getWeekdayForDate(dateStr: string): ScheduleBlockDay | null {
@@ -436,6 +426,7 @@ export function expandEvaluatedShifts(
   options: {
     studentAssistantId?: number;
     now?: Date;
+    studentTimeOff?: TimeOffInterval[];
   } = {},
 ): EvaluatedShift[] {
   if (!term.start_date || !term.end_date) {
@@ -445,6 +436,7 @@ export function expandEvaluatedShifts(
   const now = options.now ?? new Date();
   const today = toLocalDateString(now);
   const offDays = parseOffDays(term);
+  const studentTimeOff = options.studentTimeOff ?? [];
   const termSchedules = schedules.filter(
     (schedule) => schedule.academic_term_id === term.id,
   );
@@ -484,6 +476,11 @@ export function expandEvaluatedShifts(
     for (const date of iterateDates(range.startDate, range.endDate)) {
       if (date > today) continue;
       if (isVacationDay(date, offDays)) continue;
+      if (
+        isTimeOffCoveringOrgLocalDate(studentTimeOff, schedule.student_assistant_id, date)
+      ) {
+        continue;
+      }
 
       const weekday = getWeekdayForDate(date);
       if (weekday !== block.days) continue;
@@ -541,8 +538,12 @@ export function buildTermAnalytics(
   scheduleBlocks: ScheduleBlock[],
   timeEntries: TimeEntry[],
   now: Date = new Date(),
+  studentTimeOff: TimeOffInterval[] = [],
 ): TermAnalyticsResult {
-  const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, { now });
+  const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, {
+    now,
+    studentTimeOff,
+  });
 
   return {
     summary: summarizeShifts(shifts),
@@ -560,10 +561,12 @@ export function buildStudentAnalytics(
   scheduleBlocks: ScheduleBlock[],
   timeEntries: TimeEntry[],
   now: Date = new Date(),
+  studentTimeOff: TimeOffInterval[] = [],
 ): StudentAnalyticsResult {
   const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, {
     studentAssistantId,
     now,
+    studentTimeOff,
   });
 
   const recentIssues = shifts

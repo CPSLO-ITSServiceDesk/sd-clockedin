@@ -36,4 +36,9 @@ export const queryKeys = {
   admins: {
     all: ["admins"] as const,
   },
+  teamsSync: {
+    all: ["teams-sync"] as const,
+    status: (termId?: number | null) =>
+      ["teams-sync", "status", termId ?? "active"] as const,
+  },
 } as const

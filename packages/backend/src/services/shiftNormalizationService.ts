@@ -11,6 +11,7 @@ import { HttpError } from '../middleware/errorHandler';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
 import { studentAssistantService } from './studentAssistantService';
+import { studentTimeOffService } from './studentTimeOffService';
 import { termService } from './termService';
 import { timeEntryService } from './timeEntryService';
 
@@ -20,14 +21,15 @@ async function loadContext(termId: number): Promise<NormalizationContext> {
     throw new HttpError(404, 'Term not found');
   }
 
-  const [schedules, scheduleBlocks, timeEntries, students] = await Promise.all([
+  const [schedules, scheduleBlocks, timeEntries, students, studentTimeOff] = await Promise.all([
     schedulesService.getAll(),
     scheduleBlocksService.getAll(),
     timeEntryService.getAll(),
     studentAssistantService.getAll(),
+    studentTimeOffService.listByTerm(termId),
   ]);
 
-  return { term, schedules, scheduleBlocks, timeEntries, students };
+  return { term, schedules, scheduleBlocks, timeEntries, students, studentTimeOff };
 }
 
 export const shiftNormalizationService = {
@@ -39,6 +41,8 @@ export const shiftNormalizationService = {
       context.scheduleBlocks,
       context.timeEntries,
       context.students,
+      new Date(),
+      context.studentTimeOff ?? [],
     );
   },
 

@@ -8,7 +8,7 @@ import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { DatePickerField } from "@/components/admin/terms/date-picker-field"
-import { ScheduleImportPanel } from "@/components/admin/schedules/schedule-import-panel"
+import { TeamsSyncPanel } from "@/components/admin/terms/teams-sync-panel"
 import {
   ACADEMIC_CALENDAR_URL,
   ISO_DATE_PATTERN,
@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils"
 
 const STEPS = [
   { id: 1, label: "Add term" },
-  { id: 2, label: "Import schedules" },
+  { id: 2, label: "Teams sync" },
   { id: 3, label: "Done" },
 ] as const
 
@@ -117,7 +117,6 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [createdTerm, setCreatedTerm] = useState<CreatedTerm | null>(null)
-  const [importSummary, setImportSummary] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -142,7 +141,6 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
   const resetWizard = () => {
     setStep(1)
     setCreatedTerm(null)
-    setImportSummary(null)
     setSubmitError(null)
     setCreating(false)
     form.reset()
@@ -169,6 +167,7 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
       })
 
       await queryClient.invalidateQueries({ queryKey: queryKeys.terms.all })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.teamsSync.all })
 
       setCreatedTerm({
         id: term.id,
@@ -189,8 +188,8 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
           <div className="space-y-1">
             <DialogTitle>Set up a working term</DialogTitle>
             <DialogDescription>
-              Create a term, import your team&apos;s schedules, and start tracking
-              shifts.
+              Create an active term. ClockedIn pulls roster, shifts, and time off
+              from Teams Shifts.
             </DialogDescription>
           </div>
           <StepIndicator currentStep={step} />
@@ -278,8 +277,8 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
                       <div className="space-y-1 leading-none">
                         <FormLabel>Allow remote shifts</FormLabel>
                         <FormDescription>
-                          Enable before importing schedules with Blue Theme Color
-                          rows from When I Work.
+                          When on, published Teams shifts with a blue theme are
+                          stored as remote blocks.
                         </FormDescription>
                       </div>
                     </FormItem>
@@ -294,15 +293,18 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
           ) : null}
 
           {step === 2 && createdTerm ? (
-            <ScheduleImportPanel
-              key={createdTerm.id}
-              termId={createdTerm.id}
-              termName={createdTerm.name}
-              onImportSuccess={(message) => {
-                setImportSummary(message)
-                setStep(3)
-              }}
-            />
+            <div className="space-y-3">
+              <p className="text-muted-foreground text-sm">
+                <span className="text-foreground font-medium">{createdTerm.name}</span>{" "}
+                is active. Sync runs automatically; use Sync now if Teams is
+                already published, or skip and come back later.
+              </p>
+              <TeamsSyncPanel
+                termId={createdTerm.id}
+                termName={createdTerm.name}
+                showSpreadsheetFallback
+              />
+            </div>
           ) : null}
 
           {step === 3 && createdTerm ? (
@@ -314,10 +316,8 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
                 <h3 className="text-lg font-semibold">You&apos;re all set</h3>
                 <p className="text-muted-foreground text-sm">
                   <span className="text-foreground font-medium">{createdTerm.name}</span>{" "}
-                  is ready to use.
-                  {importSummary
-                    ? ` ${importSummary}`
-                    : " You can import schedules anytime from the Schedules page."}
+                  is ready to use. Teams Shifts will keep the roster and weekly
+                  templates up to date.
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2 pt-2">
@@ -352,6 +352,9 @@ export function SetupTermWizard({ open, onOpenChange }: SetupTermWizardProps) {
           <DialogFooter className="shrink-0 border-t px-6 py-4 sm:justify-between">
             <Button type="button" variant="outline" onClick={() => setStep(3)}>
               Skip for now
+            </Button>
+            <Button type="button" onClick={() => setStep(3)}>
+              Continue
             </Button>
           </DialogFooter>
         ) : null}

@@ -36,6 +36,10 @@ const definition: OAS3Definition = {
       description: 'Matching orphaned time entries to schedule blocks',
     },
     { name: 'Import', description: 'Bulk schedule import from spreadsheets' },
+    {
+      name: 'Teams Sync',
+      description: 'Pull roster, weekly templates, and time off from Teams Shifts',
+    },
     { name: 'Admins', description: 'System administrators' },
   ],
   components: { schemas, responses },

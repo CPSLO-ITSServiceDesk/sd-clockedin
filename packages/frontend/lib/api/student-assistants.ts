@@ -6,6 +6,7 @@ export type StudentRoleDisplay = "Student Lead" | "Student Assistant"
 
 export interface StudentAssistant {
   created_at: string
+  entra_user_id: string | null
   first_name: string | null
   id: number
   is_active: boolean | null
@@ -17,6 +18,7 @@ export interface StudentAssistant {
 
 export type StudentAssistantInput = {
   created_at?: string
+  entra_user_id?: string | null
   first_name?: string | null
   id?: number
   is_active?: boolean | null

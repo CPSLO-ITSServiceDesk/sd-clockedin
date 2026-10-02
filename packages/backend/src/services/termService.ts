@@ -22,6 +22,19 @@ export const termService = {
     return data ?? [];
   },
 
+  async getActive(): Promise<Term | null> {
+    const { data, error } = await supabase
+      .from('academic_term')
+      .select('*')
+      .eq('is_active', true)
+      .order('start_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw new HttpError(500, error.message);
+    return data;
+  },
+
   // get a single term by id
   async getById(id: number): Promise<Term | null> {
     const { data, error } = await supabase
@@ -96,6 +109,13 @@ export const termService = {
         throw new HttpError(500, deleteSchedulesError.message);
       }
     }
+
+    const { error: timeOffError } = await supabase
+      .from('student_time_off')
+      .delete()
+      .eq('academic_term_id', id);
+
+    if (timeOffError) throw new HttpError(500, timeOffError.message);
 
     const { error } = await supabase
       .from('academic_term')

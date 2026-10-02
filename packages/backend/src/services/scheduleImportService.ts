@@ -84,7 +84,7 @@ async function upsertStudent(
   return { student: created, action: 'create' };
 }
 
-async function replaceScheduleBlocks(
+export async function replaceScheduleBlocks(
   studentId: number,
   termId: number,
   blocks: DraftScheduleBlock[],

@@ -2,15 +2,24 @@ import { withTodayShiftsCache } from '../lib/todayShiftsCache';
 import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
 import { formatStudentRole } from '../lib/formatStudentRole';
 import { getOrgDayOfWeek } from '../lib/orgTime';
+import {
+  isCampusVacationOnDate,
+  isTimeOffCoveringInstant,
+  type TimeOffInterval,
+} from '../lib/timeOffCoverage';
 import { computeRemoteShiftStatus, computeShiftStatus, getClockInDate, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
 import type { Database } from '../types/database.types';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
 import { studentAssistantService } from './studentAssistantService';
+import { studentTimeOffService } from './studentTimeOffService';
 import { termService } from './termService';
 import { timeEntryService } from './timeEntryService';
 
 type ScheduleBlockDay = Database['public']['Enums']['days'];
+type Schedule = Database['public']['Tables']['schedules']['Row'];
+type ScheduleBlock = Database['public']['Tables']['schedule_blocks']['Row'];
+type Term = Database['public']['Tables']['academic_term']['Row'];
 
 export interface TodayShift {
   scheduleBlockId: number | null;
@@ -30,6 +39,18 @@ export interface TodayShift {
 export interface TodayShiftsResult {
   shifts: TodayShift[];
   remoteOnlyStudentIds: number[];
+}
+
+export interface AssembleTodayShiftsInput {
+  now: Date;
+  todayDate: string;
+  includeRemote: boolean;
+  schedules: Schedule[];
+  scheduleBlocks: ScheduleBlock[];
+  studentAssistants: StudentAssistant[];
+  timeEntries: TimeEntry[];
+  terms: Term[];
+  studentTimeOff: TimeOffInterval[];
 }
 
 const WEEKDAY_DAYS: ScheduleBlockDay[] = [
@@ -60,6 +81,17 @@ function resolveBlockStudentId(
 
 type StudentAssistant = Database['public']['Tables']['student_assistant']['Row'];
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
+
+function shouldOmitScheduledBlock(
+  todayDate: string,
+  now: Date,
+  term: Term | undefined,
+  studentAssistantId: number,
+  studentTimeOff: TimeOffInterval[],
+): boolean {
+  if (isCampusVacationOnDate(term, todayDate)) return true;
+  return isTimeOffCoveringInstant(studentTimeOff, studentAssistantId, now);
+}
 
 function buildUnscheduledShifts(
   todaysTimeEntries: TimeEntry[],
@@ -112,21 +144,20 @@ export const todayShiftsService = {
   },
 };
 
-async function computeTodayShifts(
-  now: Date,
-  todayDate: string,
-  includeRemote: boolean,
-): Promise<TodayShiftsResult> {
-  const todayDay = getTodayDay(now);
+export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShiftsResult {
+  const {
+    now,
+    todayDate,
+    includeRemote,
+    schedules,
+    scheduleBlocks,
+    studentAssistants,
+    timeEntries,
+    terms,
+    studentTimeOff,
+  } = input;
 
-  const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] =
-    await Promise.all([
-      schedulesService.getAll(),
-      scheduleBlocksService.getAll(),
-      studentAssistantService.getAll(),
-      timeEntryService.getAll(),
-      termService.getAll(),
-    ]);
+  const todayDay = getTodayDay(now);
 
   const studentAssistantMap = new Map(
     studentAssistants.map((assistant) => [assistant.id, assistant]),
@@ -172,6 +203,10 @@ async function computeTodayShifts(
     const studentAssistant = studentAssistantMap.get(studentId);
     if (!studentAssistant || studentAssistant.is_active === false) continue;
 
+    if (shouldOmitScheduledBlock(todayDate, now, term, studentId, studentTimeOff)) {
+      continue;
+    }
+
     if (block.is_remote) {
       remoteStudentIds.add(studentId);
     } else {
@@ -210,6 +245,18 @@ async function computeTodayShifts(
     const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
     if (!studentAssistant || studentAssistant.is_active === false) return [];
 
+    if (
+      shouldOmitScheduledBlock(
+        todayDate,
+        now,
+        term,
+        schedule.student_assistant_id,
+        studentTimeOff,
+      )
+    ) {
+      return [];
+    }
+
     const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`;
     const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
     const startTime = block.start_time ?? '00:00';
@@ -241,4 +288,35 @@ async function computeTodayShifts(
     shifts: [...scheduledShifts, ...unscheduledShifts],
     remoteOnlyStudentIds,
   };
+}
+
+async function computeTodayShifts(
+  now: Date,
+  todayDate: string,
+  includeRemote: boolean,
+): Promise<TodayShiftsResult> {
+  const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] =
+    await Promise.all([
+      schedulesService.getAll(),
+      scheduleBlocksService.getAll(),
+      studentAssistantService.getAll(),
+      timeEntryService.getAll(),
+      termService.getAll(),
+    ]);
+
+  const studentTimeOff = (
+    await Promise.all(terms.map((term) => studentTimeOffService.listByTerm(term.id)))
+  ).flat();
+
+  return assembleTodayShifts({
+    now,
+    todayDate,
+    includeRemote,
+    schedules,
+    scheduleBlocks,
+    studentAssistants,
+    timeEntries,
+    terms,
+    studentTimeOff,
+  });
 }
