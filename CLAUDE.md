@@ -12,6 +12,7 @@ The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components
 For state management, the frontend uses React Query (@tanstack/react-query) and React Table (@tanstack/react-table).
 
 The application includes API documentation via Scalar/Swagger and enhanced CI/CD workflows for Vercel deployment.
+Additionally, the backend integrates with Microsoft Teams Shifts via Microsoft Graph API to synchronize student schedules, shift templates, and time off data.
 
 ## Development Commands
 
@@ -126,7 +127,14 @@ pnpm --filter frontend exec next cache clear
    - Automatic 404 handling for missing resources in services
    - Consistent error handling via HttpError class and centralized error handler
 
-2. **Database Interaction**:
+2. **Microsoft Teams Integration** (Optional):
+   - Synchronizes roster, schedule templates, and time off from Teams Shifts via Microsoft Graph API
+   - Uses dedicated services: teamsSyncService, teamsSyncStatusService, studentTimeOffService
+   - Features automatic sync scheduling and conflict resolution
+   - Preserves existing time entries when schedule blocks are modified via clearScheduleBlockReferences
+   - Includes analytics and normalization services adapted for Teams-sourced data
+
+3. **Database Interaction**:
    - Direct Supabase client usage throughout services
    - Consistent error handling converting PostgREST errors to HttpError
    - Use of `.single()` for single-record queries with PGRST116 error handling
@@ -192,6 +200,8 @@ The Supabase database contains these core tables:
 - `time_entry`: Clock-in/clock-out records
 - `admins`: System administrators
 - `import`: Batch import tracking
+- `student_entra_user_id`: Maps student assistants to their Microsoft Entra ID (for Teams integration)
+- `teams_sync_status`: Tracks synchronization status and metadata for Teams Shifts integration
 
 **Additional tables/features for enhanced functionality:**
 - Auto clock-out runs daily at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE` via a cron job in `src/jobs/autoClockOut.ts`
@@ -199,6 +209,7 @@ The Supabase database contains these core tables:
 - Analytics endpoints under `/api/analytics` serve term- and student-level punctuality metrics
 - Timesheet verification under `/api/timesheet` aggregates hours by day
 - Shift normalization under `/api/normalization` matches orphaned time entries to schedule blocks
+- Microsoft Teams Shifts integration synchronizes roster, schedule templates, and time off data
 
 ### Key Integration Points
 1. **Frontend → Backend Communication**:
@@ -212,6 +223,7 @@ The Supabase database contains these core tables:
    - When schedule blocks are deleted/updated, `clearScheduleBlockReferences` preserves time entries by nullifying references
    - Schedule date overrides allow temporary modifications to specific schedule instances
    - Auto clock-out functionality automatically clocks out students who forget to clock out
+   - Microsoft Teams Shifts integration synchronizes roster, schedule templates, and time off data
 
 3. **State Synchronization**:
    - React Query automatically refetches data after mutations
@@ -231,6 +243,12 @@ The Supabase database contains these core tables:
 - `AUTO_CLOCK_OUT_ENABLED`: Enable/disable auto clock-out feature (default: `true`)
 - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST credentials (optional; enables caching for `/api/shifts/today`)
 - `KV_REST_API_URL` / `KV_REST_API_TOKEN`: Vercel KV equivalents of the above (either pair works; caching is disabled if neither pair is fully set). `KV_URL` / `REDIS_URL` are not used (TCP, not REST).
+- **Microsoft Teams Integration** (optional):
+  - `MICROSOFT_TENANT_ID`: Microsoft Entra tenant ID
+  - `MICROSOFT_CLIENT_ID`: Microsoft Entra application client ID
+  - `MICROSOFT_CLIENT_SECRET`: Microsoft Entra application client secret
+  - `TEAMS_TEAM_ID`: Microsoft Teams team ID to synchronize with
+  - `TEAMS_SCHEDULING_GROUP`: Name of the scheduling group within the team (defaults to 'Service Desk')
 
 **Frontend** (`.env` in `packages/frontend/`):
 - `NEXT_PUBLIC_API_URL`: Base URL for API calls (must include `/api` suffix)
@@ -260,6 +278,25 @@ The Supabase database contains these core tables:
 2. Run `pnpm --filter backend gen:types` to update TypeScript definitions
 3. Update service methods to use new columns/tables
 4. Adjust frontend API types and UI components accordingly
+
+#### Microsoft Teams Integration Tasks
+1. **Adding/Modifying Teams Sync Fields**:
+   - Update the `teamsShiftCollapse.ts` adapter if Teams API response structure changes
+   - Modify `teamsShiftsAdapter.ts` for custom field mappings
+   - Update database migrations for new schema requirements
+   - Adjust DTOs in service layer if needed
+
+2. **Configuring Sync Behavior**:
+   - Modify `teamsSyncService.ts` to change what data is synchronized
+   - Adjust `teamsSyncStatusService.ts` for different tracking requirements
+   - Update cron schedule in `src/jobs/teamsSync.ts` if different frequency needed
+   - Modify conflict resolution logic in `teamsShiftCollapse.ts` if needed
+
+3. **Testing Teams Integration**:
+   - Use fixtures in `src/tests/fixtures/graph-teams-shifts.ts` as reference
+   - Mock Microsoft Graph API responses using libraries like nock or msw
+   - Test sync status updates and error handling scenarios
+   - Verify that time off data correctly maps to student assistant records
 
 #### Debugging
 - Backend: Runs with `tsx watch src/index.ts` for hot reload during development
