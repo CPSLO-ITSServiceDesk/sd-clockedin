@@ -9,5 +9,8 @@ describe('studentAssistantService - basic existence', () => {
     expect(typeof studentAssistantService.create).toBe('function');
     expect(typeof studentAssistantService.update).toBe('function');
     expect(typeof studentAssistantService.remove).toBe('function');
+    expect(typeof studentAssistantService.findByWorkEmail).toBe('function');
+    expect(typeof studentAssistantService.findByEntraUserId).toBe('function');
+    expect(typeof studentAssistantService.listWithEntraUserId).toBe('function');
   });
 });

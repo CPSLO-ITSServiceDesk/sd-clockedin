@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import { loadEnvironment, config } from './config/environment';
 import { docsPath, mountApiDocs } from './config/swagger';
 import { scheduleAutoClockOut } from './jobs/autoClockOut';
+import { scheduleTeamsSync } from './jobs/teamsSync';
 import { registerRoutes } from './routes';
 import { createCorsMiddleware } from './middleware/cors';
 import { errorHandler } from './middleware/errorHandler';
@@ -41,4 +42,5 @@ app.listen(config.port, () => {
     console.log('CORS also allows http://localhost:* and http://127.0.0.1:*');
   }
   scheduleAutoClockOut();
+  scheduleTeamsSync();
 });

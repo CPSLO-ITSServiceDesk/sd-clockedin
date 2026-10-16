@@ -2,6 +2,12 @@
 
 Time management for student assistants — clock in/out at the kiosk, manage schedules and terms in the admin dashboard, and review hours, punctuality, and timesheets.
 
+## Microsoft Teams Shifts Integration
+
+The backend can synchronize student schedules, shift templates, and time off data directly from Microsoft Teams Shifts via Microsoft Graph API. This eliminates the need for spreadsheet imports and provides real-time schedule synchronization.
+
+To enable Teams integration, configure the Microsoft Graph environment variables in your backend `.env` file (see Prerequisites below).
+
 ## What's in the repo
 
 This is a **pnpm monorepo** with two packages:
@@ -24,6 +30,7 @@ For package-level detail, see [packages/frontend/README.md](packages/frontend/RE
 - [Node.js](https://nodejs.org/) 24+
 - [pnpm](https://pnpm.io/) 10+ (see `packageManager` in root `package.json`)
 - A [Supabase](https://supabase.com/) project with the app schema
+- (Optional) A Microsoft Entra ID tenant and Teams team for Shifts synchronization
 
 ## Getting started
 
@@ -45,6 +52,14 @@ FRONTEND_URL=http://localhost:3000
 ORG_TIMEZONE=America/Los_Angeles
 AUTO_CLOCK_OUT_ENABLED=true
 AUTO_CLOCK_OUT_TIME=17:00
+
+# Microsoft Graph / Teams Shifts (optional). All four required to enable sync.
+MICROSOFT_TENANT_ID=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+TEAMS_TEAM_ID=
+# Optional; defaults to "Service Desk" if omitted.
+TEAMS_SCHEDULING_GROUP=
 ```
 
 The API uses the **service role** key server-side so it can read and write data regardless of RLS policies. Never expose this key to the browser.
@@ -136,6 +151,7 @@ Browser (Next.js)  ──REST──▶  Express API  ──▶  Supabase (Postgr
 - **Timesheet verification** aggregates hours by day for payroll review.
 - **Shift normalization** matches orphaned time entries to schedule blocks for a term.
 - **Analytics** provides term- and student-level punctuality metrics and hourly headcount charts.
+- **Microsoft Teams Shifts integration** synchronizes roster, schedule templates, and time off data (when configured).
 - Clock-in logic picks the nearest matching block for the day; shift status (early, on-time, late, absent) is computed on the backend using the organization timezone.
 
 API responses follow a consistent shape:
@@ -150,7 +166,7 @@ Errors return `{ "success": false, "error": "..." }` with an appropriate HTTP st
 
 **Frontend:** Next.js (App Router), React, Tailwind CSS, shadcn/ui, TanStack Query & Table, React Hook Form + Zod
 
-**Backend:** Express, TypeScript, Supabase JS client, express-validator, Vitest, node-cron (for scheduled jobs)
+**Backend:** Express, TypeScript, Supabase JS client, express-validator, Vitest, node-cron (for scheduled jobs), @microsoft/microsoft-graph-client, @azure/identity (for Microsoft Teams Shifts integration)
 
 **Database:** Supabase / PostgreSQL
 
@@ -192,6 +208,14 @@ For scheduled jobs (like auto clock-out):
 3. Register job in `backend/src/index.ts`
 4. Add environment variables and configuration
 5. Add tests for the job logic
+
+For Microsoft Teams Shifts integration:
+1. Review Microsoft Graph API documentation for required permissions
+2. Update environment variables in `.env.example` and documentation
+3. Modify sync logic in `teamsSyncService.ts` or related adapter files
+4. Update database schema if storing additional data
+5. Add/update tests in `src/tests/` for Teams-specific functionality
+6. Update frontend UI components if new configuration options are needed
 
 After schema or API changes, run backend tests and smoke-test the affected admin or kiosk screens.
 

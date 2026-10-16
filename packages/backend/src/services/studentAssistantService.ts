@@ -48,6 +48,30 @@ export const studentAssistantService = {
     return data;
   },
 
+  async findByEntraUserId(entraUserId: string): Promise<StudentAssistant | null> {
+    const normalized = entraUserId.trim();
+    if (!normalized) return null;
+
+    const { data, error } = await supabase
+      .from('student_assistant')
+      .select('*')
+      .eq('entra_user_id', normalized)
+      .maybeSingle();
+
+    if (error) throw new HttpError(500, error.message);
+    return data;
+  },
+
+  async listWithEntraUserId(): Promise<StudentAssistant[]> {
+    const { data, error } = await supabase
+      .from('student_assistant')
+      .select('*')
+      .not('entra_user_id', 'is', null);
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
   // create a new student assistant
   async create(payload: StudentAssistantInsert): Promise<StudentAssistant> {
     const { data, error } = await supabase
@@ -136,6 +160,13 @@ export const studentAssistantService = {
         throw new HttpError(500, schedulesDeleteError.message);
       }
     }
+
+    const { error: timeOffError } = await supabase
+      .from('student_time_off')
+      .delete()
+      .eq('student_assistant_id', id);
+
+    if (timeOffError) throw new HttpError(500, timeOffError.message);
 
     const { error } = await supabase
       .from('student_assistant')

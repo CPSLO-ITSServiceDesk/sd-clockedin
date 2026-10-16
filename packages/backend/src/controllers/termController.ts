@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { triggerTeamsSyncForTerm } from '../jobs/teamsSync';
 import { termService } from '../services/termService';
 
 export const termController = {
@@ -28,6 +29,7 @@ export const termController = {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const term = await termService.create(req.body);
+      triggerTeamsSyncForTerm(term);
       res.status(201).json({ success: true, data: term });
     } catch (err) {
       next(err);
@@ -42,6 +44,7 @@ export const termController = {
         res.status(404).json({ success: false, error: 'Term not found' });
         return;
       }
+      triggerTeamsSyncForTerm(term);
       res.json({ success: true, data: term });
     } catch (err) {
       next(err);

@@ -7,6 +7,7 @@ import {
 import { HttpError } from '../middleware/errorHandler';
 import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
+import { studentTimeOffService } from './studentTimeOffService';
 import { termService } from './termService';
 import { timeEntryService } from './timeEntryService';
 
@@ -17,13 +18,21 @@ export const analyticsService = {
       throw new HttpError(404, 'Term not found');
     }
 
-    const [schedules, scheduleBlocks, timeEntries] = await Promise.all([
+    const [schedules, scheduleBlocks, timeEntries, studentTimeOff] = await Promise.all([
       schedulesService.getAll(),
       scheduleBlocksService.getAll(),
       timeEntryService.getAll(),
+      studentTimeOffService.listByTerm(termId),
     ]);
 
-    return buildTermAnalytics(term, schedules, scheduleBlocks, timeEntries);
+    return buildTermAnalytics(
+      term,
+      schedules,
+      scheduleBlocks,
+      timeEntries,
+      new Date(),
+      studentTimeOff,
+    );
   },
 
   async getStudentAnalytics(
@@ -35,10 +44,11 @@ export const analyticsService = {
       throw new HttpError(404, 'Term not found');
     }
 
-    const [schedules, scheduleBlocks, timeEntries] = await Promise.all([
+    const [schedules, scheduleBlocks, timeEntries, studentTimeOff] = await Promise.all([
       schedulesService.getAll(),
       scheduleBlocksService.getAll(),
       timeEntryService.getAll(),
+      studentTimeOffService.listByTerm(termId),
     ]);
 
     return buildStudentAnalytics(
@@ -47,6 +57,8 @@ export const analyticsService = {
       schedules,
       scheduleBlocks,
       timeEntries,
+      new Date(),
+      studentTimeOff,
     );
   },
 };

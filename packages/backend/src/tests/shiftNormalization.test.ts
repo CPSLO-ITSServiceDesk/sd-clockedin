@@ -66,6 +66,7 @@ const students: StudentAssistant[] = [
     polycard_id: null,
     position: 'student_assistant',
     work_email: 'alex@example.com',
+    entra_user_id: null,
     created_at: '2026-06-01T00:00:00Z',
   },
 ];
@@ -281,6 +282,39 @@ describe('buildNormalizationPreview', () => {
 
     expect(preview.unmatched[0].reason).toBe('no_schedule');
   });
+
+  it('excludes dates covered by student time off', () => {
+    const timeEntries: TimeEntry[] = [
+      {
+        id: 50,
+        schedule_block_id: null,
+        student_assistant_id: 100,
+        clock_in: mondayMorningClockIn,
+        clock_out: null,
+        created_at: '2026-06-22T09:10:00Z',
+      },
+    ];
+    const studentTimeOff = [
+      {
+        student_assistant_id: 100,
+        starts_at: '2026-06-22T07:00:00.000Z',
+        ends_at: '2026-06-23T07:00:00.000Z',
+      },
+    ];
+
+    const preview = buildNormalizationPreview(
+      term,
+      schedules,
+      scheduleBlocks,
+      timeEntries,
+      students,
+      now,
+      studentTimeOff,
+    );
+
+    expect(preview.proposals).toHaveLength(0);
+    expect(preview.unmatched[0].reason).toBe('no_blocks_that_day');
+  });
 });
 
 describe('validateNormalizationMatch', () => {
@@ -356,6 +390,29 @@ describe('validateNormalizationMatch', () => {
     expect(result).toEqual({
       valid: false,
       reason: 'Block already claimed for this student and date',
+    });
+  });
+
+  it('rejects when the entry date is covered by student time off', () => {
+    const timeOffContext = {
+      ...context,
+      studentTimeOff: [
+        {
+          student_assistant_id: 100,
+          starts_at: '2026-06-22T07:00:00.000Z',
+          ends_at: '2026-06-23T07:00:00.000Z',
+        },
+      ],
+    };
+
+    const result = validateNormalizationMatch(
+      { timeEntryId: 1, scheduleBlockId: 20 },
+      timeOffContext,
+      now,
+    );
+    expect(result).toEqual({
+      valid: false,
+      reason: 'Entry date is covered by student time off',
     });
   });
 });

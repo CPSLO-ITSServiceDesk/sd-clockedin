@@ -1,0 +1,313 @@
+# AGENTS.md
+
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+
+## Overview
+
+This is a monorepo managed by pnpm containing two packages:
+- `frontend`: A Next.js 16.2.9 application with React 19
+- `backend`: A Node.js Express API with TypeScript, connected to Supabase
+
+The frontend uses Tailwind CSS for styling and incorporates shadcn/ui components via Radix UI primitives.
+For state management, the frontend uses React Query (@tanstack/react-query) and React Table (@tanstack/react-table).
+
+The application includes API documentation via Scalar/Swagger and enhanced CI/CD workflows for Vercel deployment.
+
+## Development Commands
+
+### Package Management
+```bash
+# Install all dependencies
+pnpm install
+
+# Update lockfile without installing
+pnpm store prune
+```
+
+### Development Server
+```bash
+# Start both frontend and backend
+pnpm dev
+
+# Start only frontend
+pnpm --filter frontend dev
+
+# Start only backend  
+pnpm --filter backend dev
+```
+
+### Building
+```bash
+# Build all packages
+pnpm build
+
+# Build only frontend
+pnpm --filter frontend build
+
+# Build only backend
+pnpm --filter backend build
+```
+
+### Production Server
+```bash
+# Start all packages in production
+pnpm start
+
+# Start only frontend
+pnpm --filter frontend start
+
+# Start only backend
+pnpm --filter backend start
+```
+
+### Code Quality
+```bash
+# Lint all packages
+pnpm lint
+
+# Lint only frontend
+pnpm --filter frontend lint
+
+# Lint only backend
+pnpm --filter backend lint
+
+# Fix auto-fixable lint errors
+pnpm lint --fix
+```
+
+### Testing (Backend Only)
+```bash
+# Run all backend tests
+pnpm --filter backend test
+
+# Run backend tests in watch mode
+pnpm --filter backend test:watch
+
+# Run a specific test file
+pnpm --filter backend exec vitest run src/tests/<filename>.test.ts
+```
+
+### Database & Type Generation
+```bash
+# Regenerate Supabase TypeScript types
+pnpm --filter backend gen:types
+
+# Verify Supabase connection
+pnpm --filter backend check
+
+# Run auto clock-out job once (manual)
+pnpm --filter backend auto-clock-out
+```
+
+### Frontend-Specific
+```bash
+# Clear Next.js cache
+pnpm --filter frontend exec next cache clear
+```
+
+## Architecture & Patterns
+
+### Backend Architecture
+- **Express.js** with TypeScript for the API server
+- **Supabase** as the primary database with PostgREST API
+- **Modular structure** following feature-based organization:
+  - `src/routes/` - API route definitions with Express.Router
+  - `src/controllers/` - Request handlers coordinating between services and responses
+  - `src/services/` - Business logic and direct Supabase interactions
+  - `src/lib/` - Shared utilities (Supabase client, org timezone, shift status, import parsing)
+  - `src/middleware/` - Custom Express middleware (error handling, validation, CORS)
+  - `src/scripts/` - Utility scripts (connection testing, type generation)
+
+#### Key Patterns:
+1. **CRUD Consistency**: All resources follow the same pattern (terms, studentAssistants, schedules, etc.)
+   - Routes use express-validator for input validation
+   - Controllers handle HTTP concerns and delegate to services
+   - Services contain Supabase queries and business logic
+   - Automatic 404 handling for missing resources in services
+   - Consistent error handling via HttpError class and centralized error handler
+
+2. **Database Interaction**:
+   - Direct Supabase client usage throughout services
+   - Consistent error handling converting PostgREST errors to HttpError
+   - Use of `.single()` for single-record queries with PGRST116 error handling
+   - Proper ordering and filtering in queries
+
+3. **API Response Format**:
+   ```json
+   {
+     "success": boolean,
+     "data": null | object | array,
+     "error": string | undefined
+   }
+   ```
+   - 204 No Content for successful deletions
+   - Appropriate HTTP status codes for different operations
+
+### Frontend Architecture
+- **Next.js 16** with App Router (`app/` directory)
+- **Supabase Auth** for admin login (`lib/supabase/`, `lib/auth/`, `proxy.ts` for session refresh)
+- **React Query** for server state management and caching
+- **React Table** for complex table UIs with sorting, filtering, pagination
+- **React Hook Form** with Zod for form validation
+- **Shadcn/ui** component library built on Radix UI primitives
+- **Tailwind CSS** for utility-first styling
+
+#### Key Patterns:
+1. **API Layer**:
+   - Centralized `apiFetch` wrapper in `lib/api/client.ts`
+   - Automatic JSON serialization/deserialization
+   - Consistent error handling transforming API errors to thrown exceptions
+   - Resource-specific modules (`lib/api/terms.ts`, etc.) wrapping API endpoints
+
+2. **React Query Integration**:
+   - Query keys centralized in `lib/query-keys.ts`
+   - Custom hooks encapsulating query logic (`use-*.ts` files)
+   - Automatic refetching intervals for real-time data (e.g., today shifts)
+   - Optimistic updates where appropriate
+
+3. **Data Transformation**:
+   - Mapper functions in `lib/schedules/` for converting between API and UI formats
+   - Consistent TypeScript interfaces matching Supabase types
+   - Proper handling of nullable fields and JSONB columns
+
+4. **Component Organization**:
+   - Reusable UI components in `components/` (shadcn/ui based)
+   - Feature-specific components in route-specific directories (`app/(feature)/`)
+   - Custom hooks in `hooks/` directory
+   - Utility functions in `lib/` directory
+
+### API Documentation
+The backend includes API documentation via Scalar and Swagger:
+- **Scalar API Explorer**: Available at `/api-docs` in development and production
+- **Swagger JSON**: Available at `/api-docs/json`
+- Documentation is automatically generated from JSDoc comments in route files
+- Configured to work with Vercel serverless deployments
+
+### Database Schema Overview
+The Supabase database contains these core tables:
+- `academic_term`: School terms/semesters
+- `student_assistant`: Student worker information
+- `schedules`: Work schedules for students
+- `schedule_blocks`: Individual shift blocks within schedules
+- `time_entry`: Clock-in/clock-out records
+- `admins`: System administrators
+- `import`: Batch import tracking
+
+**Additional tables/features for enhanced functionality:**
+- Auto clock-out runs daily at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE` via a cron job in `src/jobs/autoClockOut.ts`
+- Schedule date overrides are handled through the scheduleBlocks service with temporary date modifications
+- Analytics endpoints under `/api/analytics` serve term- and student-level punctuality metrics
+- Timesheet verification under `/api/timesheet` aggregates hours by day
+- Shift normalization under `/api/normalization` matches orphaned time entries to schedule blocks
+
+### Key Integration Points
+1. **Frontend → Backend Communication**:
+   - Frontend expects API at `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:3001/api`)
+   - All API calls go through the typed `apiFetch` wrapper
+   - React Query handles caching, deduplication, and background updates
+
+2. **Schedule Management Flow**:
+   - Schedules contain multiple Schedule Blocks (shift templates)
+   - Time entries reference either a Schedule Block or have custom times
+   - When schedule blocks are deleted/updated, `clearScheduleBlockReferences` preserves time entries by nullifying references
+   - Schedule date overrides allow temporary modifications to specific schedule instances
+   - Auto clock-out functionality automatically clocks out students who forget to clock out
+
+3. **State Synchronization**:
+   - React Query automatically refetches data after mutations
+   - Optimistic UI updates in some cases (e.g., schedule block creation)
+   - WebSocket or polling mechanisms for real-time updates (currently polling every 30s for today's shifts)
+   - Enhanced analytics with punctuality metrics and hourly headcount charts with location filtering
+
+### Environment Variables
+**Backend** (`.env` in `packages/backend/`):
+- `SUPABASE_URL`: Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key (for server-side operations)
+- `PORT`: Server port (default: 3001)
+- `NODE_ENV`: Environment (development/production)
+- `FRONTEND_URL`: CORS allowed origin(s), comma-separated (defaults to `http://localhost:3000`)
+- `ORG_TIMEZONE`: IANA timezone for shift logic and auto clock-out (default: `America/Los_Angeles`)
+- `AUTO_CLOCK_OUT_TIME`: Daily auto clock-out time in HH:mm format (default: `17:00`)
+- `AUTO_CLOCK_OUT_ENABLED`: Enable/disable auto clock-out feature (default: `true`)
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST credentials (optional; enables caching for `/api/shifts/today`)
+- `KV_REST_API_URL` / `KV_REST_API_TOKEN`: Vercel KV equivalents of the above (either pair works; caching is disabled if neither pair is fully set). `KV_URL` / `REDIS_URL` are not used (TCP, not REST).
+
+**Frontend** (`.env` in `packages/frontend/`):
+- `NEXT_PUBLIC_API_URL`: Base URL for API calls (must include `/api` suffix)
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL (admin auth)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon key (admin auth)
+
+### Common Development Tasks
+
+#### Adding a New API Endpoint
+1. Create service methods in `src/services/[resource]Service.ts`
+2. Create controller in `src/controllers/[resource]Controller.ts`
+3. Define routes in `src/routes/[resource].ts`
+4. Register route in `src/routes/index.ts`
+5. Update frontend API wrapper in `packages/frontend/lib/api/[resource].ts`
+6. Add query keys to `packages/frontend/lib/query-keys.ts` if needed
+7. Create React Query hooks in `packages/frontend/hooks/` as needed
+
+#### Adding a Scheduled Job (e.g., Auto Clock-Out)
+1. Create the job file in `src/jobs/[jobName].ts`
+2. Implement the job logic (e.g., querying for overdue time entries and auto clocking out)
+3. Register the job in `src/index.ts` using cron scheduling logic
+4. Add any necessary environment variables to `.env` and validate in `src/config/environment.ts`
+5. Add tests for the job logic in `src/tests/[jobName].test.ts`
+
+#### Database Changes
+1. Modify Supabase schema directly or through migrations
+2. Run `pnpm --filter backend gen:types` to update TypeScript definitions
+3. Update service methods to use new columns/tables
+4. Adjust frontend API types and UI components accordingly
+
+#### Debugging
+- Backend: Runs with `tsx watch src/index.ts` for hot reload during development
+- Frontend: Runs with `next dev` with Fast Refresh
+- Check Supabase dashboard for direct database inspection
+- Use browser dev tools to inspect React Query cache and network requests
+- Backend logs startup information including port and CORS configuration
+
+## File Conventions
+- **TypeScript**: Strict mode enabled with path aliases via `tsconfig.json`
+- **File Naming**: kebab-case for files, PascalCase for components/types
+- **Imports**: Relative paths with `@/` alias for frontend root, relative for backend
+- **State**: Prefer React Query over local state for server-synchronized data
+- **Styling**: Tailwind utility classes with occasional custom CSS in `globals.css`
+- **Error Handling**: 
+  - Backend: Services throw `HttpError`, middleware formats responses
+  - Frontend: API errors thrown as `ApiRequestError`, caught by React Query/error boundaries
+
+### CI/CD & Deployment
+The project uses GitHub Actions for CI/CD with Vercel deployments:
+
+#### GitHub Actions Workflow (`.github/workflows/ci.yml`)
+- Runs on pushes and PRs targeting `main` or `staging`
+- Uses Node.js 24 and pnpm version from root `package.json`
+- Installs dependencies from `pnpm-lock.yaml`
+- Runs backend tests in `src/tests`
+- Builds both frontend and backend for production
+- Handles Vercel's `vercel.deployment.ready` repository dispatch events
+
+#### Vercel Deployment Checks
+- After deployment, workflow checks both `/api/health` endpoints:
+  - Frontend: `https://sd-clockedin.vercel.app/api/health`
+  - Backend: `https://sd-clockedin-express-backend.vercel.app/api/health`
+- Can be triggered manually from GitHub Actions tab using Environments
+- Reports build status to Vercel as:
+  - `Vercel - sd-clockedin: build` (frontend)
+  - `Vercel - sd-clockedin-express-backend: build` (backend)
+
+#### Environment Variables for GitHub Environments
+Create `production` and `staging` environments in GitHub Settings → Environments:
+```text
+FRONTEND_URL=https://sd-clockedin.vercel.app
+BACKEND_URL=https://sd-clockedin-express-backend.vercel.app
+```
+(Note: Workflow automatically appends `/api/health` to BACKEND_URL)
+
+#### Scalar/Swagger Documentation Validation
+CI includes validation of API documentation:
+- Checks that Scalar/Swagger endpoints are accessible
+- Validates OpenAPI specification format
+- Ensures documentation is properly deployed with Vercel

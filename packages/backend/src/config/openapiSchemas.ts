@@ -239,6 +239,12 @@ export const schemas: NonNullable<Components['schemas']> = {
         nullable: true,
         example: 'arivera@example.edu',
       },
+      entra_user_id: {
+        type: 'string',
+        nullable: true,
+        description: 'Microsoft Entra object ID used to match Teams Shifts members.',
+        example: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      },
       position: ref('StudentRole'),
       polycard_id: {
         type: 'integer',
@@ -262,6 +268,11 @@ export const schemas: NonNullable<Components['schemas']> = {
         nullable: true,
         example: 'arivera@example.edu',
       },
+      entra_user_id: {
+        type: 'string',
+        nullable: true,
+        example: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      },
       position: ref('StudentRole'),
       polycard_id: { type: 'integer', example: 100200300 },
       is_active: { type: 'boolean', example: true },
@@ -278,6 +289,11 @@ export const schemas: NonNullable<Components['schemas']> = {
         format: 'email',
         nullable: true,
         example: 'arivera@example.edu',
+      },
+      entra_user_id: {
+        type: 'string',
+        nullable: true,
+        example: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
       },
       position: ref('StudentRole'),
       polycard_id: { type: 'integer', example: 100200300 },
@@ -467,6 +483,45 @@ export const schemas: NonNullable<Components['schemas']> = {
         items: { type: 'integer' },
         example: [42],
       },
+      timeOffShifts: {
+        ...list('TodayTimeOffShift'),
+        description:
+          'Scheduled blocks omitted from `shifts` because the student has ' +
+          'Teams time off covering now.',
+      },
+      upcomingTimeOff: {
+        ...list('UpcomingTimeOff'),
+        description: 'Time off that is active now or starts within the next 14 days.',
+      },
+    },
+  },
+
+  TodayTimeOffShift: {
+    type: 'object',
+    properties: {
+      scheduleBlockId: { type: 'integer', example: 100 },
+      studentAssistantId: { type: 'integer', example: 42 },
+      firstName: { type: 'string', example: 'Alex' },
+      lastName: { type: 'string', example: 'Rivera' },
+      role: { type: 'string', example: 'Student Assistant' },
+      startTime: clockTime('09:00'),
+      endTime: clockTime('13:00'),
+      isRemote: { type: 'boolean', example: false },
+      timeOffStartsAt: timestamp('2026-06-22T07:00:00.000Z'),
+      timeOffEndsAt: timestamp('2026-06-23T07:00:00.000Z'),
+      timeOffReason: { type: 'string', nullable: true, example: 'Vacation' },
+    },
+  },
+
+  UpcomingTimeOff: {
+    type: 'object',
+    properties: {
+      studentAssistantId: { type: 'integer', example: 42 },
+      firstName: { type: 'string', example: 'Alex' },
+      lastName: { type: 'string', example: 'Rivera' },
+      startsAt: timestamp('2026-06-22T07:00:00.000Z'),
+      endsAt: timestamp('2026-06-23T07:00:00.000Z'),
+      reason: { type: 'string', nullable: true, example: 'Vacation' },
     },
   },
 
@@ -728,6 +783,65 @@ export const schemas: NonNullable<Components['schemas']> = {
     additionalProperties: { type: 'number' },
     example: { '2026-06-22': 4, '2026-06-23': 3.5 },
   },
+
+  TeamsSyncNowInput: {
+    type: 'object',
+    properties: {
+      academic_term_id: {
+        type: 'integer',
+        description: 'Term to sync. Defaults to the active term.',
+        example: 1,
+      },
+    },
+  },
+  TeamsSyncStatus: {
+    type: 'object',
+    description:
+      'Latest Teams Shifts sync outcome for a term, plus whether Graph is configured.',
+    properties: {
+      academic_term_id: { type: 'integer', example: 1 },
+      graph_configured: {
+        type: 'boolean',
+        description:
+          'True when tenant, client, secret, and TEAMS_TEAM_ID are set.',
+        example: true,
+      },
+      status: {
+        type: 'string',
+        nullable: true,
+        enum: ['success', 'error', 'not_configured'],
+        description:
+          'null when Graph is configured but this term has never been synced.',
+        example: 'success',
+      },
+      started_at: {
+        ...timestamp('2026-06-22T15:00:00.000Z'),
+        nullable: true,
+      },
+      finished_at: {
+        ...timestamp('2026-06-22T15:00:04.000Z'),
+        nullable: true,
+      },
+      error_message: {
+        type: 'string',
+        nullable: true,
+        example: null,
+      },
+      students_created: { type: 'integer', example: 2 },
+      students_matched: { type: 'integer', example: 12 },
+      students_deactivated: { type: 'integer', example: 1 },
+      schedules_updated: { type: 'integer', example: 14 },
+      total_blocks: { type: 'integer', example: 48 },
+      remote_blocks: { type: 'integer', example: 4 },
+      time_off_upserted: { type: 'integer', example: 3 },
+      team_id: { type: 'string', nullable: true, example: 'team-guid' },
+      scheduling_group: {
+        type: 'string',
+        nullable: true,
+        example: 'Service Desk',
+      },
+    },
+  },
 };
 
 export const responses: NonNullable<Components['responses']> = {
@@ -792,4 +906,8 @@ export const responses: NonNullable<Components['responses']> = {
     ref('ScheduleImportResult'),
   ),
   HoursByDay: ok('Hours worked per day', ref('HoursByDay')),
+  TeamsSyncStatus: ok(
+    'Last Teams Shifts sync status for the term',
+    ref('TeamsSyncStatus'),
+  ),
 };

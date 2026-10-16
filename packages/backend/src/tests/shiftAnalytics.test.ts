@@ -189,6 +189,82 @@ describe('expandEvaluatedShifts', () => {
     expect(shifts.some((shift) => shift.date === '2026-06-16')).toBe(false);
     expect(shifts.some((shift) => shift.date === '2026-07-28')).toBe(false);
   });
+
+  it('does not count a student as absent on dates covered by their time off', () => {
+    const studentTimeOff = [
+      {
+        student_assistant_id: 100,
+        starts_at: '2026-06-22T07:00:00.000Z',
+        ends_at: '2026-06-23T07:00:00.000Z',
+      },
+    ];
+
+    const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, [], {
+      now,
+      studentTimeOff,
+    });
+
+    expect(shifts).toEqual([]);
+  });
+
+  it('still counts other students as absent on a peer\'s time-off date', () => {
+    const peerSchedules: Schedule[] = [
+      ...schedules,
+      {
+        id: 11,
+        academic_term_id: 1,
+        student_assistant_id: 200,
+        start_date: null,
+        end_date: null,
+        created_at: '2026-06-01T00:00:00Z',
+      },
+    ];
+    const peerBlocks: ScheduleBlock[] = [
+      ...scheduleBlocks,
+      {
+        id: 30,
+        schedule_id: 11,
+        days: 'monday',
+        start_time: '09:00',
+        end_time: '12:00',
+        is_remote: false,
+        created_at: '2026-06-01T00:00:00Z',
+      },
+    ];
+    const studentTimeOff = [
+      {
+        student_assistant_id: 100,
+        starts_at: '2026-06-22T07:00:00.000Z',
+        ends_at: '2026-06-23T07:00:00.000Z',
+      },
+    ];
+
+    const shifts = expandEvaluatedShifts(term, peerSchedules, peerBlocks, [], {
+      now,
+      studentTimeOff,
+    });
+
+    expect(shifts).toHaveLength(1);
+    expect(shifts[0].studentAssistantId).toBe(200);
+    expect(shifts[0].status).toBe('absent');
+  });
+
+  it('skips the whole org-local day when time off overlaps any part of it', () => {
+    const studentTimeOff = [
+      {
+        student_assistant_id: 100,
+        starts_at: '2026-06-22T20:00:00.000Z',
+        ends_at: '2026-06-23T00:00:00.000Z',
+      },
+    ];
+
+    const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, [], {
+      now,
+      studentTimeOff,
+    });
+
+    expect(shifts).toEqual([]);
+  });
 });
 
 describe('buildTermAnalytics', () => {

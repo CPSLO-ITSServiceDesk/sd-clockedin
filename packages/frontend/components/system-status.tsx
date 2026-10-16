@@ -10,6 +10,13 @@ import {
 
 const REFETCH_INTERVAL_MS = 30_000
 
+const compactLabels: Record<SystemHealthStatus, string> = {
+  checking: "Checking systems",
+  operational: "All systems operational",
+  degraded: "Some systems degraded",
+  offline: "Systems offline",
+}
+
 const statusConfig: Record<
   SystemHealthStatus,
   { label: string; dotClass: string; textClass: string; pulse: boolean }
@@ -40,7 +47,9 @@ const statusConfig: Record<
   },
 }
 
-export function SystemStatus() {
+export function SystemStatus({
+  variant = "full",
+}: Readonly<{ variant?: "full" | "compact" }>) {
   const [status, setStatus] = useState<SystemHealthStatus>("checking")
   const [frontendOk, setFrontendOk] = useState(false)
   const [backendOk, setBackendOk] = useState(false)
@@ -69,6 +78,15 @@ export function SystemStatus() {
   }, [])
 
   const config = statusConfig[status]
+
+  if (variant === "compact") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className={cn("size-1.5 rounded-full", config.dotClass)} />
+        {compactLabels[status]}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
