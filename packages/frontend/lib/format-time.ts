@@ -53,35 +53,6 @@ export function normalizeTimeKey(value: string): string {
   return `${hours}:${minutes}`
 }
 
-const LIVE_CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
-  hour: "numeric",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: true,
-}
-
-export interface LiveClockParts {
-  hours: string
-  minutes: string
-  period: string
-  seconds: string
-}
-
-/** Split a Date into 12-hour clock parts for the live clock display. */
-export function formatLiveClockParts(date: Date): LiveClockParts {
-  const parts = new Intl.DateTimeFormat("en-US", LIVE_CLOCK_FORMAT).formatToParts(date)
-
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? ""
-
-  return {
-    hours: get("hour"),
-    minutes: get("minute"),
-    seconds: get("second"),
-    period: get("dayPeriod"),
-  }
-}
-
 /** Format a time-of-day or ISO timestamp as "8:00 AM". */
 export function formatTime(value: string): string {
   const date = parseTimeValue(value)
@@ -126,4 +97,14 @@ export function formatActualShift(
   }
 
   return `${inLabel} - ${outLabel}`
+}
+
+/** "just now", "4 min ago", "3h ago", "2d ago" for an ISO timestamp. */
+export function formatTimeAgo(value: string, now: Date = new Date()): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(value)) / 60_000))
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }

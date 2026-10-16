@@ -483,6 +483,45 @@ export const schemas: NonNullable<Components['schemas']> = {
         items: { type: 'integer' },
         example: [42],
       },
+      timeOffShifts: {
+        ...list('TodayTimeOffShift'),
+        description:
+          'Scheduled blocks omitted from `shifts` because the student has ' +
+          'Teams time off covering now.',
+      },
+      upcomingTimeOff: {
+        ...list('UpcomingTimeOff'),
+        description: 'Time off that is active now or starts within the next 14 days.',
+      },
+    },
+  },
+
+  TodayTimeOffShift: {
+    type: 'object',
+    properties: {
+      scheduleBlockId: { type: 'integer', example: 100 },
+      studentAssistantId: { type: 'integer', example: 42 },
+      firstName: { type: 'string', example: 'Alex' },
+      lastName: { type: 'string', example: 'Rivera' },
+      role: { type: 'string', example: 'Student Assistant' },
+      startTime: clockTime('09:00'),
+      endTime: clockTime('13:00'),
+      isRemote: { type: 'boolean', example: false },
+      timeOffStartsAt: timestamp('2026-06-22T07:00:00.000Z'),
+      timeOffEndsAt: timestamp('2026-06-23T07:00:00.000Z'),
+      timeOffReason: { type: 'string', nullable: true, example: 'Vacation' },
+    },
+  },
+
+  UpcomingTimeOff: {
+    type: 'object',
+    properties: {
+      studentAssistantId: { type: 'integer', example: 42 },
+      firstName: { type: 'string', example: 'Alex' },
+      lastName: { type: 'string', example: 'Rivera' },
+      startsAt: timestamp('2026-06-22T07:00:00.000Z'),
+      endsAt: timestamp('2026-06-23T07:00:00.000Z'),
+      reason: { type: 'string', nullable: true, example: 'Vacation' },
     },
   },
 

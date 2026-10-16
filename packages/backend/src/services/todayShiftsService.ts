@@ -36,10 +36,38 @@ export interface TodayShift {
   isRemote: boolean;
 }
 
+/** A scheduled block omitted from `shifts` because the student's time off covers now. */
+export interface TodayTimeOffShift {
+  scheduleBlockId: number;
+  studentAssistantId: number;
+  firstName: string;
+  lastName: string;
+  role: string;
+  startTime: string;
+  endTime: string;
+  isRemote: boolean;
+  timeOffStartsAt: string;
+  timeOffEndsAt: string;
+  timeOffReason: string | null;
+}
+
+export interface UpcomingTimeOff {
+  studentAssistantId: number;
+  firstName: string;
+  lastName: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+}
+
 export interface TodayShiftsResult {
   shifts: TodayShift[];
   remoteOnlyStudentIds: number[];
+  timeOffShifts: TodayTimeOffShift[];
+  upcomingTimeOff: UpcomingTimeOff[];
 }
+
+type TodayTimeOffInterval = TimeOffInterval & { time_off_reason?: string | null };
 
 export interface AssembleTodayShiftsInput {
   now: Date;
@@ -50,8 +78,11 @@ export interface AssembleTodayShiftsInput {
   studentAssistants: StudentAssistant[];
   timeEntries: TimeEntry[];
   terms: Term[];
-  studentTimeOff: TimeOffInterval[];
+  studentTimeOff: TodayTimeOffInterval[];
 }
+
+/** How far ahead `upcomingTimeOff` looks from `now`. */
+export const UPCOMING_TIME_OFF_WINDOW_DAYS = 14;
 
 const WEEKDAY_DAYS: ScheduleBlockDay[] = [
   'monday',
@@ -81,6 +112,46 @@ function resolveBlockStudentId(
 
 type StudentAssistant = Database['public']['Tables']['student_assistant']['Row'];
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
+
+function findTimeOffCoveringInstant(
+  rows: TodayTimeOffInterval[],
+  studentAssistantId: number,
+  instant: Date,
+): TodayTimeOffInterval | null {
+  return (
+    rows.find((row) => isTimeOffCoveringInstant([row], studentAssistantId, instant)) ?? null
+  );
+}
+
+function buildUpcomingTimeOff(
+  rows: TodayTimeOffInterval[],
+  studentAssistantMap: Map<number, StudentAssistant>,
+  now: Date,
+): UpcomingTimeOff[] {
+  const nowMs = now.getTime();
+  const windowEndMs = nowMs + UPCOMING_TIME_OFF_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  return rows
+    .filter((row) => {
+      const start = Date.parse(row.starts_at);
+      const end = Date.parse(row.ends_at);
+      if (Number.isNaN(start) || Number.isNaN(end)) return false;
+      return end > nowMs && start < windowEndMs;
+    })
+    .flatMap((row) => {
+      const studentAssistant = studentAssistantMap.get(row.student_assistant_id);
+      if (!studentAssistant || studentAssistant.is_active === false) return [];
+      return [{
+        studentAssistantId: row.student_assistant_id,
+        firstName: studentAssistant.first_name ?? '',
+        lastName: studentAssistant.last_name ?? '',
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        reason: row.time_off_reason ?? null,
+      }];
+    })
+    .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+}
 
 function shouldOmitScheduledBlock(
   todayDate: string,
@@ -167,10 +238,14 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
     getClockInDate(entry.clock_in) === todayDate,
   );
 
+  const upcomingTimeOff = buildUpcomingTimeOff(studentTimeOff, studentAssistantMap, now);
+
   if (!todayDay) {
     return {
       shifts: buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap),
       remoteOnlyStudentIds: [],
+      timeOffShifts: [],
+      upcomingTimeOff,
     };
   }
 
@@ -224,6 +299,8 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
     timeEntryMap.set(key, entry);
   }
 
+  const timeOffShifts: TodayTimeOffShift[] = [];
+
   const scheduledShifts: TodayShift[] = todaysBlocks.flatMap((block) => {
     if (block.is_remote && !includeRemote) return [];
 
@@ -254,6 +331,24 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
         studentTimeOff,
       )
     ) {
+      const timeOff = isCampusVacationOnDate(term, todayDate)
+        ? null
+        : findTimeOffCoveringInstant(studentTimeOff, schedule.student_assistant_id, now);
+      if (timeOff) {
+        timeOffShifts.push({
+          scheduleBlockId: block.id,
+          studentAssistantId: schedule.student_assistant_id,
+          firstName: studentAssistant.first_name ?? '',
+          lastName: studentAssistant.last_name ?? '',
+          role: formatStudentRole(studentAssistant.position),
+          startTime: block.start_time ?? '00:00',
+          endTime: block.end_time ?? '00:00',
+          isRemote: block.is_remote ?? false,
+          timeOffStartsAt: timeOff.starts_at,
+          timeOffEndsAt: timeOff.ends_at,
+          timeOffReason: timeOff.time_off_reason ?? null,
+        });
+      }
       return [];
     }
 
@@ -287,6 +382,8 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
   return {
     shifts: [...scheduledShifts, ...unscheduledShifts],
     remoteOnlyStudentIds,
+    timeOffShifts: timeOffShifts.sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    upcomingTimeOff,
   };
 }
 

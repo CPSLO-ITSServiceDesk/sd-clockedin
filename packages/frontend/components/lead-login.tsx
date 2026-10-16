@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/dialog"
 import { logAuthError, logAuthInfo } from "@/lib/auth/logger"
 import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
 
-export function LeadLogin() {
+export function LeadLogin({ className }: Readonly<{ className?: string }>) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,11 +54,14 @@ export function LeadLogin() {
     <>
       <Button
         variant="outline"
-        className="border-border bg-card hover:bg-secondary hover:text-foreground text-foreground uppercase tracking-wider text-xs px-6"
+        className={cn(
+          "border-border bg-card hover:bg-secondary hover:text-foreground text-foreground uppercase tracking-wider text-xs px-6",
+          className,
+        )}
         onClick={() => setOpen(true)}
       >
         <User className="h-4 w-4 mr-2" />
-        Lead Login
+        Lead login
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

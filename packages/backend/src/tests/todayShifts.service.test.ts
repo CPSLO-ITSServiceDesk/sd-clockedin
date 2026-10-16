@@ -214,4 +214,73 @@ describe('assembleTodayShifts', () => {
 
     expect(result.shifts.map((shift) => shift.studentAssistantId).sort()).toEqual([100, 200]);
   });
+  it('reports blocks omitted for time off in timeOffShifts', () => {
+    const result = assemble({
+      studentTimeOff: [allDayMondayTimeOff],
+    });
+
+    expect(result.timeOffShifts).toEqual([
+      expect.objectContaining({
+        scheduleBlockId: 20,
+        studentAssistantId: 100,
+        firstName: 'Alex',
+        startTime: '09:00',
+        endTime: '12:00',
+        timeOffEndsAt: allDayMondayTimeOff.ends_at,
+        timeOffReason: 'Vacation',
+      }),
+    ]);
+  });
+
+  it('does not report campus vacation blocks as time off', () => {
+    const result = assemble({
+      now: wednesdayMorning,
+      todayDate: '2026-06-24',
+      scheduleBlocks: mondayBlocks.map((block) => ({ ...block, days: 'wednesday' })),
+      studentTimeOff: [
+        {
+          ...allDayMondayTimeOff,
+          starts_at: '2026-06-24T07:00:00.000Z',
+          ends_at: '2026-06-25T07:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(result.timeOffShifts).toEqual([]);
+  });
+
+  it('lists current and upcoming time off within the window, soonest first', () => {
+    const later: StudentTimeOff = {
+      ...allDayMondayTimeOff,
+      id: 2,
+      student_assistant_id: 200,
+      teams_time_off_id: 'TOFF_2',
+      starts_at: '2026-06-25T07:00:00.000Z',
+      ends_at: '2026-06-26T07:00:00.000Z',
+      time_off_reason: null,
+    };
+    const past: StudentTimeOff = {
+      ...allDayMondayTimeOff,
+      id: 3,
+      teams_time_off_id: 'TOFF_3',
+      starts_at: '2026-06-15T07:00:00.000Z',
+      ends_at: '2026-06-16T07:00:00.000Z',
+    };
+    const farFuture: StudentTimeOff = {
+      ...allDayMondayTimeOff,
+      id: 4,
+      teams_time_off_id: 'TOFF_4',
+      starts_at: '2026-08-01T07:00:00.000Z',
+      ends_at: '2026-08-02T07:00:00.000Z',
+    };
+
+    const result = assemble({
+      studentTimeOff: [later, past, farFuture, allDayMondayTimeOff],
+    });
+
+    expect(result.upcomingTimeOff).toEqual([
+      expect.objectContaining({ studentAssistantId: 100, reason: 'Vacation' }),
+      expect.objectContaining({ studentAssistantId: 200, firstName: 'Blair', reason: null }),
+    ]);
+  });
 });

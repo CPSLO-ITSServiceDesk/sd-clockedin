@@ -1,9 +1,36 @@
 import { apiFetch } from "./client"
 import type { TodayShift } from "@/lib/shifts/today-shifts"
 
+/** A scheduled block omitted from `shifts` because Teams time off covers now. */
+export interface TodayTimeOffShift {
+  scheduleBlockId: number
+  studentAssistantId: number
+  firstName: string
+  lastName: string
+  role: string
+  startTime: string
+  endTime: string
+  isRemote: boolean
+  timeOffStartsAt: string
+  timeOffEndsAt: string
+  timeOffReason: string | null
+}
+
+/** Time off active now or starting within the next 14 days. */
+export interface UpcomingTimeOff {
+  studentAssistantId: number
+  firstName: string
+  lastName: string
+  startsAt: string
+  endsAt: string
+  reason: string | null
+}
+
 export interface TodayShiftsResponse {
   shifts: TodayShift[]
   remoteOnlyStudentIds: number[]
+  timeOffShifts?: TodayTimeOffShift[]
+  upcomingTimeOff?: UpcomingTimeOff[]
 }
 
 export const todayShiftsApi = {
