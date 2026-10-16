@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils"
 
 /** The design canvas; the whole display scales to fit the screen. */
 const CANVAS_WIDTH = 1920
-const CANVAS_HEIGHT = 1080
+const CANVAS_HEIGHT = 540
 
 /**
  * Below this scale the display stops shrinking and reflows instead (columns
@@ -27,16 +27,16 @@ const CANVAS_HEIGHT = 1080
 const MIN_SCALE = 0.6
 
 /** Canvas sizes (in design px) where the layout steps down. */
-const STACK_BELOW_WIDTH = 1750
-const STACK_BELOW_HEIGHT = 850
+const STACK_BELOW_WIDTH = 1600
+const STACK_BELOW_HEIGHT = 480
 
 // The display runs unattended for days, so keep "synced N min ago" fresh.
 const SYNC_STATUS_REFRESH_MS = 5 * 60_000
 
-/** Names in the "Here" list before it splits into two columns, and the cap after that. */
-const HERE_SINGLE_COLUMN_MAX = 8
-const HERE_MAX = 16
-const ARRIVING_MAX = 5
+/** The "Here" list fills two columns of four rows, top to bottom. */
+const HERE_ROWS = 4
+const HERE_MAX = HERE_ROWS * 2
+const ARRIVING_MAX = 4
 const OUT_TODAY_MAX = 4
 
 // The ambient display is brand-colored in both themes.
@@ -98,31 +98,24 @@ function stripPeriod(label: string): string {
   return label.replace(/\s?[AP]M$/i, "")
 }
 
-function SectionLabel({ children, className }: Readonly<{ children: ReactNode; className?: string }>) {
+function SectionLabel({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <span className={cn("text-2xl font-semibold uppercase tracking-[0.12em]", COLORS.muted, className)}>
+    <span className={cn("text-[22px] font-semibold uppercase tracking-[0.12em]", COLORS.muted)}>
       {children}
     </span>
   )
 }
 
-function HereRow({ tile, compact }: Readonly<{ tile: WorkingTile; compact: boolean }>) {
+function HereRow({ tile }: Readonly<{ tile: WorkingTile }>) {
   let since = "remote"
   if (tile.clockInLabel) since = `${tile.late ? "late " : ""}${stripPeriod(tile.clockInLabel)}`
   else if (!tile.isRemote) since = "walk-in"
 
   return (
-    <div className="flex min-w-0 flex-col gap-2.5">
-      <div className="flex min-w-0 items-baseline justify-between gap-6">
-        <span
-          className={cn(
-            "truncate font-bold tracking-[-0.01em]",
-            compact ? "text-[30px]" : "text-[38px]",
-          )}
-        >
-          {tile.name}
-        </span>
-        <span className={cn("shrink-0 font-mono", compact ? "text-xl" : "text-2xl", COLORS.muted)}>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate text-[28px] font-bold leading-[1.15]">{tile.name}</span>
+        <span className={cn("whitespace-nowrap font-mono text-xl", COLORS.muted)}>
           <span className={cn(tile.late && COLORS.gold)}>{since}</span>
           {tile.endLabel ? (
             <>
@@ -132,7 +125,7 @@ function HereRow({ tile, compact }: Readonly<{ tile: WorkingTile; compact: boole
           ) : null}
         </span>
       </div>
-      <div className={cn("h-2 overflow-hidden rounded-full", COLORS.track)}>
+      <div className={cn("h-1.5 overflow-hidden rounded-full", COLORS.track)}>
         <div
           className={cn("h-full rounded-full", tile.late ? "bg-[#E8B64A]" : "bg-white")}
           style={{ width: `${tile.progress ?? 0}%` }}
@@ -145,7 +138,10 @@ function HereRow({ tile, compact }: Readonly<{ tile: WorkingTile; compact: boole
 export function WallDisplay() {
   const canvas = useCanvasSize()
   const canvasWidth = canvas?.width ?? CANVAS_WIDTH
-  const stacked = canvasWidth < STACK_BELOW_WIDTH || (canvas?.height ?? CANVAS_HEIGHT) < STACK_BELOW_HEIGHT
+  const canvasHeight = canvas?.height ?? CANVAS_HEIGHT
+  const stacked = canvasWidth < STACK_BELOW_WIDTH || canvasHeight < STACK_BELOW_HEIGHT
+  // On screens taller than the strip (e.g. 16:9), keep the strip's height and center it.
+  const letterboxed = !stacked && canvasHeight > CANVAS_HEIGHT
 
   const mountedNow = useNow(1000)
   const now = mountedNow ?? new Date(0)
@@ -167,7 +163,6 @@ export function WallDisplay() {
       .map((shift) => shift.studentAssistantId),
   ).size
 
-  const twoColumns = tiles.length > HERE_SINGLE_COLUMN_MAX
   const overflow = tiles.length > HERE_MAX ? tiles.length - (HERE_MAX - 1) : 0
   const hereTiles = overflow > 0 ? tiles.slice(0, HERE_MAX - 1) : tiles
 
@@ -177,15 +172,18 @@ export function WallDisplay() {
   } else if (error) {
     hereBody = <span className="text-3xl text-[#F2B856]">Couldn&apos;t load today&apos;s shifts</span>
   } else if (tiles.length === 0) {
-    hereBody = <span className={cn("text-[34px]", COLORS.muted)}>No one is on the desk right now.</span>
+    hereBody = <span className={cn("text-[28px]", COLORS.muted)}>No one is on the desk right now.</span>
   } else {
     hereBody = (
-      <div className={cn("grid gap-x-12", twoColumns ? "grid-cols-2 gap-y-4" : "grid-cols-1 gap-y-[18px]")}>
+      <div
+        className="grid grid-flow-col grid-cols-2 gap-x-9 gap-y-3"
+        style={{ gridTemplateRows: `repeat(${HERE_ROWS}, auto)` }}
+      >
         {hereTiles.map((tile) => (
-          <HereRow key={tile.studentAssistantId} tile={tile} compact={twoColumns} />
+          <HereRow key={tile.studentAssistantId} tile={tile} />
         ))}
         {overflow > 0 ? (
-          <span className={cn("self-center text-[30px] font-bold", COLORS.muted)}>+{overflow} more</span>
+          <span className={cn("self-center text-[28px] font-bold", COLORS.muted)}>+{overflow} more</span>
         ) : null}
       </div>
     )
@@ -201,7 +199,7 @@ export function WallDisplay() {
     >
       {/* zoom (not transform) so the scaled canvas keeps a real layout size and can scroll when stacked. */}
       <div
-        className="flex flex-col gap-10 px-16 py-12"
+        className={cn("flex flex-col gap-5 px-12 py-7", letterboxed && "justify-center")}
         style={{
           zoom: canvas?.scale ?? 1,
           width: canvasWidth,
@@ -210,10 +208,10 @@ export function WallDisplay() {
         }}
       >
         <header className="flex flex-wrap items-center justify-between gap-6">
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3.5">
             <svg
-              width={34}
-              height={34}
+              width={28}
+              height={28}
               viewBox="0 0 24 24"
               fill="none"
               stroke="#E8B64A"
@@ -224,38 +222,38 @@ export function WallDisplay() {
             >
               <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-[30px] font-bold">Service Desk</span>
-            {mountedNow ? <span className={cn("text-2xl", COLORS.muted)}>{clock.date}</span> : null}
+            <span className="text-[26px] font-bold">Service Desk</span>
+            {mountedNow ? <span className={cn("text-[22px]", COLORS.muted)}>{clock.date}</span> : null}
           </div>
           {mountedNow ? (
-            <span className="font-mono text-[56px] font-semibold tracking-[-0.03em] tabular-nums">
+            <span className="font-mono text-[44px] font-semibold tracking-[-0.03em] tabular-nums">
               {clock.hm}
-              <span className={cn("ml-2.5 text-[30px]", COLORS.gold)}>{clock.period}</span>
+              <span className={cn("ml-2 text-2xl", COLORS.gold)}>{clock.period}</span>
             </span>
           ) : null}
         </header>
 
         <div
           className={cn(
-            "grid gap-16",
+            "grid gap-12",
             stacked
-              ? "grid-cols-1 gap-y-12"
-              : "min-h-0 flex-1 grid-cols-[520px_minmax(0,1fr)_460px]",
+              ? "grid-cols-1 gap-y-10"
+              : "min-h-0 grid-cols-[300px_minmax(0,1fr)_340px_360px]",
+            !stacked && (letterboxed ? "h-[420px]" : "flex-1"),
           )}
         >
-          <div className={cn("flex flex-col gap-2", !stacked && "justify-end")}>
-            <SectionLabel className="text-[26px]">Working now</SectionLabel>
+          <div className="flex flex-col gap-1.5">
+            <SectionLabel>Working now</SectionLabel>
             <span
               className={cn(
                 // Size before leading: tailwind-merge drops a leading-* that comes before a text-* size.
-                stacked ? "text-[240px]" : "text-[360px]",
-                "font-extrabold leading-[0.85] tracking-[-0.06em] tabular-nums",
+                "text-[240px] font-extrabold leading-[0.85] tracking-[-0.06em] tabular-nums",
                 COLORS.gold,
               )}
             >
               {ready ? tiles.length : "–"}
             </span>
-            <span className="text-[30px]">
+            <span className="text-2xl">
               {ready
                 ? scheduledThisHour > 0
                   ? `of ${scheduledThisHour} scheduled this hour`
@@ -263,52 +261,46 @@ export function WallDisplay() {
                 : " "}
             </span>
             {syncStatus?.graph_configured && syncStatus.status === "success" && syncStatus.finished_at ? (
-              <span className={cn("mt-6 flex items-center gap-2.5 text-lg", COLORS.muted)}>
-                <span className="size-2.5 rounded-full bg-[#4ED19A]" />
+              <span className={cn("mt-auto flex items-center gap-2 pt-3 text-base", COLORS.muted)}>
+                <span className="size-2 rounded-full bg-[#4ED19A]" />
                 Teams Shifts · synced {formatTimeAgo(syncStatus.finished_at, now)}
               </span>
             ) : null}
           </div>
 
-          <div className={cn("flex min-w-0 flex-col gap-[18px] pt-3", !stacked && "min-h-0 overflow-hidden")}>
+          <div className={cn("flex min-w-0 flex-col gap-3.5", !stacked && "min-h-0 overflow-hidden")}>
             <SectionLabel>Here</SectionLabel>
             {hereBody}
           </div>
 
-          <div className={cn("flex flex-col gap-7 pt-3", !stacked && "min-h-0")}>
-            <div className="flex flex-col gap-[18px]">
-              <SectionLabel>Arriving</SectionLabel>
-              {ready && arriving.length === 0 ? (
-                <span className={cn("text-[28px]", COLORS.muted)}>No one in the next 2 hours.</span>
-              ) : (
-                arriving.map((entry) => (
-                  <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline gap-5">
-                    <span className={cn("w-[130px] shrink-0 font-mono text-[26px]", COLORS.gold)}>
-                      {entry.start}
-                    </span>
-                    <span className="truncate text-[32px] font-semibold">{entry.name}</span>
-                    {entry.isRemote ? (
-                      <span className={cn("shrink-0 text-xl", COLORS.muted)}>remote</span>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {stacked ? null : <div className="flex-1" />}
-
-            {outToday.length > 0 ? (
-              <section className="flex flex-col gap-3.5 rounded-3xl bg-[#E8EFF8] p-7">
-                <span className="text-2xl font-bold uppercase tracking-[0.12em] text-[#1F3A63]">Out today</span>
-                {outToday.map((entry) => (
-                  <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline justify-between gap-4">
-                    <span className="truncate text-[30px] font-semibold text-[#1F3A63]">{entry.name}</span>
-                    <span className="shrink-0 text-[22px] text-[#2B4C7E]">{entry.window}</span>
-                  </div>
-                ))}
-              </section>
-            ) : null}
+          <div className="flex min-w-0 flex-col gap-3.5">
+            <SectionLabel>Arriving</SectionLabel>
+            {ready && arriving.length === 0 ? (
+              <span className={cn("text-2xl", COLORS.muted)}>No one in the next 2 hours.</span>
+            ) : (
+              arriving.map((entry) => (
+                <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline gap-4">
+                  <span className={cn("w-[110px] shrink-0 font-mono text-[22px]", COLORS.gold)}>{entry.start}</span>
+                  <span className="truncate text-[28px] font-semibold">{entry.name}</span>
+                  {entry.isRemote ? <span className={cn("shrink-0 text-lg", COLORS.muted)}>remote</span> : null}
+                </div>
+              ))
+            )}
           </div>
+
+          {outToday.length > 0 ? (
+            <section className="flex flex-col gap-3.5 self-start rounded-[20px] bg-[#E8EFF8] px-6 py-5">
+              <span className="text-[22px] font-bold uppercase tracking-[0.12em] text-[#1F3A63]">Out today</span>
+              {outToday.map((entry) => (
+                <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline justify-between gap-4">
+                  <span className="truncate text-[28px] font-semibold text-[#1F3A63]">{entry.name}</span>
+                  <span className="shrink-0 text-xl text-[#2B4C7E]">{entry.window}</span>
+                </div>
+              ))}
+            </section>
+          ) : (
+            <div />
+          )}
         </div>
       </div>
     </div>

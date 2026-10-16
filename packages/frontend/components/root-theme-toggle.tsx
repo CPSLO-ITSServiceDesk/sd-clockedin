@@ -3,11 +3,11 @@
 import { usePathname } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
 
-/** Shared theme toggle for routes without their own header control. */
+/** Shared theme toggle for routes without their own header control. The wall display has fixed brand colors. */
 export function RootThemeToggle() {
   const pathname = usePathname()
 
-  if (pathname === '/' || pathname.startsWith('/admin')) {
+  if (pathname === '/' || pathname === '/display' || pathname.startsWith('/admin')) {
     return null
   }
 
