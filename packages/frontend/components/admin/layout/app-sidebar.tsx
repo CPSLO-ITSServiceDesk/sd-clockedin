@@ -15,6 +15,7 @@ import {
   Sparkles,
   Link2,
   Users,
+  ListChecks,
 } from "lucide-react"
 import {
   Sidebar,
@@ -35,6 +36,7 @@ import { useAdminSession } from "@/hooks/use-admin-session"
 
 const navMain = [
   { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { title: "Shifts", href: "/admin/shifts", icon: ListChecks },
 ]
 
 const navManage = [

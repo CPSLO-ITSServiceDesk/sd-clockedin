@@ -1,9 +1,9 @@
-import { TermsTable } from "@/components/admin/terms/terms-table"
+import { TermsOverview } from "@/components/admin/terms/terms-overview"
 
 export default function TermsPage() {
   return (
-    <div className="flex-1 space-y-6 p-6">
-      <TermsTable />
+    <div className="flex-1 p-6">
+      <TermsOverview />
     </div>
   )
 }

@@ -26,6 +26,7 @@ export interface NormalizationUnmatched {
   studentName: string
   date: string
   clockIn: string
+  clockOut: string | null
   reason: UnmatchedReason
 }
 

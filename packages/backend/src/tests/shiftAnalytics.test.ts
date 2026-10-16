@@ -291,6 +291,7 @@ describe('buildTermAnalytics', () => {
         punctual: 1,
         late: 0,
         absent: 0,
+        excused: 0,
       },
     ]);
     expect(result.lateByTimeSlot[0]).toMatchObject({
@@ -318,6 +319,67 @@ describe('buildTermAnalytics', () => {
     expect(result.summary.punctualityRate).toBe(1);
     expect(result.summary.onTimeRate).toBe(0);
     expect(result.dailyTrend[0].punctual).toBe(1);
+  });
+
+  it('reports time-off shifts as excused without counting them in rates', () => {
+    const studentTimeOff = [
+      {
+        student_assistant_id: 100,
+        starts_at: '2026-06-22T07:00:00.000Z',
+        ends_at: '2026-06-23T07:00:00.000Z',
+      },
+    ];
+
+    const result = buildTermAnalytics(term, schedules, scheduleBlocks, [], now, studentTimeOff);
+
+    expect(result.summary.excused).toBe(1);
+    expect(result.summary.totalEvaluated).toBe(0);
+    expect(result.summary.absent).toBe(0);
+    expect(result.dailyTrend).toEqual([
+      { date: '2026-06-22', punctual: 0, late: 0, absent: 0, excused: 1 },
+    ]);
+    expect(result.lateByTimeSlot).toEqual([]);
+    expect(result.lateHeatmap).toEqual([]);
+    expect(result.lateLeaderboard).toEqual([]);
+    expect(result.studentBreakdown).toEqual([
+      {
+        studentAssistantId: 100,
+        late: 0,
+        absent: 0,
+        excused: 1,
+        total: 0,
+        avgMinutesLate: 0,
+        strip: 'e',
+      },
+    ]);
+  });
+
+  it('builds the weekday x hour heatmap and per-student strips', () => {
+    const timeEntries: TimeEntry[] = [
+      {
+        id: 1,
+        schedule_block_id: 20,
+        student_assistant_id: 100,
+        clock_in: '2026-06-22T16:20:00.000Z',
+        clock_out: '2026-06-22T19:00:00.000Z',
+        created_at: '2026-06-22T09:20:00Z',
+      },
+    ];
+
+    const result = buildTermAnalytics(term, schedules, scheduleBlocks, timeEntries, now);
+
+    expect(result.lateHeatmap).toEqual([{ day: 'monday', hour: 9, late: 1, total: 1 }]);
+    expect(result.studentBreakdown).toEqual([
+      {
+        studentAssistantId: 100,
+        late: 1,
+        absent: 0,
+        excused: 0,
+        total: 1,
+        avgMinutesLate: 10,
+        strip: 'l',
+      },
+    ]);
   });
 });
 

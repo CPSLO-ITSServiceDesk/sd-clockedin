@@ -104,6 +104,19 @@ export const timeEntryService = {
     return data;
   },
 
+  /** Entries whose clock_in falls in [startIso, endIso). */
+  async getByClockInRange(startIso: string, endIso: string): Promise<TimeEntry[]> {
+    const { data, error } = await supabase
+      .from('time_entry')
+      .select('*')
+      .gte('clock_in', startIso)
+      .lt('clock_in', endIso)
+      .order('clock_in');
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
   async getAllOpen(): Promise<TimeEntry[]> {
     const { data, error } = await supabase
       .from('time_entry')

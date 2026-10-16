@@ -534,6 +534,11 @@ export const schemas: NonNullable<Components['schemas']> = {
       late: { type: 'integer', example: 12 },
       absent: { type: 'integer', example: 3 },
       unscheduled: { type: 'integer', example: 4 },
+      excused: {
+        type: 'integer',
+        description: 'Scheduled shifts covered by Teams time off; not counted in rates.',
+        example: 3,
+      },
       onTimeRate: {
         type: 'number',
         description: 'Share of evaluated shifts marked on-time, 0\u20131.',
@@ -563,6 +568,7 @@ export const schemas: NonNullable<Components['schemas']> = {
       punctual: { type: 'integer', example: 8 },
       late: { type: 'integer', example: 1 },
       absent: { type: 'integer', example: 0 },
+      excused: { type: 'integer', example: 1 },
     },
   },
   WeekdayPattern: {
@@ -602,6 +608,36 @@ export const schemas: NonNullable<Components['schemas']> = {
       lateByTimeSlot: list('LateByTimeSlot'),
       weekdayPatterns: list('WeekdayPattern'),
       lateLeaderboard: list('StudentLeaderboardEntry'),
+      lateHeatmap: list('LateHeatmapCell'),
+      studentBreakdown: list('StudentBreakdownEntry'),
+    },
+  },
+  LateHeatmapCell: {
+    type: 'object',
+    description: 'Late rate for scheduled shifts on one weekday starting in one hour.',
+    properties: {
+      day: ref('Weekday'),
+      hour: { type: 'integer', minimum: 0, maximum: 23, example: 8 },
+      late: { type: 'integer', example: 3 },
+      total: { type: 'integer', example: 20 },
+    },
+  },
+  StudentBreakdownEntry: {
+    type: 'object',
+    properties: {
+      studentAssistantId: { type: 'integer', example: 42 },
+      late: { type: 'integer', example: 4 },
+      absent: { type: 'integer', example: 1 },
+      excused: { type: 'integer', example: 2 },
+      total: { type: 'integer', example: 30 },
+      avgMinutesLate: { type: 'number', example: 7.5 },
+      strip: {
+        type: 'string',
+        description:
+          'One code per scheduled shift in date order: o = on time/early, ' +
+          'l = late, a = absent, e = excused.',
+        example: 'oolooeoa',
+      },
     },
   },
   StudentAnalytics: {
@@ -652,6 +688,7 @@ export const schemas: NonNullable<Components['schemas']> = {
       studentName: { type: 'string', example: 'Alex Rivera' },
       date: { type: 'string', format: 'date', example: '2026-06-23' },
       clockIn: timestamp('2026-06-23T18:40:00.000Z'),
+      clockOut: { ...timestamp('2026-06-23T21:00:00.000Z'), nullable: true },
       reason: ref('UnmatchedReason'),
     },
   },
@@ -784,6 +821,107 @@ export const schemas: NonNullable<Components['schemas']> = {
     example: { '2026-06-22': 4, '2026-06-23': 3.5 },
   },
 
+  TimesheetBlock: {
+    type: 'object',
+    properties: {
+      scheduleBlockId: { type: 'integer', example: 42 },
+      startTime: { type: 'string', example: '08:00' },
+      endTime: { type: 'string', example: '12:00' },
+      isRemote: { type: 'boolean' },
+      excused: { type: 'boolean', description: 'Covered by Teams time off' },
+      hours: { type: 'number', example: 4 },
+    },
+  },
+
+  TimesheetEntry: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer' },
+      scheduleBlockId: { type: 'integer', nullable: true },
+      clockIn: { type: 'string', format: 'date-time' },
+      clockOut: { type: 'string', format: 'date-time', nullable: true },
+      hours: { type: 'number', nullable: true, description: 'Null while the entry is open' },
+    },
+  },
+
+  TimesheetDay: {
+    type: 'object',
+    properties: {
+      date: { type: 'string', format: 'date' },
+      status: {
+        type: 'string',
+        enum: ['ok', 'off', 'absent', 'open', 'excused', 'remote', 'unscheduled', 'upcoming', 'in-progress'],
+        description: 'off: worked hours differ from the schedule by 0.25h or more. ' +
+          'open: a past entry was never clocked out.',
+      },
+      blocks: { type: 'array', items: ref('TimesheetBlock') },
+      entries: { type: 'array', items: ref('TimesheetEntry') },
+      workedHours: { type: 'number' },
+      scheduledHours: { type: 'number', description: 'In-person, not excused' },
+      excusedHours: { type: 'number' },
+      remoteHours: { type: 'number' },
+    },
+  },
+
+  TimesheetIssueCounts: {
+    type: 'object',
+    properties: {
+      absent: { type: 'integer' },
+      open: { type: 'integer' },
+      off: { type: 'integer' },
+      unscheduled: { type: 'integer' },
+    },
+  },
+
+  TimesheetVerification: {
+    type: 'object',
+    properties: {
+      verifiedAt: { type: 'string', format: 'date-time' },
+      verifiedBy: { type: 'string', nullable: true },
+    },
+  },
+
+  StudentMonthSummary: {
+    type: 'object',
+    properties: {
+      studentAssistantId: { type: 'integer' },
+      workedHours: { type: 'number' },
+      scheduledHours: { type: 'number' },
+      excusedHours: { type: 'number' },
+      remoteHours: { type: 'number' },
+      excusedDays: { type: 'integer' },
+      issues: ref('TimesheetIssueCounts'),
+      issueCount: { type: 'integer', description: 'Days needing review' },
+      verification: { ...ref('TimesheetVerification'), nullable: true },
+    },
+  },
+
+  MonthTimesheetSummary: {
+    type: 'object',
+    properties: {
+      month: { type: 'string', example: '2026-09' },
+      verificationAvailable: {
+        type: 'boolean',
+        description: 'False until the timesheet_verification migration is applied',
+      },
+      students: { type: 'array', items: ref('StudentMonthSummary') },
+    },
+  },
+
+  StudentMonthTimesheet: {
+    allOf: [
+      ref('StudentMonthSummary'),
+      {
+        type: 'object',
+        properties: {
+          month: { type: 'string', example: '2026-09' },
+          verificationAvailable: { type: 'boolean' },
+          days: { type: 'array', items: ref('TimesheetDay') },
+        },
+      },
+    ],
+  },
+
   TeamsSyncNowInput: {
     type: 'object',
     properties: {
@@ -906,6 +1044,9 @@ export const responses: NonNullable<Components['responses']> = {
     ref('ScheduleImportResult'),
   ),
   HoursByDay: ok('Hours worked per day', ref('HoursByDay')),
+  MonthTimesheetSummary: ok('Every student\'s hours for the month', ref('MonthTimesheetSummary')),
+  StudentMonthTimesheet: ok('One student\'s day-by-day timesheet', ref('StudentMonthTimesheet')),
+  TimesheetVerification: ok('Month verified', ref('TimesheetVerification')),
   TeamsSyncStatus: ok(
     'Last Teams Shifts sync status for the term',
     ref('TeamsSyncStatus'),

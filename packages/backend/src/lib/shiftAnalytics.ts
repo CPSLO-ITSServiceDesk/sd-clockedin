@@ -35,6 +35,8 @@ export interface TimelinessSummary {
   late: number;
   absent: number;
   unscheduled: number;
+  /** Scheduled shifts covered by approved Teams time off; not in totalEvaluated. */
+  excused: number;
   onTimeRate: number;
   punctualityRate: number;
   avgMinutesLate: number;
@@ -53,6 +55,7 @@ export interface DailyTrendPoint {
   punctual: number;
   late: number;
   absent: number;
+  excused: number;
 }
 
 export interface StudentLateShift {
@@ -64,7 +67,7 @@ export interface StudentLateShift {
   status: 'late' | 'absent' | 'unscheduled';
 }
 
-export type EvaluatedShiftStatus = EvaluatableShiftStatus | 'unscheduled';
+export type EvaluatedShiftStatus = EvaluatableShiftStatus | 'unscheduled' | 'excused';
 
 export interface EvaluatedShift {
   date: string;
@@ -84,6 +87,31 @@ export interface TermAnalyticsResult {
   lateByTimeSlot: LateByTimeSlot[];
   weekdayPatterns: WeekdayPattern[];
   lateLeaderboard: StudentLeaderboardEntry[];
+  lateHeatmap: LateHeatmapCell[];
+  studentBreakdown: StudentBreakdownEntry[];
+}
+
+/** Late rate for scheduled shifts on one weekday starting in one hour. */
+export interface LateHeatmapCell {
+  day: string;
+  /** Start hour, 0–23. */
+  hour: number;
+  late: number;
+  total: number;
+}
+
+/**
+ * Per-student counts for the term. `strip` holds one code per scheduled shift
+ * in date order: o = on time/early, l = late, a = absent, e = excused.
+ */
+export interface StudentBreakdownEntry {
+  studentAssistantId: number;
+  late: number;
+  absent: number;
+  excused: number;
+  total: number;
+  avgMinutesLate: number;
+  strip: string;
 }
 
 export interface WeekdayPattern {
@@ -165,6 +193,7 @@ function emptySummary(): TimelinessSummary {
     late: 0,
     absent: 0,
     unscheduled: 0,
+    excused: 0,
     onTimeRate: 0,
     punctualityRate: 0,
     avgMinutesLate: 0,
@@ -181,6 +210,7 @@ function summarizeShifts(shifts: EvaluatedShift[]): TimelinessSummary {
   const late = shifts.filter((shift) => shift.status === 'late').length;
   const absent = shifts.filter((shift) => shift.status === 'absent').length;
   const unscheduled = shifts.filter((shift) => shift.status === 'unscheduled').length;
+  const excused = shifts.filter((shift) => shift.status === 'excused').length;
   const totalEvaluated = onTime + early + late + absent;
 
   const lateShifts = shifts.filter((shift) => shift.status === 'late');
@@ -196,17 +226,23 @@ function summarizeShifts(shifts: EvaluatedShift[]): TimelinessSummary {
     late,
     absent,
     unscheduled,
+    excused,
     onTimeRate: totalEvaluated > 0 ? onTime / totalEvaluated : 0,
     punctualityRate: totalEvaluated > 0 ? (onTime + early) / totalEvaluated : 0,
     avgMinutesLate: Math.round(avgMinutesLate * 10) / 10,
   };
 }
 
+/** Unscheduled punches and excused shifts don't count toward punctuality rates. */
+function isRated(shift: EvaluatedShift): boolean {
+  return shift.status !== 'unscheduled' && shift.status !== 'excused';
+}
+
 function aggregateLateByTimeSlot(shifts: EvaluatedShift[]): LateByTimeSlot[] {
   const slotMap = new Map<string, { late: number; total: number }>();
 
   for (const shift of shifts) {
-    if (shift.status === 'unscheduled') continue;
+    if (!isRated(shift)) continue;
 
     const startTime = normalizeTimeKey(shift.startTime);
     const current = slotMap.get(startTime) ?? { late: 0, total: 0 };
@@ -235,7 +271,7 @@ function aggregateWeekdayPatterns(shifts: EvaluatedShift[]): WeekdayPattern[] {
   );
 
   for (const shift of shifts) {
-    if (shift.status === 'unscheduled') continue;
+    if (!isRated(shift)) continue;
 
     const current = map.get(shift.day);
     if (!current) continue;
@@ -254,7 +290,7 @@ function aggregateLateLeaderboard(shifts: EvaluatedShift[]): StudentLeaderboardE
   const map = new Map<number, { late: number; absent: number; total: number }>();
 
   for (const shift of shifts) {
-    if (shift.status === 'unscheduled') continue;
+    if (!isRated(shift)) continue;
 
     const current = map.get(shift.studentAssistantId) ?? { late: 0, absent: 0, total: 0 };
     current.total += 1;
@@ -281,6 +317,7 @@ function aggregateDailyTrend(shifts: EvaluatedShift[]): DailyTrendPoint[] {
       punctual: 0,
       late: 0,
       absent: 0,
+      excused: 0,
     };
 
     if (shift.status === 'on-time' || shift.status === 'early') {
@@ -289,12 +326,78 @@ function aggregateDailyTrend(shifts: EvaluatedShift[]): DailyTrendPoint[] {
       current.late += 1;
     } else if (shift.status === 'absent') {
       current.absent += 1;
+    } else if (shift.status === 'excused') {
+      current.excused += 1;
     }
 
     dayMap.set(shift.date, current);
   }
 
   return [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function aggregateLateHeatmap(shifts: EvaluatedShift[]): LateHeatmapCell[] {
+  const map = new Map<string, LateHeatmapCell>();
+
+  for (const shift of shifts) {
+    if (!isRated(shift)) continue;
+    const hour = Number.parseInt(shift.startTime.split(':')[0] ?? '', 10);
+    if (Number.isNaN(hour)) continue;
+
+    const key = `${shift.day}-${hour}`;
+    const current = map.get(key) ?? { day: shift.day, hour, late: 0, total: 0 };
+    current.total += 1;
+    if (shift.status === 'late') current.late += 1;
+    map.set(key, current);
+  }
+
+  return [...map.values()].sort(
+    (a, b) =>
+      WEEKDAY_ORDER.indexOf(a.day as (typeof WEEKDAY_ORDER)[number]) -
+        WEEKDAY_ORDER.indexOf(b.day as (typeof WEEKDAY_ORDER)[number]) || a.hour - b.hour,
+  );
+}
+
+const STRIP_CODES: Partial<Record<EvaluatedShiftStatus, string>> = {
+  'on-time': 'o',
+  early: 'o',
+  late: 'l',
+  absent: 'a',
+  excused: 'e',
+};
+
+/** Every student with a scheduled shift, most late first. */
+function aggregateStudentBreakdown(shifts: EvaluatedShift[]): StudentBreakdownEntry[] {
+  const byStudent = new Map<number, EvaluatedShift[]>();
+  for (const shift of shifts) {
+    if (shift.status === 'unscheduled') continue;
+    const list = byStudent.get(shift.studentAssistantId) ?? [];
+    list.push(shift);
+    byStudent.set(shift.studentAssistantId, list);
+  }
+
+  return [...byStudent.entries()]
+    .map(([studentAssistantId, studentShifts]) => {
+      const ordered = [...studentShifts].sort(
+        (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+      );
+      const lateShifts = ordered.filter((shift) => shift.status === 'late');
+      const avgMinutesLate =
+        lateShifts.length > 0
+          ? lateShifts.reduce((sum, shift) => sum + shift.minutesLate, 0) / lateShifts.length
+          : 0;
+
+      return {
+        studentAssistantId,
+        late: lateShifts.length,
+        absent: ordered.filter((shift) => shift.status === 'absent').length,
+        excused: ordered.filter((shift) => shift.status === 'excused').length,
+        total: ordered.filter(isRated).length,
+        avgMinutesLate: Math.round(avgMinutesLate * 10) / 10,
+        strip: ordered.map((shift) => STRIP_CODES[shift.status] ?? '').join(''),
+      };
+    })
+    .sort((a, b) => b.late - a.late || b.absent - a.absent || a.studentAssistantId - b.studentAssistantId);
 }
 
 function findUnmatchedEntries(
@@ -427,6 +530,8 @@ export function expandEvaluatedShifts(
     studentAssistantId?: number;
     now?: Date;
     studentTimeOff?: TimeOffInterval[];
+    /** Emit time-off-covered shifts with status `excused` instead of dropping them. */
+    includeExcused?: boolean;
   } = {},
 ): EvaluatedShift[] {
   if (!term.start_date || !term.end_date) {
@@ -476,14 +581,28 @@ export function expandEvaluatedShifts(
     for (const date of iterateDates(range.startDate, range.endDate)) {
       if (date > today) continue;
       if (isVacationDay(date, offDays)) continue;
-      if (
-        isTimeOffCoveringOrgLocalDate(studentTimeOff, schedule.student_assistant_id, date)
-      ) {
-        continue;
-      }
 
       const weekday = getWeekdayForDate(date);
       if (weekday !== block.days) continue;
+
+      if (
+        isTimeOffCoveringOrgLocalDate(studentTimeOff, schedule.student_assistant_id, date)
+      ) {
+        if (options.includeExcused) {
+          evaluated.push({
+            date,
+            studentAssistantId: schedule.student_assistant_id,
+            scheduleBlockId: block.id,
+            day: block.days,
+            startTime: normalizeTimeKey(block.start_time),
+            endTime: normalizeTimeKey(block.end_time),
+            clockIn: null,
+            status: 'excused',
+            minutesLate: 0,
+          });
+        }
+        continue;
+      }
 
       const entryKey = `${block.id}-${schedule.student_assistant_id}-${date}`;
       const entry = timeEntryMap.get(entryKey) ?? null;
@@ -543,6 +662,7 @@ export function buildTermAnalytics(
   const shifts = expandEvaluatedShifts(term, schedules, scheduleBlocks, timeEntries, {
     now,
     studentTimeOff,
+    includeExcused: true,
   });
 
   return {
@@ -551,6 +671,8 @@ export function buildTermAnalytics(
     lateByTimeSlot: aggregateLateByTimeSlot(shifts),
     weekdayPatterns: aggregateWeekdayPatterns(shifts),
     lateLeaderboard: aggregateLateLeaderboard(shifts),
+    lateHeatmap: aggregateLateHeatmap(shifts),
+    studentBreakdown: aggregateStudentBreakdown(shifts),
   };
 }
 
@@ -567,6 +689,7 @@ export function buildStudentAnalytics(
     studentAssistantId,
     now,
     studentTimeOff,
+    includeExcused: true,
   });
 
   const recentIssues = shifts

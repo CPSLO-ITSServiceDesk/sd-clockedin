@@ -20,6 +20,18 @@ import { cn } from "@/lib/utils"
 const CANVAS_WIDTH = 1920
 const CANVAS_HEIGHT = 1080
 
+/**
+ * Below this scale the display stops shrinking and reflows instead (fewer
+ * tile columns, sidebar under the tiles), so small windows stay readable.
+ */
+const MIN_SCALE = 0.6
+
+/** Canvas sizes (in design px) where the layout steps down. */
+const STACK_BELOW_WIDTH = 1500
+const STACK_BELOW_HEIGHT = 850
+const NARROW_BELOW_WIDTH = 1000
+const COMPACT_BELOW_WIDTH = 1700
+
 // The display runs unattended for days, so keep "synced N min ago" fresh.
 const SYNC_STATUS_REFRESH_MS = 5 * 60_000
 
@@ -31,12 +43,24 @@ function subscribeResize(onChange: () => void): () => void {
   return () => window.removeEventListener("resize", onChange)
 }
 
-function getCanvasScale(): number {
-  return Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT)
+interface CanvasSize {
+  scale: number
+  width: number
+  height: number
 }
 
-function useCanvasScale(): number | null {
-  return useSyncExternalStore(subscribeResize, getCanvasScale, () => null)
+// useSyncExternalStore needs a stable snapshot, so the size is cached as a string key.
+function getCanvasKey(): string {
+  const fit = Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT)
+  const scale = Math.max(MIN_SCALE, fit)
+  return `${scale}|${window.innerWidth / scale}|${window.innerHeight / scale}`
+}
+
+function useCanvasSize(): CanvasSize | null {
+  const key = useSyncExternalStore(subscribeResize, getCanvasKey, () => null)
+  if (!key) return null
+  const [scale, width, height] = key.split("|").map(Number)
+  return { scale, width, height }
 }
 
 function formatClock(now: Date): { hm: string; period: string; date: string } {
@@ -139,7 +163,12 @@ function PersonTile({ tile, dense }: Readonly<{ tile: WorkingTile; dense: boolea
 }
 
 export function WallDisplay() {
-  const scale = useCanvasScale()
+  const canvas = useCanvasSize()
+  const canvasWidth = canvas?.width ?? CANVAS_WIDTH
+  const stacked = canvasWidth < STACK_BELOW_WIDTH || (canvas?.height ?? CANVAS_HEIGHT) < STACK_BELOW_HEIGHT
+  const narrow = canvasWidth < NARROW_BELOW_WIDTH
+  // Side by side but with less room for tiles: one column fewer.
+  const compact = !stacked && canvasWidth < COMPACT_BELOW_WIDTH
   const mountedNow = useNow(1000)
   const now = mountedNow ?? new Date(0)
   const { shifts, timeOffShifts, isLoading, error } = useTodayShiftList({ includeRemote: true })
@@ -169,7 +198,11 @@ export function WallDisplay() {
       <div
         className={cn(
           "grid content-start gap-4",
-          dense ? "grid-cols-4" : "grid-cols-3",
+          narrow
+            ? dense ? "grid-cols-2" : "grid-cols-1"
+            : stacked || compact
+              ? dense ? "grid-cols-3" : "grid-cols-2"
+              : dense ? "grid-cols-4" : "grid-cols-3",
         )}
       >
         {visibleTiles.map((tile) => (
@@ -185,17 +218,23 @@ export function WallDisplay() {
   }
 
   return (
-    <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-background text-foreground">
+    <div
+      className={cn(
+        "h-dvh w-full bg-background text-foreground",
+        stacked ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
+      )}
+    >
+      {/* zoom (not transform) so the scaled canvas keeps a real layout size and can scroll when stacked. */}
       <div
-        className="flex shrink-0 flex-col gap-9 px-14 py-12"
+        className="flex flex-col gap-9 px-14 py-12"
         style={{
-          width: CANVAS_WIDTH,
-          height: CANVAS_HEIGHT,
-          transform: `scale(${scale ?? 1})`,
-          visibility: scale === null ? "hidden" : "visible",
+          zoom: canvas?.scale ?? 1,
+          width: canvasWidth,
+          ...(stacked ? { minHeight: canvas?.height } : { height: canvas?.height ?? CANVAS_HEIGHT }),
+          visibility: canvas === null ? "hidden" : "visible",
         }}
       >
-        <header className="flex items-end justify-between">
+        <header className="flex flex-wrap items-end justify-between gap-6">
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center gap-3.5">
               <div className="flex size-12 items-center justify-center rounded-[14px] bg-accent text-accent-foreground">
@@ -220,10 +259,15 @@ export function WallDisplay() {
           ) : null}
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_520px] gap-7">
-          <div className="min-h-0 overflow-hidden">{tileArea}</div>
+        <div
+          className={cn(
+            "grid gap-7",
+            stacked ? "grid-cols-1" : "min-h-0 flex-1 grid-cols-[minmax(0,1fr)_520px]",
+          )}
+        >
+          <div className={cn(!stacked && "min-h-0 overflow-hidden")}>{tileArea}</div>
 
-          <aside className="flex min-h-0 flex-col gap-5">
+          <aside className={cn("flex flex-col gap-5", !stacked && "min-h-0")}>
             <section className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-7">
               <div className="flex items-baseline justify-between">
                 <h2 className="text-[30px] font-bold">Up next</h2>
@@ -264,7 +308,7 @@ export function WallDisplay() {
               </section>
             ) : null}
 
-            <div className="flex-1" />
+            {stacked ? null : <div className="flex-1" />}
             {syncStatus?.graph_configured && syncStatus.status === "success" && syncStatus.finished_at ? (
               <div className="flex items-center gap-2.5 text-lg text-muted-foreground">
                 <span className="size-2.5 rounded-full bg-accent" />

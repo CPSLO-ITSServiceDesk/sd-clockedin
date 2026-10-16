@@ -7,6 +7,8 @@ export interface TimelinessSummary {
   late: number
   absent: number
   unscheduled: number
+  /** Scheduled shifts covered by Teams time off; not counted in rates. */
+  excused: number
   onTimeRate: number
   punctualityRate: number
   avgMinutesLate: number
@@ -25,6 +27,7 @@ export interface DailyTrendPoint {
   punctual: number
   late: number
   absent: number
+  excused: number
 }
 
 export interface WeekdayPattern {
@@ -50,12 +53,37 @@ export interface StudentLateShift {
   status: "late" | "absent" | "unscheduled"
 }
 
+/** Late rate for scheduled shifts on one weekday starting in one hour. */
+export interface LateHeatmapCell {
+  day: string
+  /** Start hour, 0–23. */
+  hour: number
+  late: number
+  total: number
+}
+
+/**
+ * Per-student term counts. `strip` has one code per scheduled shift in date
+ * order: o = on time/early, l = late, a = absent, e = excused.
+ */
+export interface StudentBreakdownEntry {
+  studentAssistantId: number
+  late: number
+  absent: number
+  excused: number
+  total: number
+  avgMinutesLate: number
+  strip: string
+}
+
 export interface TermAnalytics {
   summary: TimelinessSummary
   dailyTrend: DailyTrendPoint[]
   lateByTimeSlot: LateByTimeSlot[]
   weekdayPatterns: WeekdayPattern[]
   lateLeaderboard: StudentLeaderboardEntry[]
+  lateHeatmap: LateHeatmapCell[]
+  studentBreakdown: StudentBreakdownEntry[]
 }
 
 export interface StudentAnalytics {

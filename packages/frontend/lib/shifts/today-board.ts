@@ -3,7 +3,7 @@ import { formatTime } from "@/lib/format-time"
 import {
   getOrgLocalDateString,
   getOrgLocalMinutes,
-  ORG_TIMEZONE,
+  formatOrgClock,
   toOrgWallClockMinutes,
 } from "@/lib/org-time"
 import type { StudentAssistant } from "@/lib/api/student-assistants"
@@ -51,14 +51,6 @@ export interface OutTodayEntry {
   initials: string
   window: string
   reason: string | null
-}
-
-function formatOrgClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    timeZone: ORG_TIMEZONE,
-    hour: "numeric",
-    minute: "2-digit",
-  })
 }
 
 function byStartThenFirstName(

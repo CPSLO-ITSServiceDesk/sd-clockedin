@@ -55,6 +55,7 @@ export interface NormalizationUnmatched {
   studentName: string;
   date: string;
   clockIn: string;
+  clockOut: string | null;
   reason: UnmatchedReason;
 }
 
@@ -206,6 +207,7 @@ export function buildNormalizationPreview(
         studentName,
         date: date ?? '',
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'outside_term_range',
       });
       continue;
@@ -219,6 +221,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'no_schedule',
       });
       continue;
@@ -232,6 +235,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'outside_term_range',
       });
       continue;
@@ -244,6 +248,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'no_blocks_that_day',
       });
       continue;
@@ -256,6 +261,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'no_blocks_that_day',
       });
       continue;
@@ -269,6 +275,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'no_blocks_that_day',
       });
       continue;
@@ -289,6 +296,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'no_blocks_that_day',
       });
       continue;
@@ -306,6 +314,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'block_already_claimed',
       });
       continue;
@@ -319,6 +328,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'outside_window',
       });
       continue;
@@ -340,6 +350,7 @@ export function buildNormalizationPreview(
         studentName,
         date,
         clockIn: entry.clock_in!,
+        clockOut: entry.clock_out ?? null,
         reason: 'outside_window',
       });
       continue;

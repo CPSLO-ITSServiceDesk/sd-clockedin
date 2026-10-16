@@ -345,6 +345,35 @@ export type Database = {
           },
         ]
       }
+      timesheet_verification: {
+        Row: {
+          month: string
+          student_assistant_id: number
+          verified_at: string
+          verified_by: string | null
+        }
+        Insert: {
+          month: string
+          student_assistant_id: number
+          verified_at?: string
+          verified_by?: string | null
+        }
+        Update: {
+          month?: string
+          student_assistant_id?: number
+          verified_at?: string
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_verification_student_assistant_id_fkey"
+            columns: ["student_assistant_id"]
+            isOneToOne: false
+            referencedRelation: "student_assistant"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

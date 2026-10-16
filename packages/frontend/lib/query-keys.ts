@@ -30,8 +30,10 @@ export const queryKeys = {
     preview: (termId: number) => ["normalization", "preview", termId] as const,
   },
   timesheet: {
-    hoursByDay: (studentId: number, startDate: string, endDate: string) =>
-      ["timesheet", "hours-by-day", studentId, startDate, endDate] as const,
+    all: ["timesheet"] as const,
+    month: (month: string) => ["timesheet", "month", month] as const,
+    studentMonth: (studentId: number, month: string) =>
+      ["timesheet", "student", studentId, month] as const,
   },
   admins: {
     all: ["admins"] as const,

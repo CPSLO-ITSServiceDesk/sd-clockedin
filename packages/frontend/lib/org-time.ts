@@ -117,3 +117,12 @@ export function toOrgWallClockMinutes(value: string): number {
   if (hours > 23 || minutes > 59) return Number.NaN
   return hours * 60 + minutes
 }
+
+/** Format an ISO timestamp as an org-local clock time ("8:02 AM"). */
+export function formatOrgClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: ORG_TIMEZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}

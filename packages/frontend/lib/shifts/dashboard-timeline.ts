@@ -1,5 +1,5 @@
 import type { TodayTimeOffShift, UpcomingTimeOff } from "@/lib/api/today-shifts"
-import { getOrgLocalDateString, ORG_TIMEZONE, toOrgWallClockMinutes } from "@/lib/org-time"
+import { formatOrgClock, getOrgLocalDateString, ORG_TIMEZONE, toOrgWallClockMinutes } from "@/lib/org-time"
 import {
   formatShiftName,
   getShiftInitials,
@@ -38,14 +38,6 @@ export interface TimelineRow {
 export interface TimelineRange {
   startHour: number
   endHour: number
-}
-
-function formatOrgClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    timeZone: ORG_TIMEZONE,
-    hour: "numeric",
-    minute: "2-digit",
-  })
 }
 
 function formatOrgShortDate(iso: string): string {

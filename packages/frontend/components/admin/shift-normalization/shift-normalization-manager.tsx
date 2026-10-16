@@ -1,416 +1,397 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
-import { Link2, Search } from "lucide-react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { Check, Minus } from "lucide-react"
 import { toast } from "sonner"
-import { TermPageHeader } from "@/components/admin/student-term/term-page-header"
-import { ShiftNormalizationKpiCards } from "@/components/admin/shift-normalization/shift-normalization-kpi-cards"
+
+import { sortTermsByActiveStatus } from "@/components/admin/terms/term-types"
 import {
-  normalizationTableCellClassName,
-  normalizationTableHeadClassName,
-  ShiftNormalizationTableSection,
-} from "@/components/admin/shift-normalization/shift-normalization-table-section"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   applyNormalizationMatches,
   fetchNormalizationPreview,
-  type NormalizationPreview,
-  type NormalizationProposal,
-  type UnmatchedReason,
 } from "@/lib/api/shift-normalization"
-import { formatTime, formatTimeRange } from "@/lib/format-time"
+import { termsApi } from "@/lib/api/terms"
+import { formatTimeAgo } from "@/lib/format-time"
 import { queryKeys } from "@/lib/query-keys"
-import { useStudentTermSelection } from "@/hooks/use-student-term-selection"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  buildProposalView,
+  describeUnmatched,
+  formatEntryDate,
+  formatEntryRange,
+} from "@/lib/shifts/normalization-view"
 import { cn } from "@/lib/utils"
 
-const BASE_PATH = "/admin/shift-normalization"
+const MATCH_GRID =
+  "grid grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[28px_minmax(0,1.2fr)_110px_150px_minmax(0,1.3fr)_170px_150px] gap-x-3 gap-y-1"
+const UNMATCHED_GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.2fr)_110px_150px_170px_minmax(0,1.6fr)] gap-x-3 gap-y-1"
 
-const UNMATCHED_REASON_LABELS: Record<UnmatchedReason, string> = {
-  no_schedule: "No schedule",
-  outside_term_range: "Outside term range",
-  no_blocks_that_day: "No blocks that day",
-  outside_window: "Outside window",
-  block_already_claimed: "Block already claimed",
-}
-
-function formatBlockDay(day: string): string {
-  return day.charAt(0).toUpperCase() + day.slice(1)
+function Checkmark({ state }: Readonly<{ state: "on" | "off" | "some" }>) {
+  return (
+    <span
+      className={cn(
+        "flex size-5 items-center justify-center rounded-md border-[1.5px]",
+        state === "off" ? "border-border bg-card" : "border-accent bg-accent text-accent-foreground",
+      )}
+    >
+      {state === "on" ? <Check className="size-3.5" strokeWidth={3} /> : null}
+      {state === "some" ? <Minus className="size-3.5" strokeWidth={3} /> : null}
+    </span>
+  )
 }
 
 export function ShiftNormalizationManager() {
   const queryClient = useQueryClient()
-  const { sortedTerms, activeTermId, selectedTerm, changeTerm } =
-    useStudentTermSelection({ basePath: BASE_PATH })
+  const { data: terms = [] } = useQuery({ queryKey: queryKeys.terms.all, queryFn: termsApi.list })
+  const sortedTerms = useMemo(() => sortTermsByActiveStatus(terms), [terms])
+  const [termChoice, setTermChoice] = useState<number | null>(null)
+  const termId = termChoice ?? sortedTerms[0]?.id ?? null
+  const term = terms.find((candidate) => candidate.id === termId)
 
-  const [preview, setPreview] = useState<NormalizationPreview | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [loading, setLoading] = useState(false)
+  const previewQuery = useQuery({
+    queryKey: queryKeys.normalization.preview(termId ?? 0),
+    queryFn: () => fetchNormalizationPreview(termId!),
+    enabled: termId != null,
+  })
+  const preview = previewQuery.data
+  const views = useMemo(() => (preview?.proposals ?? []).map(buildProposalView), [preview])
+
+  // Admin choices on top of the default (close matches selected); reset on every scan.
+  const [overrides, setOverrides] = useState<{ scan: number; picks: Map<number, boolean> }>({
+    scan: 0,
+    picks: new Map(),
+  })
+  const picks = overrides.scan === previewQuery.dataUpdatedAt ? overrides.picks : new Map<number, boolean>()
+  const isSelected = (id: number, isClose: boolean) => picks.get(id) ?? isClose
+  const selected = views.filter((view) => isSelected(view.proposal.timeEntryId, view.isClose))
+
   const [applying, setApplying] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [unmatchedOpen, setUnmatchedOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [banner, setBanner] = useState<string | null>(null)
+  const [unmatchedOpen, setUnmatchedOpen] = useState(true)
 
-  const proposals = preview?.proposals ?? []
-  const selectedCount = useMemo(
-    () => proposals.filter((p) => selectedIds.has(p.timeEntryId)).length,
-    [proposals, selectedIds],
-  )
+  const setPicks = (update: (_current: Map<number, boolean>) => Map<number, boolean>) =>
+    setOverrides({ scan: previewQuery.dataUpdatedAt, picks: update(new Map(picks)) })
 
-  const handleScan = useCallback(async () => {
-    if (!activeTermId) return
+  const toggle = (id: number, isClose: boolean) =>
+    setPicks((current) => current.set(id, !isSelected(id, isClose)))
 
-    setLoading(true)
-    setError(null)
-    setPreview(null)
+  const allSelected = views.length > 0 && selected.length === views.length
+  const toggleAll = () =>
+    setPicks(() => new Map(views.map((view) => [view.proposal.timeEntryId, !allSelected])))
 
-    try {
-      const result = await fetchNormalizationPreview(activeTermId)
-      setPreview(result)
-      setSelectedIds(new Set(result.proposals.map((p) => p.timeEntryId)))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed")
-    } finally {
-      setLoading(false)
-    }
-  }, [activeTermId])
+  const scan = async () => {
+    setBanner(null)
+    await previewQuery.refetch()
+  }
 
-  const toggleProposal = useCallback((timeEntryId: number, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (checked) {
-        next.add(timeEntryId)
-      } else {
-        next.delete(timeEntryId)
-      }
-      return next
-    })
-  }, [])
-
-  const toggleAll = useCallback(
-    (checked: boolean) => {
-      if (checked) {
-        setSelectedIds(new Set(proposals.map((p) => p.timeEntryId)))
-      } else {
-        setSelectedIds(new Set())
-      }
-    },
-    [proposals],
-  )
-
-  const handleApply = useCallback(async () => {
-    if (!activeTermId || selectedCount === 0) return
-
+  const apply = async () => {
+    if (!termId || selected.length === 0) return
     setApplying(true)
-    setConfirmOpen(false)
-
-    const matches = proposals
-      .filter((p) => selectedIds.has(p.timeEntryId))
-      .map((p) => ({
-        timeEntryId: p.timeEntryId,
-        scheduleBlockId: p.proposedBlockId,
-      }))
-
     try {
-      const result = await applyNormalizationMatches(activeTermId, matches)
-
+      const result = await applyNormalizationMatches(
+        termId,
+        selected.map((view) => ({
+          timeEntryId: view.proposal.timeEntryId,
+          scheduleBlockId: view.proposal.proposedBlockId,
+        })),
+      )
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.analytics.term(activeTermId),
-        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.analytics.term(termId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timesheet.all }),
       ])
-
-      toast.success(
-        `Linked ${result.applied} ${result.applied === 1 ? "entry" : "entries"}${
-          result.skipped.length > 0 ? `; ${result.skipped.length} skipped` : ""
-        }`,
+      await previewQuery.refetch()
+      setBanner(
+        `Linked ${result.applied} ${result.applied === 1 ? "clock-in" : "clock-ins"} to their shifts.${
+          result.skipped.length > 0 ? ` ${result.skipped.length} skipped because they changed since the scan.` : ""
+        } Timesheets and analytics are updated.`,
       )
-
-      await handleScan()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Apply failed")
+      toast.error(err instanceof Error ? err.message : "Couldn't link the selected clock-ins")
     } finally {
       setApplying(false)
     }
-  }, [activeTermId, selectedCount, proposals, selectedIds, queryClient, handleScan])
+  }
 
-  const allSelected = proposals.length > 0 && selectedCount === proposals.length
+  const scannedLabel = previewQuery.isFetching
+    ? "scanning…"
+    : previewQuery.dataUpdatedAt
+      ? `last scanned ${formatTimeAgo(new Date(previewQuery.dataUpdatedAt).toISOString())}`
+      : "not scanned yet"
+
+  const unmatched = preview?.unmatched ?? []
+  const kpis = [
+    {
+      value: preview ? preview.summary.totalUnscheduled : "—",
+      label: "Unlinked clock-ins",
+      hint: "not tied to a shift",
+      className: "",
+    },
+    { value: preview ? views.length : "—", label: "Suggested matches", hint: "close to a scheduled shift", className: "text-accent" },
+    {
+      value: preview ? unmatched.length : "—",
+      label: "No match",
+      hint: "need a manual fix",
+      className: "text-amber-700 dark:text-amber-300",
+    },
+  ]
 
   return (
-    <div className="space-y-6">
-      <TermPageHeader
-        title="Shift Normalization"
-        description="Find unscheduled time entries and link them to matching schedule blocks."
-        sortedTerms={sortedTerms}
-        activeTermId={activeTermId}
-        onTermChange={changeTerm}
-      />
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          onClick={handleScan}
-          disabled={!activeTermId || loading || applying}
-        >
-          <Search className="size-4" />
-          {loading ? "Scanning..." : "Scan for matches"}
-        </Button>
-        {preview && proposals.length > 0 ? (
-          <Button
-            type="button"
-            onClick={() => setConfirmOpen(true)}
-            disabled={selectedCount === 0 || applying}
+    <div className="flex flex-col gap-[18px]">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[28px] font-bold tracking-[-0.02em]">Shift normalization</h1>
+          <p className="text-sm text-muted-foreground">
+            {term?.name ?? "No term"} · {scannedLabel}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={termId ? String(termId) : undefined}
+            onValueChange={(value) => {
+              setTermChoice(Number(value))
+              setBanner(null)
+            }}
           >
-            <Link2 className="size-4" />
-            Apply selected ({selectedCount})
-          </Button>
-        ) : null}
+            <SelectTrigger className="h-[38px] w-[190px] rounded-full bg-card">
+              <SelectValue placeholder="Select term" />
+            </SelectTrigger>
+            <SelectContent>
+              {sortedTerms.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.name}
+                  {option.is_active ? " (Active)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button
+            type="button"
+            onClick={scan}
+            disabled={!termId || previewQuery.isFetching || applying}
+            className="h-[38px] rounded-full border-[1.5px] border-accent bg-card px-3.5 text-[13px] font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+          >
+            {previewQuery.isFetching ? "Scanning…" : "Scan again"}
+          </button>
+          <button
+            type="button"
+            onClick={apply}
+            disabled={selected.length === 0 || applying || previewQuery.isFetching}
+            className="h-[38px] rounded-full bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent/90 disabled:bg-muted-foreground disabled:text-background"
+          >
+            {applying ? "Linking…" : selected.length > 0 ? `Link ${selected.length} selected` : "Link selected"}
+          </button>
+        </div>
       </div>
 
-      {error ? (
-        <p className="text-destructive text-sm">{error}</p>
+      {banner ? (
+        <div className="flex items-center gap-2.5 rounded-[14px] bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+          <Check className="size-4 shrink-0" strokeWidth={2.5} />
+          {banner}
+        </div>
       ) : null}
 
-      {preview ? (
-        <>
-          <ShiftNormalizationKpiCards summary={preview.summary} isLoading={loading} />
+      {previewQuery.error ? (
+        <p className="text-sm text-destructive">
+          {previewQuery.error instanceof Error ? previewQuery.error.message : "Scan failed"}
+        </p>
+      ) : null}
 
-          {proposals.length > 0 ? (
-            <ShiftNormalizationTableSection
-              title="Proposed matches"
-              description="Review and select entries to link to schedule blocks"
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead
-                      className={cn(
-                        normalizationTableHeadClassName,
-                        "w-10 px-4",
-                      )}
-                    >
-                      <Checkbox
-                        checked={allSelected}
-                        onCheckedChange={(checked) =>
-                          toggleAll(checked === true)
-                        }
-                        aria-label="Select all proposals"
-                      />
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Student
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Date
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Clock in
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Clock out
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Proposed block
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {proposals.map((proposal: NormalizationProposal) => (
-                    <TableRow
-                      key={proposal.timeEntryId}
-                      className="border-border hover:bg-secondary/50 transition-colors"
-                    >
-                      <TableCell
-                        className={cn(normalizationTableCellClassName, "w-10 px-4")}
-                      >
-                        <Checkbox
-                          checked={selectedIds.has(proposal.timeEntryId)}
-                          onCheckedChange={(checked) =>
-                            toggleProposal(
-                              proposal.timeEntryId,
-                              checked === true,
-                            )
-                          }
-                          aria-label={`Select entry ${proposal.timeEntryId}`}
-                        />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "font-medium text-card-foreground",
-                        )}
-                      >
-                        {proposal.studentName}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "text-muted-foreground tabular-nums",
-                        )}
-                      >
-                        {proposal.date}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "text-muted-foreground tabular-nums",
-                        )}
-                      >
-                        {formatTime(proposal.clockIn)}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "text-muted-foreground tabular-nums",
-                        )}
-                      >
-                        {proposal.clockOut
-                          ? formatTime(proposal.clockOut)
-                          : "—"}
-                      </TableCell>
-                      <TableCell className={normalizationTableCellClassName}>
-                        {formatBlockDay(proposal.blockDay)}{" "}
-                        {formatTimeRange(
-                          proposal.blockStartTime,
-                          proposal.blockEndTime,
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ShiftNormalizationTableSection>
-          ) : (
-            <Card className="bg-card border-border">
-              <CardContent className="text-muted-foreground py-10 text-center text-sm">
-                {preview.summary.totalUnscheduled === 0
-                  ? `No unscheduled entries found for ${selectedTerm?.name ?? "this term"}.`
-                  : "No close matches found. Unmatched entries are listed below."}
-              </CardContent>
-            </Card>
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        {kpis.map((kpi) => (
+          <div
+            key={kpi.label}
+            className="flex items-baseline gap-3 rounded-2xl border border-border bg-card px-4 py-3.5"
+          >
+            <span className={cn("font-mono text-[28px] font-semibold", kpi.className)}>{kpi.value}</span>
+            <span className="flex flex-col">
+              <span className="text-sm font-bold">{kpi.label}</span>
+              <span className="text-xs text-muted-foreground">{kpi.hint}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <section className="overflow-hidden rounded-[20px] border border-border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[15px] font-bold">Suggested matches</span>
+            <span className="text-[13px] text-muted-foreground">Clock-in compared with the shift it would link to</span>
+          </div>
+          <div className="flex items-center gap-3.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-[18px] rounded-full bg-accent" />
+              Clocked in
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-[18px] rounded shadow-[inset_0_0_0_1.5px_var(--muted-foreground)]" />
+              Scheduled shift
+            </span>
+          </div>
+        </div>
+        <div
+          className={cn(
+            MATCH_GRID,
+            "items-center border-y border-border/60 bg-muted/40 px-5 py-2 text-xs font-semibold text-muted-foreground",
           )}
+        >
+          <button
+            type="button"
+            onClick={toggleAll}
+            disabled={views.length === 0}
+            aria-label={allSelected ? "Clear selection" : "Select all matches"}
+          >
+            <Checkmark state={allSelected ? "on" : selected.length > 0 ? "some" : "off"} />
+          </button>
+          <span>Student</span>
+          <span className="hidden md:inline">Date</span>
+          <span className="hidden md:inline">Clocked in</span>
+          <span className="hidden md:inline">Overlap</span>
+          <span className="hidden md:inline">Links to shift</span>
+          <span className="md:block">Difference</span>
+        </div>
 
-          {preview.unmatched.length > 0 ? (
-            <ShiftNormalizationTableSection
-              title={`Unmatched (${preview.unmatched.length})`}
-              description="Entries that could not be linked to a schedule block"
-              collapsible
-              open={unmatchedOpen}
-              onOpenChange={setUnmatchedOpen}
+        {previewQuery.isLoading ? (
+          <p className="px-5 py-9 text-center text-sm text-muted-foreground">Scanning clock-ins…</p>
+        ) : views.length === 0 ? (
+          <p className="px-5 py-9 text-center text-sm text-muted-foreground">
+            {preview && preview.summary.totalUnscheduled === 0
+              ? "Every clock-in this term is linked to a shift."
+              : "Every clock-in that could be matched has been linked. Scan again after the next Teams sync."}
+          </p>
+        ) : (
+          views.map((view) => {
+            const { proposal } = view
+            const on = isSelected(proposal.timeEntryId, view.isClose)
+            return (
+              <button
+                key={proposal.timeEntryId}
+                type="button"
+                onClick={() => toggle(proposal.timeEntryId, view.isClose)}
+                aria-pressed={on}
+                className={cn(
+                  MATCH_GRID,
+                  "w-full items-center border-b border-border/60 px-5 py-[11px] text-left last:border-0",
+                  on ? "bg-accent/5" : "hover:bg-muted/40",
+                )}
+              >
+                <Checkmark state={on ? "on" : "off"} />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-semibold">{proposal.studentName}</span>
+                  <span className="truncate font-mono text-xs text-muted-foreground md:hidden">
+                    {formatEntryDate(proposal.date)} · {formatEntryRange(proposal.clockIn, proposal.clockOut)} →{" "}
+                    {view.blockLabel}
+                  </span>
+                </span>
+                <span className="hidden font-mono text-[13px] text-foreground/80 md:inline">
+                  {formatEntryDate(proposal.date)}
+                </span>
+                <span className="hidden font-mono text-[13px] md:inline">
+                  {formatEntryRange(proposal.clockIn, proposal.clockOut)}
+                </span>
+                <span className="relative hidden h-[22px] md:block" aria-hidden>
+                  <span
+                    className="absolute inset-y-0 rounded-md bg-muted/60 shadow-[inset_0_0_0_1.5px_var(--muted-foreground)]"
+                    style={{ left: `${view.block.left}%`, width: `${view.block.width}%` }}
+                  />
+                  <span
+                    className={cn("absolute top-[7px] h-2 rounded-full", !view.entry.open && "bg-accent")}
+                    style={{
+                      left: `${view.entry.left}%`,
+                      width: `${view.entry.width}%`,
+                      ...(view.entry.open
+                        ? { backgroundImage: "repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 10px)" }
+                        : null),
+                    }}
+                  />
+                </span>
+                <span className="hidden font-mono text-[13px] text-foreground/80 md:inline">{view.blockLabel}</span>
+                <span
+                  className={cn(
+                    "justify-self-start whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold",
+                    view.needsLook
+                      ? "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                      : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+                  )}
+                >
+                  {view.difference}
+                </span>
+              </button>
+            )
+          })
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-[20px] border border-border bg-card">
+        <button
+          type="button"
+          onClick={() => setUnmatchedOpen((open) => !open)}
+          aria-expanded={unmatchedOpen}
+          className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-muted/30"
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[15px] font-bold">No match · {unmatched.length}</span>
+            <span className="text-[13px] text-muted-foreground">These clock-ins can&apos;t be linked automatically</span>
+          </span>
+          <span className="text-[13px] font-semibold text-accent">{unmatchedOpen ? "Hide" : "Show"}</span>
+        </button>
+        {unmatchedOpen ? (
+          <>
+            <div
+              className={cn(
+                UNMATCHED_GRID,
+                "hidden border-y border-border/60 bg-muted/40 px-5 py-2 text-xs font-semibold text-muted-foreground md:grid",
+              )}
             >
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Student
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Date
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Clock in
-                    </TableHead>
-                    <TableHead className={normalizationTableHeadClassName}>
-                      Reason
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.unmatched.map((entry) => (
-                    <TableRow
-                      key={entry.timeEntryId}
-                      className="border-border hover:bg-secondary/50 transition-colors"
-                    >
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "font-medium text-card-foreground",
-                        )}
-                      >
-                        {entry.studentName}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "text-muted-foreground tabular-nums",
-                        )}
-                      >
-                        {entry.date || "—"}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          normalizationTableCellClassName,
-                          "text-muted-foreground tabular-nums",
-                        )}
-                      >
-                        {formatTime(entry.clockIn)}
-                      </TableCell>
-                      <TableCell className={normalizationTableCellClassName}>
-                        <Badge variant="secondary">
-                          {UNMATCHED_REASON_LABELS[entry.reason]}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ShiftNormalizationTableSection>
-          ) : null}
-        </>
-      ) : (
-        <Card className="bg-card border-border">
-          <CardContent className="text-muted-foreground flex min-h-[280px] flex-col items-center justify-center gap-3 text-center text-sm">
-            <Link2 className="size-8 opacity-40" />
-            <p>
-              Select a term and scan to find unscheduled entries that can be
-              linked to schedule blocks.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apply selected matches?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will link {selectedCount}{" "}
-              {selectedCount === 1 ? "entry" : "entries"} to their proposed
-              schedule blocks for {selectedTerm?.name ?? "the selected term"}.
-              This cannot be undone automatically.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={applying}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleApply} disabled={applying}>
-              {applying ? "Applying..." : "Apply matches"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <span>Student</span>
+              <span>Date</span>
+              <span>Clocked in</span>
+              <span>Reason</span>
+              <span>What to do</span>
+            </div>
+            {unmatched.length === 0 ? (
+              <p className="border-t border-border/60 px-5 py-6 text-sm text-muted-foreground">
+                Nothing needs a manual fix.
+              </p>
+            ) : (
+              unmatched.map((entry) => {
+                const reason = describeUnmatched(entry)
+                return (
+                  <div
+                    key={entry.timeEntryId}
+                    className={cn(UNMATCHED_GRID, "items-center border-b border-border/60 px-5 py-[11px] last:border-0")}
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-semibold">{entry.studentName}</span>
+                      <span className="font-mono text-xs text-muted-foreground md:hidden">
+                        {formatEntryDate(entry.date)} · {formatEntryRange(entry.clockIn, entry.clockOut)}
+                      </span>
+                    </span>
+                    <span className="hidden font-mono text-[13px] text-foreground/80 md:inline">
+                      {formatEntryDate(entry.date)}
+                    </span>
+                    <span className="hidden font-mono text-[13px] md:inline">
+                      {formatEntryRange(entry.clockIn, entry.clockOut)}
+                    </span>
+                    <span className="justify-self-start whitespace-nowrap rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:text-amber-200">
+                      {reason.label}
+                    </span>
+                    <span className="col-span-2 text-[13px] text-muted-foreground md:col-span-1">{reason.next}</span>
+                  </div>
+                )
+              })
+            )}
+          </>
+        ) : null}
+      </section>
     </div>
   )
 }

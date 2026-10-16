@@ -17,6 +17,19 @@ export const studentTimeOffService = {
     return data ?? [];
   },
 
+  /** Time off overlapping [startIso, endIso). */
+  async listOverlapping(startIso: string, endIso: string): Promise<StudentTimeOff[]> {
+    const { data, error } = await supabase
+      .from('student_time_off')
+      .select('*')
+      .lt('starts_at', endIso)
+      .gt('ends_at', startIso)
+      .order('starts_at', { ascending: true });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
   async upsertByTeamsTimeOffId(payload: StudentTimeOffInsert): Promise<StudentTimeOff> {
     const teamsTimeOffId = payload.teams_time_off_id.trim();
     if (!teamsTimeOffId) {
