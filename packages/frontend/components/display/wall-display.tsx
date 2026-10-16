@@ -5,9 +5,9 @@ import { useSyncExternalStore, type ReactNode } from "react"
 import { useNow } from "@/hooks/use-now"
 import { useActiveTermTeamsSyncStatus } from "@/hooks/use-teams-sync"
 import { useTodayShiftList } from "@/hooks/use-today-shifts"
-import { getAvatarToneClass } from "@/lib/avatar-tones"
 import { formatTimeAgo } from "@/lib/format-time"
-import { ORG_TIMEZONE } from "@/lib/org-time"
+import { getOrgLocalMinutes, ORG_TIMEZONE } from "@/lib/org-time"
+import { isScheduledDuringHour } from "@/lib/shifts/dashboard-stats"
 import {
   buildOutToday,
   buildUpNext,
@@ -21,22 +21,31 @@ const CANVAS_WIDTH = 1920
 const CANVAS_HEIGHT = 1080
 
 /**
- * Below this scale the display stops shrinking and reflows instead (fewer
- * tile columns, sidebar under the tiles), so small windows stay readable.
+ * Below this scale the display stops shrinking and reflows instead (columns
+ * stack), so small windows stay readable.
  */
 const MIN_SCALE = 0.6
 
 /** Canvas sizes (in design px) where the layout steps down. */
-const STACK_BELOW_WIDTH = 1500
+const STACK_BELOW_WIDTH = 1750
 const STACK_BELOW_HEIGHT = 850
-const NARROW_BELOW_WIDTH = 1000
-const COMPACT_BELOW_WIDTH = 1700
 
 // The display runs unattended for days, so keep "synced N min ago" fresh.
 const SYNC_STATUS_REFRESH_MS = 5 * 60_000
 
-const MAX_TILES = 9
-const MAX_TILES_DENSE = 16
+/** Names in the "Here" list before it splits into two columns, and the cap after that. */
+const HERE_SINGLE_COLUMN_MAX = 8
+const HERE_MAX = 16
+const ARRIVING_MAX = 5
+const OUT_TODAY_MAX = 4
+
+// The ambient display is brand-colored in both themes.
+const COLORS = {
+  background: "bg-[#154734]",
+  muted: "text-[#B9D3C5]",
+  gold: "text-[#E8B64A]",
+  track: "bg-[#2C5E49]",
+}
 
 function subscribeResize(onChange: () => void): () => void {
   window.addEventListener("resize", onChange)
@@ -84,79 +93,50 @@ function formatClock(now: Date): { hm: string; period: string; date: string } {
   }
 }
 
-function ClockIcon({ size }: Readonly<{ size: number }>) {
+/** "10:22 AM" → "10:22" */
+function stripPeriod(label: string): string {
+  return label.replace(/\s?[AP]M$/i, "")
+}
+
+function SectionLabel({ children, className }: Readonly<{ children: ReactNode; className?: string }>) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
+    <span className={cn("text-2xl font-semibold uppercase tracking-[0.12em]", COLORS.muted, className)}>
+      {children}
+    </span>
   )
 }
 
-function PersonTile({ tile, dense }: Readonly<{ tile: WorkingTile; dense: boolean }>) {
+function HereRow({ tile, compact }: Readonly<{ tile: WorkingTile; compact: boolean }>) {
+  let since = "remote"
+  if (tile.clockInLabel) since = `${tile.late ? "late " : ""}${stripPeriod(tile.clockInLabel)}`
+  else if (!tile.isRemote) since = "walk-in"
+
   return (
-    <div
-      className={cn(
-        "flex flex-col rounded-3xl border border-border bg-card",
-        dense ? "gap-3 p-5" : "gap-[18px] p-6",
-      )}
-    >
-      <div className="flex items-center gap-4">
-        <div
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <div className="flex min-w-0 items-baseline justify-between gap-6">
+        <span
           className={cn(
-            "flex shrink-0 items-center justify-center rounded-full font-bold",
-            dense ? "size-12 text-lg" : "size-16 text-2xl",
-            getAvatarToneClass(tile.studentAssistantId),
+            "truncate font-bold tracking-[-0.01em]",
+            compact ? "text-[30px]" : "text-[38px]",
           )}
         >
-          {tile.initials}
-        </div>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span
-            className={cn(
-              "truncate font-bold tracking-[-0.01em]",
-              dense ? "text-[22px]" : "text-[28px]",
-            )}
-          >
-            {tile.name}
-          </span>
-          <span className={cn("truncate text-muted-foreground", dense ? "text-base" : "text-xl")}>
-            {tile.role}
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2">
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          {tile.progress !== null ? (
-            <div
-              className={cn(
-                "h-full rounded-full",
-                tile.late ? "bg-[var(--status-pending)]" : "bg-accent",
-              )}
-              style={{ width: `${tile.progress}%` }}
-            />
+          {tile.name}
+        </span>
+        <span className={cn("shrink-0 font-mono", compact ? "text-xl" : "text-2xl", COLORS.muted)}>
+          <span className={cn(tile.late && COLORS.gold)}>{since}</span>
+          {tile.endLabel ? (
+            <>
+              {" → "}
+              <span className="text-white">{stripPeriod(tile.endLabel)}</span>
+            </>
           ) : null}
-        </div>
+        </span>
+      </div>
+      <div className={cn("h-2 overflow-hidden rounded-full", COLORS.track)}>
         <div
-          className={cn(
-            "flex justify-between gap-3 font-mono text-muted-foreground",
-            dense ? "text-base" : "text-xl",
-          )}
-        >
-          <span className={cn(tile.late && "text-amber-700 dark:text-amber-300")}>
-            {tile.inLabel}
-          </span>
-          {tile.endLabel ? <span>until {tile.endLabel}</span> : null}
-        </div>
+          className={cn("h-full rounded-full", tile.late ? "bg-[#E8B64A]" : "bg-white")}
+          style={{ width: `${tile.progress ?? 0}%` }}
+        />
       </div>
     </div>
   )
@@ -166,9 +146,7 @@ export function WallDisplay() {
   const canvas = useCanvasSize()
   const canvasWidth = canvas?.width ?? CANVAS_WIDTH
   const stacked = canvasWidth < STACK_BELOW_WIDTH || (canvas?.height ?? CANVAS_HEIGHT) < STACK_BELOW_HEIGHT
-  const narrow = canvasWidth < NARROW_BELOW_WIDTH
-  // Side by side but with less room for tiles: one column fewer.
-  const compact = !stacked && canvasWidth < COMPACT_BELOW_WIDTH
+
   const mountedNow = useNow(1000)
   const now = mountedNow ?? new Date(0)
   const { shifts, timeOffShifts, isLoading, error } = useTodayShiftList({ includeRemote: true })
@@ -176,42 +154,38 @@ export function WallDisplay() {
     refetchIntervalMs: SYNC_STATUS_REFRESH_MS,
   })
 
+  const ready = Boolean(mountedNow) && !isLoading
   const tiles = mountedNow ? buildWorkingTiles(shifts, now) : []
-  const upNext = mountedNow ? buildUpNext(shifts, now) : []
-  const outToday = mountedNow ? buildOutToday(timeOffShifts, now) : []
+  const arriving = mountedNow ? buildUpNext(shifts, now).slice(0, ARRIVING_MAX) : []
+  const outToday = mountedNow ? buildOutToday(timeOffShifts, now).slice(0, OUT_TODAY_MAX) : []
   const clock = formatClock(now)
 
-  const dense = tiles.length > MAX_TILES
-  const tileLimit = dense ? MAX_TILES_DENSE : MAX_TILES
-  const overflow = tiles.length > tileLimit ? tiles.length - (tileLimit - 1) : 0
-  const visibleTiles = overflow > 0 ? tiles.slice(0, tileLimit - 1) : tiles
+  const currentHour = Math.floor(getOrgLocalMinutes(now) / 60)
+  const scheduledThisHour = new Set(
+    shifts
+      .filter((shift) => shift.startTime && isScheduledDuringHour(shift, currentHour))
+      .map((shift) => shift.studentAssistantId),
+  ).size
 
-  let tileArea: ReactNode
-  if (isLoading || !mountedNow) {
-    tileArea = <p className="text-3xl text-muted-foreground">Loading...</p>
+  const twoColumns = tiles.length > HERE_SINGLE_COLUMN_MAX
+  const overflow = tiles.length > HERE_MAX ? tiles.length - (HERE_MAX - 1) : 0
+  const hereTiles = overflow > 0 ? tiles.slice(0, HERE_MAX - 1) : tiles
+
+  let hereBody: ReactNode
+  if (!ready) {
+    hereBody = <span className={cn("text-3xl", COLORS.muted)}>Loading...</span>
   } else if (error) {
-    tileArea = <p className="text-3xl text-destructive">Couldn&apos;t load today&apos;s shifts</p>
+    hereBody = <span className="text-3xl text-[#F2B856]">Couldn&apos;t load today&apos;s shifts</span>
   } else if (tiles.length === 0) {
-    tileArea = <p className="text-3xl text-muted-foreground">No one is working right now.</p>
+    hereBody = <span className={cn("text-[34px]", COLORS.muted)}>No one is on the desk right now.</span>
   } else {
-    tileArea = (
-      <div
-        className={cn(
-          "grid content-start gap-4",
-          narrow
-            ? dense ? "grid-cols-2" : "grid-cols-1"
-            : stacked || compact
-              ? dense ? "grid-cols-3" : "grid-cols-2"
-              : dense ? "grid-cols-4" : "grid-cols-3",
-        )}
-      >
-        {visibleTiles.map((tile) => (
-          <PersonTile key={tile.studentAssistantId} tile={tile} dense={dense} />
+    hereBody = (
+      <div className={cn("grid gap-x-12", twoColumns ? "grid-cols-2 gap-y-4" : "grid-cols-1 gap-y-[18px]")}>
+        {hereTiles.map((tile) => (
+          <HereRow key={tile.studentAssistantId} tile={tile} compact={twoColumns} />
         ))}
         {overflow > 0 ? (
-          <div className="flex items-center justify-center rounded-3xl border border-dashed border-border text-[28px] font-bold text-muted-foreground">
-            +{overflow} more
-          </div>
+          <span className={cn("self-center text-[30px] font-bold", COLORS.muted)}>+{overflow} more</span>
         ) : null}
       </div>
     )
@@ -220,13 +194,14 @@ export function WallDisplay() {
   return (
     <div
       className={cn(
-        "h-dvh w-full bg-background text-foreground",
+        "h-dvh w-full text-white",
+        COLORS.background,
         stacked ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
       )}
     >
       {/* zoom (not transform) so the scaled canvas keeps a real layout size and can scroll when stacked. */}
       <div
-        className="flex flex-col gap-9 px-14 py-12"
+        className="flex flex-col gap-10 px-16 py-12"
         style={{
           zoom: canvas?.scale ?? 1,
           width: canvasWidth,
@@ -234,88 +209,106 @@ export function WallDisplay() {
           visibility: canvas === null ? "hidden" : "visible",
         }}
       >
-        <header className="flex flex-wrap items-end justify-between gap-6">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-3.5">
-              <div className="flex size-12 items-center justify-center rounded-[14px] bg-accent text-accent-foreground">
-                <ClockIcon size={26} />
-              </div>
-              <span className="text-[28px] font-bold">Service Desk</span>
-            </div>
-            <span className="text-[56px] font-bold leading-none tracking-[-0.03em]">
-              {mountedNow && !isLoading ? `${tiles.length} working now` : " "}
-            </span>
+        <header className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex flex-wrap items-center gap-4">
+            <svg
+              width={34}
+              height={34}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#E8B64A"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-[30px] font-bold">Service Desk</span>
+            {mountedNow ? <span className={cn("text-2xl", COLORS.muted)}>{clock.date}</span> : null}
           </div>
           {mountedNow ? (
-            <div className="flex flex-col items-end gap-1.5">
-              <span className="font-mono text-[88px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums">
-                {clock.hm}
-                <span className="ml-3 text-[40px] text-accent">{clock.period}</span>
-              </span>
-              <span className="text-[22px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                {clock.date}
-              </span>
-            </div>
+            <span className="font-mono text-[56px] font-semibold tracking-[-0.03em] tabular-nums">
+              {clock.hm}
+              <span className={cn("ml-2.5 text-[30px]", COLORS.gold)}>{clock.period}</span>
+            </span>
           ) : null}
         </header>
 
         <div
           className={cn(
-            "grid gap-7",
-            stacked ? "grid-cols-1" : "min-h-0 flex-1 grid-cols-[minmax(0,1fr)_520px]",
+            "grid gap-16",
+            stacked
+              ? "grid-cols-1 gap-y-12"
+              : "min-h-0 flex-1 grid-cols-[520px_minmax(0,1fr)_460px]",
           )}
         >
-          <div className={cn(!stacked && "min-h-0 overflow-hidden")}>{tileArea}</div>
+          <div className={cn("flex flex-col gap-2", !stacked && "justify-end")}>
+            <SectionLabel className="text-[26px]">Working now</SectionLabel>
+            <span
+              className={cn(
+                // Size before leading: tailwind-merge drops a leading-* that comes before a text-* size.
+                stacked ? "text-[240px]" : "text-[360px]",
+                "font-extrabold leading-[0.85] tracking-[-0.06em] tabular-nums",
+                COLORS.gold,
+              )}
+            >
+              {ready ? tiles.length : "–"}
+            </span>
+            <span className="text-[30px]">
+              {ready
+                ? scheduledThisHour > 0
+                  ? `of ${scheduledThisHour} scheduled this hour`
+                  : "nobody scheduled this hour"
+                : " "}
+            </span>
+            {syncStatus?.graph_configured && syncStatus.status === "success" && syncStatus.finished_at ? (
+              <span className={cn("mt-6 flex items-center gap-2.5 text-lg", COLORS.muted)}>
+                <span className="size-2.5 rounded-full bg-[#4ED19A]" />
+                Teams Shifts · synced {formatTimeAgo(syncStatus.finished_at, now)}
+              </span>
+            ) : null}
+          </div>
 
-          <aside className={cn("flex flex-col gap-5", !stacked && "min-h-0")}>
-            <section className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-7">
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-[30px] font-bold">Up next</h2>
-                <span className="text-xl text-muted-foreground">next 2 hours</span>
-              </div>
-              {upNext.length === 0 ? (
-                <p className="text-2xl text-muted-foreground">No one else starting soon.</p>
+          <div className={cn("flex min-w-0 flex-col gap-[18px] pt-3", !stacked && "min-h-0 overflow-hidden")}>
+            <SectionLabel>Here</SectionLabel>
+            {hereBody}
+          </div>
+
+          <div className={cn("flex flex-col gap-7 pt-3", !stacked && "min-h-0")}>
+            <div className="flex flex-col gap-[18px]">
+              <SectionLabel>Arriving</SectionLabel>
+              {ready && arriving.length === 0 ? (
+                <span className={cn("text-[28px]", COLORS.muted)}>No one in the next 2 hours.</span>
               ) : (
-                upNext.slice(0, 6).map((entry) => (
-                  <div key={entry.studentAssistantId} className="flex items-center gap-4 py-2">
-                    <span className="w-[120px] shrink-0 font-mono text-2xl font-semibold">
+                arriving.map((entry) => (
+                  <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline gap-5">
+                    <span className={cn("w-[130px] shrink-0 font-mono text-[26px]", COLORS.gold)}>
                       {entry.start}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[26px] font-semibold">
-                      {entry.name}
-                    </span>
+                    <span className="truncate text-[32px] font-semibold">{entry.name}</span>
                     {entry.isRemote ? (
-                      <span className="shrink-0 rounded-full bg-muted px-3 py-1 text-lg font-bold text-muted-foreground">
-                        Remote
-                      </span>
+                      <span className={cn("shrink-0 text-xl", COLORS.muted)}>remote</span>
                     ) : null}
                   </div>
                 ))
               )}
-            </section>
+            </div>
+
+            {stacked ? null : <div className="flex-1" />}
 
             {outToday.length > 0 ? (
-              <section className="flex flex-col gap-4 rounded-3xl bg-sky-500/10 p-7">
-                <h2 className="text-[30px] font-bold text-sky-900 dark:text-sky-100">Out today</h2>
-                {outToday.slice(0, 5).map((entry) => (
-                  <div key={entry.studentAssistantId} className="flex items-center justify-between gap-4">
-                    <span className="truncate text-[26px] font-semibold text-sky-900 dark:text-sky-100">
-                      {entry.name}
-                    </span>
-                    <span className="shrink-0 text-xl text-sky-800 dark:text-sky-200">{entry.window}</span>
+              <section className="flex flex-col gap-3.5 rounded-3xl bg-[#E8EFF8] p-7">
+                <span className="text-2xl font-bold uppercase tracking-[0.12em] text-[#1F3A63]">Out today</span>
+                {outToday.map((entry) => (
+                  <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline justify-between gap-4">
+                    <span className="truncate text-[30px] font-semibold text-[#1F3A63]">{entry.name}</span>
+                    <span className="shrink-0 text-[22px] text-[#2B4C7E]">{entry.window}</span>
                   </div>
                 ))}
               </section>
             ) : null}
-
-            {stacked ? null : <div className="flex-1" />}
-            {syncStatus?.graph_configured && syncStatus.status === "success" && syncStatus.finished_at ? (
-              <div className="flex items-center gap-2.5 text-lg text-muted-foreground">
-                <span className="size-2.5 rounded-full bg-accent" />
-                Schedules from Teams Shifts · synced {formatTimeAgo(syncStatus.finished_at, now)}
-              </div>
-            ) : null}
-          </aside>
+          </div>
         </div>
       </div>
     </div>
