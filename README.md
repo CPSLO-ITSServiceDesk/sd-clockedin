@@ -4,9 +4,13 @@ Time management for student assistants — clock in/out at the kiosk, manage sch
 
 ## Microsoft Teams Shifts Integration
 
-The backend can synchronize student schedules, shift templates, and time off data directly from Microsoft Teams Shifts via Microsoft Graph API. This eliminates the need for spreadsheet imports and provides real-time schedule synchronization.
+The backend can synchronize the roster, weekly schedules, and time off directly from Microsoft Teams Shifts via Microsoft Graph API, so schedules don't have to be imported from spreadsheets.
 
-To enable Teams integration, configure the Microsoft Graph environment variables in your backend `.env` file (see Prerequisites below).
+- Sync runs **hourly** for the active term, right after an active term is saved, and on demand (`POST /api/teams-sync/sync-now`).
+- Only members of the configured scheduling group (`TEAMS_SCHEDULING_GROUP`, default "Service Desk") are synced, and only **shared** (published) shifts and time off. Pending time-off requests aren't synced; an approved request appears once its time off is on the schedule.
+- The integration is read-only: nothing in the app writes back to Teams.
+
+To enable Teams integration, configure the Microsoft Graph environment variables in your backend `.env` file (see Environment variables below).
 
 ## What's in the repo
 
@@ -17,11 +21,23 @@ This is a **pnpm monorepo** with two packages:
 | [`packages/frontend`](packages/frontend) | Next.js app (kiosk + admin UI) | http://localhost:3000 |
 | [`packages/backend`](packages/backend) | Express API backed by Supabase | http://localhost:3001/api |
 
-**Kiosk** (`/`) — live clock, who's clocked in, expected arrivals, student clock in/out.
+**Kiosk** (`/`) — live clock, who's clocked in, expected arrivals, who's out today, student clock in/out.
 
-**Display** (`/display`) — full-screen kiosk view for a wall monitor (clocked-in list and expected arrivals).
+**Display** (`/display`) — full-screen view for a wall monitor: who's here, who's coming next, and who's out today with the hours they're off.
 
-**Admin** (`/admin`) — terms, students, schedules, shift monitoring, student records, timesheet verification, shift normalization, analytics (term, student, group schedule), settings, and access control. Admin routes require Supabase Auth.
+**Admin** (`/admin`) — Supabase Auth required:
+- **Dashboard** with today's timeline and time off
+- **Shifts**
+- **Students:** roster with an edit panel
+- **Terms**
+- **Schedules:** team week editor
+- **Schedule Builder** (`/admin/schedules/new`): current-schedule view, then import availability → rules → review → publish
+- **Timesheet Verification**
+- **Shift Normalization:** link orphaned clock-ins, fix odd clock-outs
+- **Admin Access**
+- **Term Analytics** and **Student Records**
+
+`/admin/analytics/hourly-staffing` still exists but isn't in the sidebar.
 
 For package-level detail, see [packages/frontend/README.md](packages/frontend/README.md) and [packages/backend/README.md](packages/backend/README.md).
 
@@ -97,7 +113,7 @@ pnpm build            # Production build
 pnpm start            # Start production servers
 pnpm lint             # Lint all packages
 
-pnpm --filter backend test          # Backend unit tests (Vitest)
+pnpm --filter backend exec vitest run src/tests   # Backend unit tests (Vitest, same as CI)
 pnpm --filter backend test:watch    # Tests in watch mode
 pnpm --filter backend gen:types     # Regenerate Supabase TypeScript types
 ```
@@ -144,15 +160,21 @@ Browser (Next.js)  ──REST──▶  Express API  ──▶  Supabase (Postgr
        └── Supabase Auth ───────────┘   (admin login)
 ```
 
-- **Schedules** belong to a term and student; each schedule has **blocks** (day + start/end time).
-- **Time entries** record clock in/out, optionally linked to a schedule block.
-- **Schedule date overrides** allow temporary modifications to specific schedule instances.
+- **Schedules** belong to a term and student; each schedule has **blocks** (day + start/end time). A schedule can narrow its dates within the term (`start_date`/`end_date`), and terms list vacation days and swap days in `off_days`.
+- **Time entries** record clock in/out, optionally linked to a schedule block. Replacing a student's blocks (Teams sync, spreadsheet import, schedule-builder publish) keeps unchanged blocks, so their time entries stay linked.
+- **Time off** comes from Teams. Today's shifts match it against each shift's hours:
+  - covering the whole shift marks it as time off for the day
+  - partial time off trims the shift to the hours still worked, so nobody is marked late or absent for hours they're off
 - **Auto clock-out** runs daily at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE` and closes forgotten punch-outs.
-- **Timesheet verification** aggregates hours by day for payroll review.
-- **Shift normalization** matches orphaned time entries to schedule blocks for a term.
+- **Timesheet verification** shows monthly hours per student and lets admins sign off each month.
+- **Shift normalization** matches orphaned time entries to schedule blocks for a term, and sets odd clock-outs to the scheduled shift end. Odd means never clocked out, still clocked in well after the shift, auto clocked out, next day, or long after the shift.
+- **Schedule builder** turns a Microsoft Forms availability export into a draft schedule:
+  - desk rules: hours, minimum on desk, a lead every hour, shift length, requested hours, budget
+  - a generated draft you review by painting cells
+  - publishing writes it to the term's schedules
 - **Analytics** provides term- and student-level punctuality metrics and hourly headcount charts.
 - **Microsoft Teams Shifts integration** synchronizes roster, schedule templates, and time off data (when configured).
-- Clock-in logic picks the nearest matching block for the day; shift status (early, on-time, late, absent) is computed on the backend using the organization timezone.
+- Clock-in logic picks the nearest matching block for the day; shift status (early, on-time, late, absent) is computed on the backend using the organization timezone. Remote shifts are never flagged late or absent.
 
 API responses follow a consistent shape:
 
@@ -181,25 +203,28 @@ sd-clockin/
     │   ├── app/           # Routes (kiosk, display, admin)
     │   ├── components/    # UI and feature components
     │   ├── hooks/         # React Query hooks
-    │   ├── lib/           # API client, auth, Supabase helpers
+    │   ├── lib/           # API client, auth, Supabase, shift/schedule helpers
     │   └── proxy.ts       # Session refresh for admin auth
     └── backend/           # Express API
-        └── src/
-            ├── routes/    # HTTP routes
-            ├── controllers/
-            ├── services/  # Business logic + Supabase
-            ├── lib/       # Shared helpers (time, shifts, import)
-            ├── jobs/      # Scheduled jobs (auto clock-out)
-            ├── middleware/
-            └── tests/
+        ├── src/
+        │   ├── routes/    # HTTP routes
+        │   ├── controllers/
+        │   ├── services/  # Business logic + Supabase
+        │   ├── lib/       # Pure helpers (time, shifts, import, schedule builder, Teams)
+        │   ├── jobs/      # Scheduled jobs (auto clock-out, Teams sync)
+        │   ├── middleware/
+        │   └── tests/
+        └── supabase/
+            ├── migrations/  # Forward SQL migrations (applied by hand)
+            └── down/        # Matching rollbacks
 ```
 
 ## Contributing / extending
 
 Typical flow for a new feature that touches data:
 
-1. Schema change in Supabase (if needed) → `pnpm --filter backend gen:types`
-2. Backend service → controller → route
+1. Schema change (if needed): add a migration in `packages/backend/supabase/migrations/` plus its rollback in `supabase/down/`, apply it in Supabase, then `pnpm --filter backend gen:types`
+2. Rules and calculations as pure functions in `backend/src/lib/` with Vitest tests → backend service → controller → route
 3. Frontend `lib/api/` wrapper → query hook → UI
 
 For scheduled jobs (like auto clock-out):
