@@ -1,7 +1,7 @@
 import { withTodayShiftsCache } from '../lib/todayShiftsCache';
 import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
 import { formatStudentRole } from '../lib/formatStudentRole';
-import { getOrgDayOfWeek } from '../lib/orgTime';
+import { getOrgDayOfWeek, getOrgLocalInstant } from '../lib/orgTime';
 import { timeToMinutes } from '../lib/time';
 import {
   isCampusVacationOnDate,
@@ -67,6 +67,8 @@ export interface TodayShiftsResult {
   remoteOnlyStudentIds: number[];
   timeOffShifts: TodayTimeOffShift[];
   upcomingTimeOff: UpcomingTimeOff[];
+  /** Every time off overlapping today (past, current or later), soonest first. */
+  todayTimeOff: UpcomingTimeOff[];
 }
 
 type TodayTimeOffInterval = TimeOffInterval & { time_off_reason?: string | null };
@@ -115,20 +117,19 @@ function resolveBlockStudentId(
 type StudentAssistant = Database['public']['Tables']['student_assistant']['Row'];
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
 
-function buildUpcomingTimeOff(
+/** Time off for active students overlapping `[fromMs, toMs)`, soonest first. */
+function listTimeOff(
   rows: TodayTimeOffInterval[],
   studentAssistantMap: Map<number, StudentAssistant>,
-  now: Date,
+  fromMs: number,
+  toMs: number,
 ): UpcomingTimeOff[] {
-  const nowMs = now.getTime();
-  const windowEndMs = nowMs + UPCOMING_TIME_OFF_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-
   return rows
     .filter((row) => {
       const start = Date.parse(row.starts_at);
       const end = Date.parse(row.ends_at);
       if (Number.isNaN(start) || Number.isNaN(end)) return false;
-      return end > nowMs && start < windowEndMs;
+      return end > fromMs && start < toMs;
     })
     .flatMap((row) => {
       const studentAssistant = studentAssistantMap.get(row.student_assistant_id);
@@ -142,7 +143,28 @@ function buildUpcomingTimeOff(
         reason: row.time_off_reason ?? null,
       }];
     })
-    .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+    .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt) || a.firstName.localeCompare(b.firstName));
+}
+
+function buildUpcomingTimeOff(
+  rows: TodayTimeOffInterval[],
+  studentAssistantMap: Map<number, StudentAssistant>,
+  now: Date,
+): UpcomingTimeOff[] {
+  const nowMs = now.getTime();
+  return listTimeOff(rows, studentAssistantMap, nowMs, nowMs + UPCOMING_TIME_OFF_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/** All of `todayDate` in the org timezone, so time off that already ended today still counts. */
+function buildTodayTimeOff(
+  rows: TodayTimeOffInterval[],
+  studentAssistantMap: Map<number, StudentAssistant>,
+  todayDate: string,
+): UpcomingTimeOff[] {
+  const dayStart = getOrgLocalInstant(todayDate, 0, 0).getTime();
+  const [y, m, d] = todayDate.split('-').map(Number);
+  const nextDate = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  return listTimeOff(rows, studentAssistantMap, dayStart, getOrgLocalInstant(nextDate, 0, 0).getTime());
 }
 
 type BlockTimeOff =
@@ -274,6 +296,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
   );
 
   const upcomingTimeOff = buildUpcomingTimeOff(studentTimeOff, studentAssistantMap, now);
+  const todayTimeOff = buildTodayTimeOff(studentTimeOff, studentAssistantMap, todayDate);
 
   if (!todayDay) {
     return {
@@ -281,6 +304,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
       remoteOnlyStudentIds: [],
       timeOffShifts: [],
       upcomingTimeOff,
+      todayTimeOff,
     };
   }
 
@@ -415,6 +439,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
     remoteOnlyStudentIds,
     timeOffShifts: timeOffShifts.sort((a, b) => a.startTime.localeCompare(b.startTime)),
     upcomingTimeOff,
+    todayTimeOff,
   };
 }
 

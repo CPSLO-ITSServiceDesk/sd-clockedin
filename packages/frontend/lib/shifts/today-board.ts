@@ -1,4 +1,4 @@
-import type { TodayTimeOffShift } from "@/lib/api/today-shifts"
+import type { TodayTimeOffShift, UpcomingTimeOff } from "@/lib/api/today-shifts"
 import { formatTime } from "@/lib/format-time"
 import {
   getOrgLocalDateString,
@@ -171,47 +171,64 @@ export function formatTimeOffToday(startsAt: string, endsAt: string, now: Date =
   return formatOrgClockRange(startsAt, endsAt)
 }
 
-/** One entry per student on Teams time off today, with when they're off. */
+/**
+ * One entry per student off today, with when: "All day", "10:00 – 11:00 AM",
+ * "Until 1:00 PM"... Lists time off that already ended today too, so short
+ * time off stays visible all day. Falls back to `timeOffShifts` for responses
+ * from before `todayTimeOff` existed.
+ */
 export function buildOutToday(
+  todayTimeOff: UpcomingTimeOff[],
   timeOffShifts: TodayTimeOffShift[],
   now: Date = new Date(),
 ): OutTodayEntry[] {
-  const byStudent = new Map<number, TodayTimeOffShift[]>()
-  for (const shift of timeOffShifts) {
-    const list = byStudent.get(shift.studentAssistantId) ?? []
-    list.push(shift)
-    byStudent.set(shift.studentAssistantId, list)
+  const windows: Pick<UpcomingTimeOff, "studentAssistantId" | "firstName" | "lastName" | "startsAt" | "endsAt" | "reason">[] =
+    todayTimeOff.length > 0
+      ? todayTimeOff
+      : timeOffShifts.map((shift) => ({
+          studentAssistantId: shift.studentAssistantId,
+          firstName: shift.firstName,
+          lastName: shift.lastName,
+          startsAt: shift.timeOffStartsAt,
+          endsAt: shift.timeOffEndsAt,
+          reason: shift.timeOffReason,
+        }))
+
+  const byStudent = new Map<number, typeof windows>()
+  for (const entry of windows) {
+    byStudent.set(entry.studentAssistantId, [...(byStudent.get(entry.studentAssistantId) ?? []), entry])
   }
 
   return Array.from(byStudent.values())
-    .map((studentShifts) => {
-      const [first] = studentShifts
-      // Several shifts can share one time off; list each distinct window once, earliest first.
-      const windows = [
+    .map((entries) => {
+      const sorted = [...entries].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
+      const [first] = sorted
+      // List each distinct window once, earliest first.
+      const labels = [
         ...new Map(
-          [...studentShifts]
-            .sort((a, b) => Date.parse(a.timeOffStartsAt) - Date.parse(b.timeOffStartsAt))
-            .map((shift) => [
-              `${shift.timeOffStartsAt}|${shift.timeOffEndsAt}`,
-              formatTimeOffToday(shift.timeOffStartsAt, shift.timeOffEndsAt, now),
-            ]),
+          sorted.map((entry) => [`${entry.startsAt}|${entry.endsAt}`, formatTimeOffToday(entry.startsAt, entry.endsAt, now)]),
         ).values(),
       ]
-      const window = windows.includes("All day") ? "All day" : windows.join(", ")
-
       return {
         entry: {
           studentAssistantId: first.studentAssistantId,
           name: formatShiftName(first),
           initials: getShiftInitials(first),
-          window,
-          reason: first.timeOffReason,
+          window: labels.includes("All day") ? "All day" : labels.join(", "),
+          reason: first.reason,
         },
-        startMinutes: Math.min(...studentShifts.map((shift) => toOrgWallClockMinutes(shift.startTime))),
+        allDay: labels.includes("All day"),
+        startsAt: Date.parse(first.startsAt),
         firstName: first.firstName,
       }
     })
-    .sort(byStartThenFirstName)
+    // All-day first, then by when the time off starts, then first name.
+    .sort(
+      (a, b) =>
+        Number(b.allDay) - Number(a.allDay) ||
+        a.startsAt - b.startsAt ||
+        a.firstName.localeCompare(b.firstName),
+    )
     .map(({ entry }) => entry)
 }
 

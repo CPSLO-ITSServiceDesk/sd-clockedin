@@ -168,7 +168,7 @@ export function Kiosk() {
   const queryClient = useQueryClient()
   const mountedNow = useNow(1000)
   const now = mountedNow ?? new Date(0)
-  const { shifts, timeOffShifts, isLoading, error } = useTodayShiftList()
+  const { shifts, timeOffShifts, todayTimeOff, isLoading, error } = useTodayShiftList()
   const [modalMode, setModalMode] = useState<"in" | "out" | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<WorkingTile | null>(null)
   const [clockOutAllOpen, setClockOutAllOpen] = useState(false)
@@ -179,7 +179,7 @@ export function Kiosk() {
 
   const clockedIn = mountedNow ? buildWorkingTiles(shifts, now) : []
   const arrivals = mountedNow ? buildUpNext(shifts, now) : []
-  const outToday = mountedNow ? buildOutToday(timeOffShifts, now) : []
+  const outToday = mountedNow ? buildOutToday(todayTimeOff, timeOffShifts, now) : []
   const clock = formatClockParts(now)
   const ready = mountedNow !== null && !isLoading
   const showClockOutAll = mountedNow !== null && isDuringLastWorkingHour(now)

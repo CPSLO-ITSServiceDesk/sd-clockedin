@@ -1,7 +1,7 @@
 import { apiFetch } from "./client"
 import type { TodayShift } from "@/lib/shifts/today-shifts"
 
-/** A scheduled block omitted from `shifts` because Teams time off covers now. */
+/** A scheduled block omitted from `shifts` because Teams time off covers all of it, or covers it now. */
 export interface TodayTimeOffShift {
   scheduleBlockId: number
   studentAssistantId: number
@@ -31,6 +31,8 @@ export interface TodayShiftsResponse {
   remoteOnlyStudentIds: number[]
   timeOffShifts?: TodayTimeOffShift[]
   upcomingTimeOff?: UpcomingTimeOff[]
+  /** Every time off overlapping today, including ones that already ended. */
+  todayTimeOff?: UpcomingTimeOff[]
 }
 
 export const todayShiftsApi = {

@@ -145,7 +145,7 @@ export function WallDisplay() {
 
   const mountedNow = useNow(1000)
   const now = mountedNow ?? new Date(0)
-  const { shifts, timeOffShifts, isLoading, error } = useTodayShiftList({ includeRemote: true })
+  const { shifts, timeOffShifts, todayTimeOff, isLoading, error } = useTodayShiftList({ includeRemote: true })
   const { data: syncStatus } = useActiveTermTeamsSyncStatus({
     refetchIntervalMs: SYNC_STATUS_REFRESH_MS,
   })
@@ -153,7 +153,7 @@ export function WallDisplay() {
   const ready = Boolean(mountedNow) && !isLoading
   const tiles = mountedNow ? buildWorkingTiles(shifts, now) : []
   const arriving = mountedNow ? buildUpNext(shifts, now).slice(0, ARRIVING_MAX) : []
-  const outToday = mountedNow ? buildOutToday(timeOffShifts, now).slice(0, OUT_TODAY_MAX) : []
+  const outToday = mountedNow ? buildOutToday(todayTimeOff, timeOffShifts, now).slice(0, OUT_TODAY_MAX) : []
   const clock = formatClock(now)
 
   const currentHour = Math.floor(getOrgLocalMinutes(now) / 60)

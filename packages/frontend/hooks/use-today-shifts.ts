@@ -27,6 +27,7 @@ export function useTodayShiftList(options?: { includeRemote?: boolean }) {
     remoteOnlyStudentIds: query.data?.remoteOnlyStudentIds ?? [],
     timeOffShifts: query.data?.timeOffShifts ?? [],
     upcomingTimeOff: query.data?.upcomingTimeOff ?? [],
+    todayTimeOff: query.data?.todayTimeOff ?? [],
   }
 }
 

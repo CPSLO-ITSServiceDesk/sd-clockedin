@@ -262,6 +262,23 @@ describe('assembleTodayShifts', () => {
     expect(alex(after)).toMatchObject({ startTime: '10:00', endTime: '12:00' });
   });
 
+  it('lists every time off overlapping today in todayTimeOff, even after it ended', () => {
+    const result = assemble({
+      now: new Date('2026-06-22T22:00:00.000Z'), // 3:00 PM, after both
+      studentTimeOff: [
+        mondayOff(9, 10),
+        { ...mondayOff(12, 13), id: 2, student_assistant_id: 200 },
+        { ...allDayMondayTimeOff, id: 3, starts_at: '2026-06-23T16:00:00.000Z', ends_at: '2026-06-23T17:00:00.000Z' },
+      ],
+    });
+
+    expect(result.todayTimeOff.map((entry) => [entry.firstName, entry.startsAt])).toEqual([
+      ['Alex', '2026-06-22T16:00:00.000Z'],
+      ['Blair', '2026-06-22T19:00:00.000Z'],
+    ]);
+    expect(result.upcomingTimeOff.map((entry) => entry.startsAt)).toEqual(['2026-06-23T16:00:00.000Z']);
+  });
+
   it('reports blocks omitted for time off in timeOffShifts', () => {
     const result = assemble({
       studentTimeOff: [allDayMondayTimeOff],
