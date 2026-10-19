@@ -1,3 +1,5 @@
+import { config } from '../config/environment';
+import { findClockOutFixes, type ClockOutFix } from '../lib/clockOutFixes';
 import {
   buildNormalizationPreview,
   validateNormalizationMatch,
@@ -14,6 +16,29 @@ import { studentAssistantService } from './studentAssistantService';
 import { studentTimeOffService } from './studentTimeOffService';
 import { termService } from './termService';
 import { timeEntryService } from './timeEntryService';
+
+export type NormalizationPreviewWithClockOuts = NormalizationPreview & {
+  /** Linked entries whose clock-out looks wrong, with the scheduled end as the fix. */
+  clockOutFixes: ClockOutFix[];
+};
+
+export interface ClockOutFixResult {
+  applied: number;
+  skipped: { timeEntryId: number; reason: string }[];
+}
+
+function clockOutFixesFor(context: NormalizationContext, now: Date = new Date()): ClockOutFix[] {
+  const { enabled, hour, minute } = config.autoClockOut;
+  return findClockOutFixes({
+    term: context.term,
+    schedules: context.schedules,
+    scheduleBlocks: context.scheduleBlocks,
+    timeEntries: context.timeEntries,
+    students: context.students,
+    now,
+    autoClockOutMinutes: enabled ? hour * 60 + minute : null,
+  });
+}
 
 async function loadContext(termId: number): Promise<NormalizationContext> {
   const term = await termService.getById(termId);
@@ -33,9 +58,9 @@ async function loadContext(termId: number): Promise<NormalizationContext> {
 }
 
 export const shiftNormalizationService = {
-  async getPreview(termId: number): Promise<NormalizationPreview> {
+  async getPreview(termId: number): Promise<NormalizationPreviewWithClockOuts> {
     const context = await loadContext(termId);
-    return buildNormalizationPreview(
+    const preview = buildNormalizationPreview(
       context.term,
       context.schedules,
       context.scheduleBlocks,
@@ -44,6 +69,34 @@ export const shiftNormalizationService = {
       new Date(),
       context.studentTimeOff ?? [],
     );
+    return { ...preview, clockOutFixes: clockOutFixesFor(context) };
+  },
+
+  /**
+   * Set each selected entry's clock-out to its shift's scheduled end. Fixes are
+   * recomputed first, so entries that no longer look wrong are skipped.
+   */
+  async applyClockOutFixes(termId: number, timeEntryIds: number[]): Promise<ClockOutFixResult> {
+    const context = await loadContext(termId);
+    const fixes = new Map(clockOutFixesFor(context).map((fix) => [fix.timeEntryId, fix]));
+    const skipped: ClockOutFixResult['skipped'] = [];
+    let applied = 0;
+
+    for (const timeEntryId of new Set(timeEntryIds)) {
+      const fix = fixes.get(timeEntryId);
+      if (!fix) {
+        skipped.push({ timeEntryId, reason: 'Clock-out no longer needs fixing' });
+        continue;
+      }
+      const updated = await timeEntryService.update(timeEntryId, { clock_out: fix.proposedClockOut });
+      if (!updated) {
+        skipped.push({ timeEntryId, reason: 'Time entry not found' });
+        continue;
+      }
+      applied += 1;
+    }
+
+    return { applied, skipped };
   },
 
   async applyMatches(

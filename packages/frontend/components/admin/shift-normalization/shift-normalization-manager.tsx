@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Check, Minus } from "lucide-react"
+import { Check } from "lucide-react"
 import { toast } from "sonner"
 
+import { Checkmark, ClockOutFixesSection } from "@/components/admin/shift-normalization/clock-out-fixes-section"
 import { sortTermsByActiveStatus } from "@/components/admin/terms/term-types"
 import {
   Select,
@@ -32,20 +33,6 @@ const MATCH_GRID =
   "grid grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[28px_minmax(0,1.2fr)_110px_150px_minmax(0,1.3fr)_170px_150px] gap-x-3 gap-y-1"
 const UNMATCHED_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.2fr)_110px_150px_170px_minmax(0,1.6fr)] gap-x-3 gap-y-1"
-
-function Checkmark({ state }: Readonly<{ state: "on" | "off" | "some" }>) {
-  return (
-    <span
-      className={cn(
-        "flex size-5 items-center justify-center rounded-md border-[1.5px]",
-        state === "off" ? "border-border bg-card" : "border-accent bg-accent text-accent-foreground",
-      )}
-    >
-      {state === "on" ? <Check className="size-3.5" strokeWidth={3} /> : null}
-      {state === "some" ? <Minus className="size-3.5" strokeWidth={3} /> : null}
-    </span>
-  )
-}
 
 export function ShiftNormalizationManager() {
   const queryClient = useQueryClient()
@@ -91,6 +78,17 @@ export function ShiftNormalizationManager() {
     await previewQuery.refetch()
   }
 
+  /** Time entries changed: refresh everything that reads them, then rescan. */
+  const refreshAfterChange = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
+      ...(termId ? [queryClient.invalidateQueries({ queryKey: queryKeys.analytics.term(termId) })] : []),
+      queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.timesheet.all }),
+    ])
+    await previewQuery.refetch()
+  }
+
   const apply = async () => {
     if (!termId || selected.length === 0) return
     setApplying(true)
@@ -102,13 +100,7 @@ export function ShiftNormalizationManager() {
           scheduleBlockId: view.proposal.proposedBlockId,
         })),
       )
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.analytics.term(termId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.todayShifts.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.timesheet.all }),
-      ])
-      await previewQuery.refetch()
+      await refreshAfterChange()
       setBanner(
         `Linked ${result.applied} ${result.applied === 1 ? "clock-in" : "clock-ins"} to their shifts.${
           result.skipped.length > 0 ? ` ${result.skipped.length} skipped because they changed since the scan.` : ""
@@ -128,6 +120,7 @@ export function ShiftNormalizationManager() {
       : "not scanned yet"
 
   const unmatched = preview?.unmatched ?? []
+  const clockOutFixes = preview?.clockOutFixes ?? []
   const kpis = [
     {
       value: preview ? preview.summary.totalUnscheduled : "—",
@@ -140,6 +133,12 @@ export function ShiftNormalizationManager() {
       value: preview ? unmatched.length : "—",
       label: "No match",
       hint: "need a manual fix",
+      className: "text-amber-700 dark:text-amber-300",
+    },
+    {
+      value: preview ? clockOutFixes.length : "—",
+      label: "Odd clock-outs",
+      hint: "can be set to shift end",
       className: "text-amber-700 dark:text-amber-300",
     },
   ]
@@ -205,7 +204,7 @@ export function ShiftNormalizationManager() {
         </p>
       ) : null}
 
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi) => (
           <div
             key={kpi.label}
@@ -329,6 +328,17 @@ export function ShiftNormalizationManager() {
           })
         )}
       </section>
+
+      <ClockOutFixesSection
+        termId={termId}
+        fixes={clockOutFixes}
+        scanKey={previewQuery.dataUpdatedAt}
+        disabled={previewQuery.isFetching || applying}
+        onApplied={async (message) => {
+          await refreshAfterChange()
+          setBanner(message)
+        }}
+      />
 
       <section className="overflow-hidden rounded-[20px] border border-border bg-card">
         <button

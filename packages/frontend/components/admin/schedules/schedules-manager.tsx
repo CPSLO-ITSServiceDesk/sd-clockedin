@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Search, Upload } from "lucide-react"
+import Link from "next/link"
+import { Search, Sparkles, Upload } from "lucide-react"
 import { toast } from "sonner"
 
 import { ScheduleCoverage } from "@/components/admin/schedules/schedule-coverage"
@@ -219,6 +220,13 @@ export function SchedulesManager() {
                 ))}
               </SelectContent>
             </Select>
+            <Link
+              href={activeTermId ? `/admin/schedules/new?term=${activeTermId}` : "/admin/schedules/new"}
+              className="flex h-9 items-center gap-2 rounded-full bg-primary px-3.5 text-[13px] font-bold text-primary-foreground hover:bg-primary/90"
+            >
+              <Sparkles className="size-3.5" />
+              Build from availability
+            </Link>
             <button
               type="button"
               disabled={!activeTermId}

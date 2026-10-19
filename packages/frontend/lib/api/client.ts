@@ -44,6 +44,23 @@ export async function apiFetch<T>(
     ...init,
   })
 
+  return parseResponse<T>(res)
+}
+
+/** POST multipart form data (file uploads); the browser sets the multipart boundary. */
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const accessToken = await getAccessToken()
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    body: formData,
+  })
+
+  return parseResponse<T>(res)
+}
+
+async function parseResponse<T>(res: Response): Promise<T> {
   if (res.status === 204) {
     return undefined as T
   }

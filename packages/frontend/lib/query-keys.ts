@@ -38,6 +38,11 @@ export const queryKeys = {
   admins: {
     all: ["admins"] as const,
   },
+  scheduleDrafts: {
+    all: ["schedule-drafts"] as const,
+    byTerm: (termId: number) => ["schedule-drafts", "term", termId] as const,
+    preview: (draftId: number) => ["schedule-drafts", draftId, "publish-preview"] as const,
+  },
   teamsSync: {
     all: ["teams-sync"] as const,
     status: (termId?: number | null) =>

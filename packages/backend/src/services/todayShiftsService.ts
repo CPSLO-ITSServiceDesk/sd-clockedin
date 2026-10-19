@@ -2,9 +2,11 @@ import { withTodayShiftsCache } from '../lib/todayShiftsCache';
 import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
 import { formatStudentRole } from '../lib/formatStudentRole';
 import { getOrgDayOfWeek } from '../lib/orgTime';
+import { timeToMinutes } from '../lib/time';
 import {
   isCampusVacationOnDate,
   isTimeOffCoveringInstant,
+  timeOffForShift,
   type TimeOffInterval,
 } from '../lib/timeOffCoverage';
 import { computeRemoteShiftStatus, computeShiftStatus, getClockInDate, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
@@ -36,7 +38,7 @@ export interface TodayShift {
   isRemote: boolean;
 }
 
-/** A scheduled block omitted from `shifts` because the student's time off covers now. */
+/** A scheduled block omitted from `shifts` because time off covers the whole shift, or covers it now. */
 export interface TodayTimeOffShift {
   scheduleBlockId: number;
   studentAssistantId: number;
@@ -113,16 +115,6 @@ function resolveBlockStudentId(
 type StudentAssistant = Database['public']['Tables']['student_assistant']['Row'];
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
 
-function findTimeOffCoveringInstant(
-  rows: TodayTimeOffInterval[],
-  studentAssistantId: number,
-  instant: Date,
-): TodayTimeOffInterval | null {
-  return (
-    rows.find((row) => isTimeOffCoveringInstant([row], studentAssistantId, instant)) ?? null
-  );
-}
-
 function buildUpcomingTimeOff(
   rows: TodayTimeOffInterval[],
   studentAssistantMap: Map<number, StudentAssistant>,
@@ -153,15 +145,58 @@ function buildUpcomingTimeOff(
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
 
-function shouldOmitScheduledBlock(
+type BlockTimeOff =
+  /** Campus vacation: the block doesn't run and isn't listed. */
+  | { kind: 'vacation' }
+  /** Time off covers the whole shift, or covers it right now. */
+  | { kind: 'off'; timeOff: TodayTimeOffInterval }
+  /** Works the shift; `startTime`/`endTime` are trimmed around any partial time off. */
+  | { kind: 'work'; startTime: string; endTime: string };
+
+function minutesToTime(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Time off is matched against the shift's own hours on `todayDate`, not just
+ * the current instant, so a shift fully covered by time off is shown as time
+ * off all day and a partly covered one is trimmed (8–11 with 10–11 off is
+ * expected 8–10; with 8–9 off it's expected from 9, so it isn't marked late).
+ */
+function resolveBlockTimeOff(
+  block: ScheduleBlock,
+  studentAssistantId: number,
   todayDate: string,
   now: Date,
   term: Term | undefined,
-  studentAssistantId: number,
-  studentTimeOff: TimeOffInterval[],
-): boolean {
-  if (isCampusVacationOnDate(term, todayDate)) return true;
-  return isTimeOffCoveringInstant(studentTimeOff, studentAssistantId, now);
+  studentTimeOff: TodayTimeOffInterval[],
+): BlockTimeOff {
+  if (isCampusVacationOnDate(term, todayDate)) return { kind: 'vacation' };
+
+  const startTime = block.start_time ?? '00:00';
+  const endTime = block.end_time ?? '00:00';
+  const startMinutes = timeToMinutes(startTime);
+  const endMinutes = timeToMinutes(endTime);
+  if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes) || endMinutes <= startMinutes) {
+    return { kind: 'work', startTime, endTime };
+  }
+
+  const { timeOff, remaining } = timeOffForShift(
+    studentTimeOff,
+    studentAssistantId,
+    todayDate,
+    startMinutes,
+    endMinutes,
+  );
+  if (!timeOff) return { kind: 'work', startTime, endTime };
+  if (!remaining || isTimeOffCoveringInstant([timeOff], studentAssistantId, now)) {
+    return { kind: 'off', timeOff };
+  }
+  return {
+    kind: 'work',
+    startTime: remaining[0] === startMinutes ? startTime : minutesToTime(remaining[0]),
+    endTime: remaining[1] === endMinutes ? endTime : minutesToTime(remaining[1]),
+  };
 }
 
 function buildUnscheduledShifts(
@@ -278,7 +313,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
     const studentAssistant = studentAssistantMap.get(studentId);
     if (!studentAssistant || studentAssistant.is_active === false) continue;
 
-    if (shouldOmitScheduledBlock(todayDate, now, term, studentId, studentTimeOff)) {
+    if (resolveBlockTimeOff(block, studentId, todayDate, now, term, studentTimeOff).kind !== 'work') {
       continue;
     }
 
@@ -322,39 +357,35 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
     const studentAssistant = studentAssistantMap.get(schedule.student_assistant_id);
     if (!studentAssistant || studentAssistant.is_active === false) return [];
 
-    if (
-      shouldOmitScheduledBlock(
-        todayDate,
-        now,
-        term,
-        schedule.student_assistant_id,
-        studentTimeOff,
-      )
-    ) {
-      const timeOff = isCampusVacationOnDate(term, todayDate)
-        ? null
-        : findTimeOffCoveringInstant(studentTimeOff, schedule.student_assistant_id, now);
-      if (timeOff) {
-        timeOffShifts.push({
-          scheduleBlockId: block.id,
-          studentAssistantId: schedule.student_assistant_id,
-          firstName: studentAssistant.first_name ?? '',
-          lastName: studentAssistant.last_name ?? '',
-          role: formatStudentRole(studentAssistant.position),
-          startTime: block.start_time ?? '00:00',
-          endTime: block.end_time ?? '00:00',
-          isRemote: block.is_remote ?? false,
-          timeOffStartsAt: timeOff.starts_at,
-          timeOffEndsAt: timeOff.ends_at,
-          timeOffReason: timeOff.time_off_reason ?? null,
-        });
-      }
+    const resolved = resolveBlockTimeOff(
+      block,
+      schedule.student_assistant_id,
+      todayDate,
+      now,
+      term,
+      studentTimeOff,
+    );
+    if (resolved.kind === 'vacation') return [];
+    if (resolved.kind === 'off') {
+      timeOffShifts.push({
+        scheduleBlockId: block.id,
+        studentAssistantId: schedule.student_assistant_id,
+        firstName: studentAssistant.first_name ?? '',
+        lastName: studentAssistant.last_name ?? '',
+        role: formatStudentRole(studentAssistant.position),
+        startTime: block.start_time ?? '00:00',
+        endTime: block.end_time ?? '00:00',
+        isRemote: block.is_remote ?? false,
+        timeOffStartsAt: resolved.timeOff.starts_at,
+        timeOffEndsAt: resolved.timeOff.ends_at,
+        timeOffReason: resolved.timeOff.time_off_reason ?? null,
+      });
       return [];
     }
 
     const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`;
     const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
-    const startTime = block.start_time ?? '00:00';
+    const { startTime, endTime } = resolved;
 
     return [{
       scheduleBlockId: block.id,
@@ -363,7 +394,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
       lastName: studentAssistant.last_name ?? '',
       role: formatStudentRole(studentAssistant.position),
       startTime,
-      endTime: block.end_time ?? '00:00',
+      endTime,
       clockInActual: timeEntry?.clock_in ?? null,
       clockOutActual: timeEntry?.clock_out ?? null,
       timeEntryId: timeEntry?.id ?? null,

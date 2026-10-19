@@ -214,6 +214,54 @@ describe('assembleTodayShifts', () => {
 
     expect(result.shifts.map((shift) => shift.studentAssistantId).sort()).toEqual([100, 200]);
   });
+
+  /** Alex's time off on Monday, in PDT (UTC-7). */
+  const mondayOff = (startHour: number, endHour: number): StudentTimeOff => ({
+    ...allDayMondayTimeOff,
+    starts_at: `2026-06-22T${String(startHour + 7).padStart(2, '0')}:00:00.000Z`,
+    ends_at: `2026-06-22T${String(endHour + 7).padStart(2, '0')}:00:00.000Z`,
+  });
+  const alex = (result: ReturnType<typeof assemble>) =>
+    result.shifts.find((shift) => shift.studentAssistantId === 100);
+
+  it('reports a shift fully covered by time off before the time off starts', () => {
+    const result = assemble({
+      now: new Date('2026-06-22T15:00:00.000Z'), // 8:00 AM
+      studentTimeOff: [mondayOff(9, 12)],
+    });
+
+    expect(alex(result)).toBeUndefined();
+    expect(result.timeOffShifts.map((shift) => shift.scheduleBlockId)).toEqual([20]);
+  });
+
+  it('reports full-shift time off when viewing another day, whatever the reference time', () => {
+    const result = assemble({
+      now: new Date('2026-06-22T07:00:00.000Z'), // midnight, as for a future ?date=
+      studentTimeOff: [mondayOff(9, 12)],
+    });
+
+    expect(result.timeOffShifts.map((shift) => shift.studentAssistantId)).toEqual([100]);
+  });
+
+  it('trims a shift whose end is covered by time off', () => {
+    const result = assemble({ studentTimeOff: [mondayOff(11, 12)] });
+
+    expect(alex(result)).toMatchObject({ startTime: '09:00', endTime: '11:00' });
+    expect(result.timeOffShifts).toEqual([]);
+  });
+
+  it('starts the shift when time off at its start ends, and shows time off during it', () => {
+    const during = assemble({ studentTimeOff: [mondayOff(9, 10)] }); // 9:30 AM
+    expect(alex(during)).toBeUndefined();
+    expect(during.timeOffShifts.map((shift) => shift.studentAssistantId)).toEqual([100]);
+
+    const after = assemble({
+      now: new Date('2026-06-22T17:30:00.000Z'), // 10:30 AM
+      studentTimeOff: [mondayOff(9, 10)],
+    });
+    expect(alex(after)).toMatchObject({ startTime: '10:00', endTime: '12:00' });
+  });
+
   it('reports blocks omitted for time off in timeOffShifts', () => {
     const result = assemble({
       studentTimeOff: [allDayMondayTimeOff],

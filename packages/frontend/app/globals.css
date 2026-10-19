@@ -23,6 +23,14 @@
   --status-pending: oklch(0.72 0.14 85);
   --status-offline: var(--ds-fg-subtle);
 
+  /* Schedule builder: desk roles and availability */
+  --role-lead: oklch(0.37 0.07 160);
+  --role-main: oklch(0.6 0.06 155);
+  --role-training: oklch(0.42 0.09 255);
+  --role-foreground: oklch(0.99 0 0);
+  --avail: oklch(0.91 0.07 85);
+  --avail-edge: oklch(0.55 0.1 70);
+
   /* shadcn semantic mapping */
   --background: var(--ds-bg);
   --foreground: var(--ds-fg);
@@ -76,6 +84,13 @@
   --status-online: var(--ds-accent);
   --status-pending: oklch(0.78 0.14 85);
   --status-offline: var(--ds-fg-subtle);
+
+  --role-lead: oklch(0.62 0.12 155);
+  --role-main: oklch(0.5 0.06 155);
+  --role-training: oklch(0.6 0.11 255);
+  --role-foreground: oklch(0.16 0.01 60);
+  --avail: oklch(0.38 0.06 85);
+  --avail-edge: oklch(0.75 0.12 80);
 
   --background: var(--ds-bg);
   --foreground: var(--ds-fg);
@@ -158,6 +173,12 @@
   --color-status-online: var(--status-online);
   --color-status-pending: var(--status-pending);
   --color-status-offline: var(--status-offline);
+  --color-role-lead: var(--role-lead);
+  --color-role-main: var(--role-main);
+  --color-role-training: var(--role-training);
+  --color-role-foreground: var(--role-foreground);
+  --color-avail: var(--avail);
+  --color-avail-edge: var(--avail-edge);
 }
 
 @layer base {

@@ -31,4 +31,15 @@ export const shiftNormalizationController = {
       next(err);
     }
   },
+
+  async applyClockOutFixes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const termId = Number(req.params.termId);
+      const timeEntryIds = (req.body.timeEntryIds as unknown[]).map(Number);
+      const data = await shiftNormalizationService.applyClockOutFixes(termId, timeEntryIds);
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
 };

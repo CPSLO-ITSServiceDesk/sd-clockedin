@@ -7,6 +7,7 @@ import {
   Clock,
   LayoutDashboard,
   Calendar,
+  CalendarPlus,
   BookOpen,
   GraduationCap,
   ShieldCheck,
@@ -42,6 +43,7 @@ const navManage = [
   { title: "Students", href: "/admin/students", icon: GraduationCap },
   { title: "Terms", href: "/admin/terms", icon: BookOpen },
   { title: "Schedules", href: "/admin/schedules", icon: Calendar },
+  { title: "Schedule Builder", href: "/admin/schedules/new", icon: CalendarPlus },
   { title: "Timesheet Verification", href: "/admin/timesheet-verification", icon: Clock },
   { title: "Shift Normalization", href: "/admin/shift-normalization", icon: Link2 },
   { title: "Admin Access", href: "/admin/access", icon: ShieldCheck },
@@ -51,6 +53,15 @@ const navAnalytics = [
   { title: "Term Analytics", href: "/admin/analytics/term", icon: BarChart2 },
   { title: "Student Records", href: "/admin/studentrecords", icon: ClipboardList },
 ]
+
+const allNavHrefs = [...navMain, ...navManage, ...navAnalytics].map((item) => item.href)
+
+/** Active on the item's page and its sub-pages, unless a more specific item matches. */
+function isNavActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true
+  if (href === "/admin" || !pathname.startsWith(`${href}/`)) return false
+  return !allNavHrefs.some((other) => other.length > href.length && pathname.startsWith(other))
+}
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -84,7 +95,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {navMain.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                  <SidebarMenuButton asChild isActive={isNavActive(pathname, item.href)} tooltip={item.title}>
                     <Link href={item.href}>
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
@@ -102,7 +113,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {navManage.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                  <SidebarMenuButton asChild isActive={isNavActive(pathname, item.href)} tooltip={item.title}>
                     <Link href={item.href}>
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
@@ -120,7 +131,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {navAnalytics.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                  <SidebarMenuButton asChild isActive={isNavActive(pathname, item.href)} tooltip={item.title}>
                     <Link href={item.href}>
                       <item.icon className="size-4" />
                       <span>{item.title}</span>

@@ -11,6 +11,7 @@ import analyticsRoutes from './analytics';
 import shiftNormalizationRoutes from './shiftNormalization';
 import timesheetRoutes from './timesheet';
 import adminRoutes from './admins';
+import scheduleDraftRoutes from './scheduleDrafts';
 
 const router = Router();
 
@@ -47,6 +48,7 @@ router.use('/analytics', analyticsRoutes);
 router.use('/normalization', shiftNormalizationRoutes);
 router.use('/timesheet', timesheetRoutes);
 router.use('/admins', adminRoutes);
+router.use('/schedule-drafts', scheduleDraftRoutes);
 
 /** Mounts all API routes under the /api prefix. */
 export function registerRoutes(app: Application): void {

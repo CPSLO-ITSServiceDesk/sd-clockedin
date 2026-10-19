@@ -115,6 +115,59 @@ export type Database = {
           },
         ]
       }
+      schedule_draft: {
+        Row: {
+          academic_term_id: number
+          change_log: Json
+          created_at: string
+          id: number
+          people: Json
+          published_at: string | null
+          rules: Json
+          source_filename: string | null
+          status: string
+          step: number
+          unmatched: Json
+          updated_at: string
+        }
+        Insert: {
+          academic_term_id: number
+          change_log?: Json
+          created_at?: string
+          id?: number
+          people?: Json
+          published_at?: string | null
+          rules?: Json
+          source_filename?: string | null
+          status?: string
+          step?: number
+          unmatched?: Json
+          updated_at?: string
+        }
+        Update: {
+          academic_term_id?: number
+          change_log?: Json
+          created_at?: string
+          id?: number
+          people?: Json
+          published_at?: string | null
+          rules?: Json
+          source_filename?: string | null
+          status?: string
+          step?: number
+          unmatched?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_draft_academic_term_id_fkey"
+            columns: ["academic_term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_term"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedules: {
         Row: {
           academic_term_id: number | null

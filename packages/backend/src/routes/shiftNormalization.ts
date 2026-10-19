@@ -69,4 +69,45 @@ router.post(
   shiftNormalizationController.applyMatches,
 );
 
+/**
+ * @openapi
+ * /normalization/terms/{termId}/clock-outs:
+ *   post:
+ *     tags: [Normalization]
+ *     summary: Set odd clock-outs to the shift's scheduled end
+ *     description: >
+ *       For the given time entries (from clockOutFixes in the preview), sets
+ *       clock_out to the linked shift's scheduled end on the clock-in date.
+ *       Fixes are recomputed first; entries that no longer look wrong (never
+ *       clocked out on a past day, closed by auto clock-out after the shift
+ *       ended, closed on a later day, more than 30 minutes past the shift end,
+ *       or before the clock-in) are reported under skipped.
+ *     parameters:
+ *       - in: path
+ *         name: termId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [timeEntryIds]
+ *             properties:
+ *               timeEntryIds: { type: array, items: { type: integer } }
+ *     responses:
+ *       200: { description: Count applied plus skipped entries with reasons }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.post(
+  '/terms/:termId/clock-outs',
+  param('termId').isInt().withMessage('termId must be an integer'),
+  body('timeEntryIds').isArray({ min: 1 }).withMessage('timeEntryIds must be a non-empty array'),
+  body('timeEntryIds.*').isInt().withMessage('timeEntryIds must be integers'),
+  validate,
+  shiftNormalizationController.applyClockOutFixes,
+);
+
 export default router;

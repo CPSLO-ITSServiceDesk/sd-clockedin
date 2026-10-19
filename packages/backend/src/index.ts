@@ -19,7 +19,8 @@ mountApiDocs(app);
 // Security & parsing middleware
 app.use(helmet());
 app.use(createCorsMiddleware());
-app.use(express.json());
+// Schedule drafts carry every student's availability and shifts.
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // API routes

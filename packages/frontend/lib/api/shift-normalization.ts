@@ -30,6 +30,29 @@ export interface NormalizationUnmatched {
   reason: UnmatchedReason
 }
 
+export type ClockOutIssue =
+  | "missing"
+  | "still_open"
+  | "auto_clock_out"
+  | "next_day"
+  | "long_after_end"
+  | "before_clock_in"
+
+/** A linked clock-in whose clock-out looks wrong, with the shift's scheduled end as the fix. */
+export interface ClockOutFix {
+  timeEntryId: number
+  studentAssistantId: number
+  studentName: string
+  date: string
+  clockIn: string
+  clockOut: string | null
+  scheduleBlockId: number
+  blockStartTime: string
+  blockEndTime: string
+  proposedClockOut: string
+  issue: ClockOutIssue
+}
+
 export interface NormalizationPreview {
   summary: {
     totalUnscheduled: number
@@ -38,6 +61,7 @@ export interface NormalizationPreview {
   }
   proposals: NormalizationProposal[]
   unmatched: NormalizationUnmatched[]
+  clockOutFixes: ClockOutFix[]
 }
 
 export interface NormalizationMatchInput {
@@ -65,6 +89,19 @@ export async function applyNormalizationMatches(
     {
       method: "POST",
       body: JSON.stringify({ matches }),
+    },
+  )
+}
+
+export async function applyClockOutFixes(
+  termId: number,
+  timeEntryIds: number[],
+): Promise<NormalizationApplyResult> {
+  return apiFetch<NormalizationApplyResult>(
+    `/normalization/terms/${termId}/clock-outs`,
+    {
+      method: "POST",
+      body: JSON.stringify({ timeEntryIds }),
     },
   )
 }
