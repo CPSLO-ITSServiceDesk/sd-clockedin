@@ -2,14 +2,7 @@
 
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  Clock,
-  LogOut,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react"
+import { Clock, Pencil, Plus, Trash2 } from "lucide-react"
 import { formatStudentName } from "@/components/admin/mock-students"
 import {
   TimeEntryFormDialog,
@@ -19,7 +12,6 @@ import {
 } from "@/components/admin/student-records/time-entry-form-dialog"
 import {
   entryMatchesTerm,
-  formatBlockLabel,
   formatDuration,
   getEntryDateLabel,
   getEntryDurationMinutes,
@@ -32,8 +24,9 @@ import type { ScheduleBlock } from "@/lib/api/scheduleBlocks"
 import type { Schedule } from "@/lib/api/schedules"
 import type { Term } from "@/lib/api/terms"
 import { timeEntriesApi, type TimeEntry } from "@/lib/api/time-entries"
-import { formatTime } from "@/lib/format-time"
+import { formatTime, timeToMinutes } from "@/lib/format-time"
 import { queryKeys } from "@/lib/query-keys"
+import { cn } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,23 +37,38 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+const ENTRY_GRID =
+  "grid grid-cols-[100px_minmax(0,1fr)_84px_84px_76px_70px_170px] gap-3"
+
+/** Clock-ins more than this many minutes after the shift start count as late. */
+const LATE_GRACE_MINUTES = 10
+
+function compactTime(value: string): string {
+  const minutes = timeToMinutes(value)
+  const hour = Math.floor(minutes / 60)
+  const rest = String(minutes % 60).padStart(2, "0")
+  return `${hour % 12 || 12}:${rest}${hour < 12 ? "a" : "p"}`
+}
+
+function formatBlockRange(block: ScheduleBlock): string {
+  if (!block.start_time || !block.end_time) return "—"
+  return `${compactTime(block.start_time)}–${compactTime(block.end_time)}`
+}
+
+function formatEntryDate(clockIn: string | null): string {
+  if (!clockIn) return "—"
+  const date = new Date(clockIn)
+  if (Number.isNaN(date.getTime())) return "—"
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+}
+
+function isLateClockIn(entry: TimeEntry, block: ScheduleBlock | undefined): boolean {
+  if (!block?.start_time || !entry.clock_in) return false
+  const clockIn = new Date(entry.clock_in)
+  if (Number.isNaN(clockIn.getTime())) return false
+  const clockInMinutes = clockIn.getHours() * 60 + clockIn.getMinutes()
+  return clockInMinutes > timeToMinutes(block.start_time) + LATE_GRACE_MINUTES
+}
 
 interface TimeEntriesPanelProps {
   student: ScheduleStudent | null
@@ -185,134 +193,121 @@ export function TimeEntriesPanel({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3 px-[22px] pt-4 pb-[22px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-muted-foreground text-sm">
-            {studentEntries.length} entries for {term?.name ?? "selected term"}
-          </p>
-        </div>
-        <Button type="button" size="sm" onClick={openCreateDialog}>
-          <Plus className="size-4" />
+        <span className="text-[13px] text-muted-foreground">
+          {studentEntries.length} entries for {term?.name ?? "selected term"}
+        </span>
+        <button
+          type="button"
+          onClick={openCreateDialog}
+          className="flex h-[34px] items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-bold text-primary-foreground hover:bg-primary/90"
+        >
+          <Plus className="size-3.5" strokeWidth={2.25} />
           Add entry
-        </Button>
+        </button>
       </div>
 
       {studentEntries.length === 0 ? (
-        <div className="text-muted-foreground flex min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center text-sm">
-          <p>No clock in/out entries for this student in the selected term.</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={openCreateDialog}
-          >
-            <Plus className="size-4" />
-            Add first entry
-          </Button>
+        <div className="flex min-h-[280px] flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-border text-center text-sm text-muted-foreground">
+          No clock in/out entries for this student in the selected term.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground text-xs uppercase tracking-wider">
-                  Date
-                </TableHead>
-                <TableHead className="text-muted-foreground text-xs uppercase tracking-wider">
-                  Shift
-                </TableHead>
-                <TableHead className="text-muted-foreground text-xs uppercase tracking-wider">
-                  Clock in
-                </TableHead>
-                <TableHead className="text-muted-foreground text-xs uppercase tracking-wider">
-                  Clock out
-                </TableHead>
-                <TableHead className="text-muted-foreground text-xs uppercase tracking-wider">
-                  Duration
-                </TableHead>
-                <TableHead className="text-muted-foreground text-xs uppercase tracking-wider">
-                  Status
-                </TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {studentEntries.map((entry) => {
-                const block = entry.schedule_block_id
-                  ? blockById.get(entry.schedule_block_id)
-                  : undefined
-                const isOpen = !entry.clock_out
+        <div className="overflow-x-auto rounded-2xl border border-border">
+          <div className="min-w-[760px]">
+            <div
+              className={cn(
+                ENTRY_GRID,
+                "border-b border-border/60 bg-muted/40 px-[18px] py-2.5 text-xs font-semibold text-muted-foreground",
+              )}
+            >
+              <span>Date</span>
+              <span>Shift</span>
+              <span>Clock in</span>
+              <span>Clock out</span>
+              <span>Duration</span>
+              <span>Status</span>
+              <span />
+            </div>
+            {studentEntries.map((entry) => {
+              const block = entry.schedule_block_id
+                ? blockById.get(entry.schedule_block_id)
+                : undefined
+              const isOpen = !entry.clock_out
+              const late = isLateClockIn(entry, block)
 
-                return (
-                  <TableRow key={entry.id} className="border-border">
-                    <TableCell className="text-sm">
-                      {getEntryDateLabel(entry.clock_in)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {block ? formatBlockLabel(block) : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {entry.clock_in ? formatTime(entry.clock_in) : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {entry.clock_out ? formatTime(entry.clock_out) : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {formatDuration(getEntryDurationMinutes(entry))}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          isOpen
-                            ? "bg-accent/20 text-accent"
-                            : "bg-muted text-muted-foreground"
-                        }
+              return (
+                <div
+                  key={entry.id}
+                  className={cn(
+                    ENTRY_GRID,
+                    "items-center border-b border-border/60 px-[18px] py-[9px] last:border-0 hover:bg-muted/40",
+                  )}
+                >
+                  <span className="text-sm font-semibold">{formatEntryDate(entry.clock_in)}</span>
+                  <span
+                    className={cn(
+                      "truncate text-[13px]",
+                      block ? "text-muted-foreground" : "text-amber-700 dark:text-amber-300",
+                    )}
+                  >
+                    {block ? formatBlockRange(block) : "Unscheduled"}
+                  </span>
+                  <span
+                    className={cn(
+                      "font-mono text-[13px]",
+                      late && "text-amber-700 dark:text-amber-300",
+                    )}
+                  >
+                    {entry.clock_in ? formatTime(entry.clock_in) : "—"}
+                  </span>
+                  <span className="font-mono text-[13px]">
+                    {entry.clock_out ? formatTime(entry.clock_out) : "—"}
+                  </span>
+                  <span className="font-mono text-[13px] text-muted-foreground">
+                    {isOpen ? "running" : formatDuration(getEntryDurationMinutes(entry))}
+                  </span>
+                  <span
+                    className={cn(
+                      "justify-self-start rounded-full px-2 py-0.5 text-[11px] font-bold",
+                      isOpen ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {isOpen ? "Open" : "Closed"}
+                  </span>
+                  <div className="flex items-center justify-end gap-1.5">
+                    {isOpen ? (
+                      <button
+                        type="button"
+                        onClick={() => handleClockOut(entry)}
+                        className="h-7 shrink-0 whitespace-nowrap rounded-full border border-accent/30 bg-accent/10 px-3.5 text-xs font-bold text-accent hover:bg-accent/20"
                       >
-                        {isOpen ? "Open" : "Closed"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditDialog(entry)}>
-                            <Pencil className="size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          {isOpen ? (
-                            <DropdownMenuItem onClick={() => handleClockOut(entry)}>
-                              <LogOut className="size-4" />
-                              Clock out now
-                            </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => setDeleteTarget(entry)}
-                          >
-                            <Trash2 className="size-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                        Clock out
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      title="Edit"
+                      aria-label="Edit entry"
+                      onClick={() => openEditDialog(entry)}
+                      className="flex size-7 items-center justify-center rounded-full border border-border bg-card hover:bg-muted"
+                    >
+                      <Pencil className="size-[13px]" strokeWidth={2.25} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete"
+                      aria-label="Delete entry"
+                      onClick={() => setDeleteTarget(entry)}
+                      className="flex size-7 items-center justify-center rounded-full border border-border bg-card text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="size-[13px]" strokeWidth={2.25} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

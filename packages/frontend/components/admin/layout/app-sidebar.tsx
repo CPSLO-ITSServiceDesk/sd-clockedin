@@ -14,7 +14,6 @@ import {
   ClipboardList,
   Sparkles,
   Link2,
-  Users,
   ListChecks,
 } from "lucide-react"
 import {
@@ -51,7 +50,6 @@ const navManage = [
 const navAnalytics = [
   { title: "Term Analytics", href: "/admin/analytics/term", icon: BarChart2 },
   { title: "Student Records", href: "/admin/studentrecords", icon: ClipboardList },
-  { title: "Hourly Staffing", href: "/admin/analytics/hourly-staffing", icon: Users },
 ]
 
 export function AppSidebar() {

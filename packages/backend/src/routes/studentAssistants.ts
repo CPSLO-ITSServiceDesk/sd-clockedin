@@ -64,7 +64,7 @@ router.post(
   body('first_name').optional().isString(),
   body('last_name').optional().isString(),
   body('is_active').optional().isBoolean(),
-  body('polycard_id').optional().isInt(),
+  body('polycard_id').optional({ values: 'null' }).isInt(),
   body('work_email').optional({ values: 'null' }).isEmail().withMessage('work_email must be a valid email'),
   body('position')
     .isIn(['student_lead', 'student_assistant'])
@@ -104,7 +104,7 @@ router.put(
   body('first_name').optional().isString(),
   body('last_name').optional().isString(),
   body('is_active').optional().isBoolean(),
-  body('polycard_id').optional().isInt(),
+  body('polycard_id').optional({ values: 'null' }).isInt(),
   body('work_email').optional({ values: 'null' }).isEmail().withMessage('work_email must be a valid email'),
   body('position').optional().isIn(['student_lead', 'student_assistant']).withMessage('position must be a valid student role'),
   validate,
