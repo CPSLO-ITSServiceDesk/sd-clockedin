@@ -1,3 +1,4 @@
+import { diffScheduleBlocks } from '../lib/diffScheduleBlocks';
 import { parseScheduleSpreadsheet } from '../lib/scheduleImportParser';
 import {
   transformImportRows,
@@ -102,11 +103,15 @@ export async function replaceScheduleBlocks(
     });
   }
 
+  // Only touch blocks that actually changed so time entries stay linked to unchanged shifts.
   const existingBlocks = await scheduleBlocksService.getByScheduleId(schedule.id);
-  await scheduleBlocksService.removeMany(existingBlocks.map((block) => block.id));
+  const { updates, removeIds, creates } = diffScheduleBlocks(existingBlocks, blocks);
 
-  await Promise.all(
-    blocks.map((block) =>
+  await scheduleBlocksService.removeMany(removeIds);
+
+  await Promise.all([
+    ...updates.map(({ id, is_remote }) => scheduleBlocksService.update(id, { is_remote })),
+    ...creates.map((block) =>
       scheduleBlocksService.create({
         schedule_id: schedule!.id,
         days: block.day,
@@ -115,7 +120,7 @@ export async function replaceScheduleBlocks(
         is_remote: block.is_remote,
       }),
     ),
-  );
+  ]);
 }
 
 export const scheduleImportService = {
