@@ -108,7 +108,7 @@ function SectionLabel({ children }: Readonly<{ children: ReactNode }>) {
 
 function HereRow({ tile }: Readonly<{ tile: WorkingTile }>) {
   let since = "remote"
-  if (tile.clockInLabel) since = `${tile.late ? "late " : ""}${stripPeriod(tile.clockInLabel)}`
+  if (tile.clockInLabel) since = stripPeriod(tile.clockInLabel)
   else if (!tile.isRemote) since = "walk-in"
 
   return (
@@ -116,7 +116,7 @@ function HereRow({ tile }: Readonly<{ tile: WorkingTile }>) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-[28px] font-bold leading-[1.15]">{tile.name}</span>
         <span className={cn("whitespace-nowrap font-mono text-xl", COLORS.muted)}>
-          <span className={cn(tile.late && COLORS.gold)}>{since}</span>
+          <span>{since}</span>
           {tile.endLabel ? (
             <>
               {" → "}
@@ -127,7 +127,7 @@ function HereRow({ tile }: Readonly<{ tile: WorkingTile }>) {
       </div>
       <div className={cn("h-1.5 overflow-hidden rounded-full", COLORS.track)}>
         <div
-          className={cn("h-full rounded-full", tile.late ? "bg-[#E8B64A]" : "bg-white")}
+          className="h-full rounded-full bg-white"
           style={{ width: `${tile.progress ?? 0}%` }}
         />
       </div>

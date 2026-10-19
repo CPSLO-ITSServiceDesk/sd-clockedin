@@ -144,12 +144,38 @@ export function buildUpNext(shifts: TodayShift[], now: Date = new Date()): UpNex
     .map(({ entry }) => entry)
 }
 
-/** One entry per student on Teams time off today: "All day" or "Back 1:00 PM". */
+/** "10:00 – 11:00 AM", or "11:00 AM – 1:00 PM" across noon. */
+function formatOrgClockRange(startIso: string, endIso: string): string {
+  const start = formatOrgClock(startIso)
+  const end = formatOrgClock(endIso)
+  const period = /\s?[AP]M$/i
+  const samePeriod = start.match(period)?.[0].trim() === end.match(period)?.[0].trim()
+  return `${samePeriod ? start.replace(period, "") : start} – ${end}`
+}
+
+/**
+ * When someone is off today: "All day" only if the time off covers the whole
+ * day; otherwise "10:00 – 11:00 AM", "Until 1:00 PM" or "From 2:00 PM".
+ */
+export function formatTimeOffToday(startsAt: string, endsAt: string, now: Date = new Date()): string {
+  const today = getOrgLocalDateString(now)
+  const startDate = getOrgLocalDateString(new Date(startsAt))
+  const startsBeforeToday =
+    startDate < today || (startDate === today && toOrgWallClockMinutes(startsAt) === 0)
+  // ends_at is exclusive, so time off through the end of today ends at tomorrow's midnight.
+  const runsPastToday = getOrgLocalDateString(new Date(endsAt)) > today
+
+  if (startsBeforeToday && runsPastToday) return "All day"
+  if (startsBeforeToday) return `Until ${formatOrgClock(endsAt)}`
+  if (runsPastToday) return `From ${formatOrgClock(startsAt)}`
+  return formatOrgClockRange(startsAt, endsAt)
+}
+
+/** One entry per student on Teams time off today, with when they're off. */
 export function buildOutToday(
   timeOffShifts: TodayTimeOffShift[],
   now: Date = new Date(),
 ): OutTodayEntry[] {
-  const today = getOrgLocalDateString(now)
   const byStudent = new Map<number, TodayTimeOffShift[]>()
   for (const shift of timeOffShifts) {
     const list = byStudent.get(shift.studentAssistantId) ?? []
@@ -160,13 +186,18 @@ export function buildOutToday(
   return Array.from(byStudent.values())
     .map((studentShifts) => {
       const [first] = studentShifts
-      const lastShiftEnd = Math.max(
-        ...studentShifts.map((shift) => toOrgWallClockMinutes(shift.endTime)),
-      )
-      const endsToday = getOrgLocalDateString(new Date(first.timeOffEndsAt)) === today
-      const backAt = toOrgWallClockMinutes(first.timeOffEndsAt)
-      const window =
-        endsToday && backAt < lastShiftEnd ? `Back ${formatOrgClock(first.timeOffEndsAt)}` : "All day"
+      // Several shifts can share one time off; list each distinct window once, earliest first.
+      const windows = [
+        ...new Map(
+          [...studentShifts]
+            .sort((a, b) => Date.parse(a.timeOffStartsAt) - Date.parse(b.timeOffStartsAt))
+            .map((shift) => [
+              `${shift.timeOffStartsAt}|${shift.timeOffEndsAt}`,
+              formatTimeOffToday(shift.timeOffStartsAt, shift.timeOffEndsAt, now),
+            ]),
+        ).values(),
+      ]
+      const window = windows.includes("All day") ? "All day" : windows.join(", ")
 
       return {
         entry: {
