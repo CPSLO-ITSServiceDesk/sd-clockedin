@@ -15,6 +15,7 @@ import {
   type DraftRules,
   type UnmatchedResponse,
 } from '../lib/scheduleBuilder/model';
+import { seedFromBlocks } from '../lib/scheduleBuilder/copyFromTerm';
 import { applyImport, withRoster } from '../lib/scheduleBuilder/roster';
 import type { DraftScheduleBlock } from '../lib/scheduleImportTransform';
 import { HttpError } from '../middleware/errorHandler';
@@ -172,18 +173,58 @@ export const scheduleDraftService = {
     return withCurrentRoster(toDraft(await getRow(id)));
   },
 
-  async create(termId: number): Promise<ScheduleDraft> {
+  /** Latest draft for every term that has one (for the Schedules home). */
+  async listLatestPerTerm(): Promise<ScheduleDraft[]> {
+    const { data, error } = await supabase
+      .from('schedule_draft')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    if (error) throwDbError(error);
+    const seen = new Set<number>();
+    return (data ?? []).filter((row) => !seen.has(row.academic_term_id) && seen.add(row.academic_term_id)).map(toDraft);
+  },
+
+  /** Start a draft for a term; optionally seeded with another term's weekly shifts. */
+  async create(termId: number, copyFromTermId?: number): Promise<ScheduleDraft> {
     const term = await termService.getById(termId);
     if (!term) throw new HttpError(404, 'Academic term not found');
 
     const students = await studentAssistantService.getAll();
+    let people = withRoster([], students);
+    const log = [logEntry('builder', `Started ${term.name ?? 'term'} schedule`)];
+
+    if (copyFromTermId != null && copyFromTermId !== termId) {
+      const source = await termService.getById(copyFromTermId);
+      if (!source) throw new HttpError(404, 'Term to copy from not found');
+      const [schedules, blocks] = await Promise.all([schedulesService.getAll(), scheduleBlocksService.getAll()]);
+      const owners = new Map(
+        schedules
+          .filter((schedule) => schedule.academic_term_id === copyFromTermId && schedule.student_assistant_id != null)
+          .map((schedule) => [schedule.id, schedule.student_assistant_id!]),
+      );
+      const copiedBlocks = blocks.flatMap((block) => {
+        const owner = block.schedule_id != null ? owners.get(block.schedule_id) : undefined;
+        if (owner == null || !block.days || !block.start_time || !block.end_time) return [];
+        return [{
+          student_assistant_id: owner,
+          day: block.days,
+          start_time: block.start_time,
+          end_time: block.end_time,
+          is_remote: block.is_remote ?? false,
+        }];
+      });
+      const seeded = seedFromBlocks(people, copiedBlocks);
+      people = seeded.people;
+      log.push(logEntry('builder', `Copied ${seeded.copied} weekly shifts from ${source.name ?? 'another term'} as a starting point`));
+    }
+
     const { data, error } = await supabase
       .from('schedule_draft')
       .insert({
         academic_term_id: termId,
         rules: DEFAULT_RULES as unknown as Json,
-        people: withRoster([], students) as unknown as Json,
-        change_log: [logEntry('builder', `Started ${term.name ?? 'term'} schedule`)] as unknown as Json,
+        people: people as unknown as Json,
+        change_log: log as unknown as Json,
       })
       .select()
       .single();
@@ -295,6 +336,17 @@ export const scheduleDraftService = {
       students_affected: affected,
       teams_sync_enabled: config.microsoftGraph.enabled,
     };
+  },
+
+  /** Record a send to Teams Shifts on the draft (the shifts live in Teams, not in ClockedIn yet). */
+  async markSentToTeams(id: number, text: string): Promise<ScheduleDraft> {
+    const draft = await this.getById(id);
+    return save(id, {
+      status: 'published',
+      step: 4,
+      published_at: new Date().toISOString(),
+      change_log: appendLog(draft.change_log, logEntry('you', text)) as unknown as Json,
+    });
   },
 
   async publish(id: number): Promise<ScheduleDraft> {

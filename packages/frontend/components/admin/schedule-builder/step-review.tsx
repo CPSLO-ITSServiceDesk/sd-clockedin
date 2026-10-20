@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react"
 
 import { Panel, Pill, Segmented } from "@/components/admin/schedule-builder/builder-ui"
 import { ROLE_BG, ReviewGrid, type GridCell, type Layer } from "@/components/admin/schedule-builder/review-grid"
+import { SlotFiller } from "@/components/admin/schedule-builder/slot-filler"
 import type { BuilderContext } from "@/components/admin/schedule-builder/schedule-builder"
 import type { Weekday } from "@/components/admin/terms/term-types"
 import { usePaintStroke } from "@/hooks/use-paint-stroke"
@@ -27,7 +28,7 @@ import {
 import { cn } from "@/lib/utils"
 
 type Brush = ShiftRole | "erase"
-type View = "week" | "day"
+type View = "week" | "day" | "slots"
 
 /** What one drag does: paint a role, erase, or open/close availability. */
 type StrokeMode = { kind: "role"; role: ShiftRole | null } | { kind: "availability"; open: boolean }
@@ -148,42 +149,47 @@ export function StepReview(context: Readonly<BuilderContext>) {
             options={[
               { value: "week", label: "Week" },
               { value: "day", label: "Day" },
+              { value: "slots", label: "Slots" },
             ]}
             value={view}
             onChange={setView}
           />
-          <span className="hidden h-[22px] w-px bg-border sm:block" />
-          <Segmented
-            options={[
-              { value: "shifts", label: "Shifts" },
-              { value: "availability", label: "Availability" },
-            ]}
-            value={layer}
-            onChange={setLayer}
-          />
-          {layer === "shifts" ? (
-            <Segmented
-              options={BRUSHES.map((option) => ({
-                value: option.value,
-                label: (
-                  <>
-                    <span
-                      className={cn(
-                        "size-3 rounded-[3px]",
-                        option.value === "erase" ? "border border-border bg-card" : ROLE_BG[option.value],
-                      )}
-                    />
-                    {option.label}
-                  </>
-                ),
-              }))}
-              value={brush}
-              onChange={setBrush}
-            />
-          ) : (
-            <span className="rounded-full bg-amber-500/15 px-3 py-[7px] text-xs font-semibold text-amber-800 dark:text-amber-200">
-              Drag to open or close hours · closing removes shifts in them
-            </span>
+          {view === "slots" ? null : (
+            <>
+              <span className="hidden h-[22px] w-px bg-border sm:block" />
+              <Segmented
+                options={[
+                  { value: "shifts", label: "Shifts" },
+                  { value: "availability", label: "Availability" },
+                ]}
+                value={layer}
+                onChange={setLayer}
+              />
+              {layer === "shifts" ? (
+                <Segmented
+                  options={BRUSHES.map((option) => ({
+                    value: option.value,
+                    label: (
+                      <>
+                        <span
+                          className={cn(
+                            "size-3 rounded-[3px]",
+                            option.value === "erase" ? "border border-border bg-card" : ROLE_BG[option.value],
+                          )}
+                        />
+                        {option.label}
+                      </>
+                    ),
+                  }))}
+                  value={brush}
+                  onChange={setBrush}
+                />
+              ) : (
+                <span className="rounded-full bg-amber-500/15 px-3 py-[7px] text-xs font-semibold text-amber-800 dark:text-amber-200">
+                  Drag to open or close hours · closing removes shifts in them
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -208,31 +214,35 @@ export function StepReview(context: Readonly<BuilderContext>) {
         </div>
       ) : null}
 
-      <Panel className="px-4 py-3.5">
-        <ReviewGrid
-          days={view === "day" ? [day] : WEEKDAYS}
-          people={visible}
-          rules={draft.rules}
-          checks={checks}
-          layer={layer}
-          nameOf={nameOf}
-          onCellDown={onCellDown}
-          onCellEnter={paint.enter}
-        />
-        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-2 pt-3 text-xs text-muted-foreground">
-          <Legend className="bg-avail" label="Available" />
-          <Legend className="bg-role-lead" label="Lead" />
-          <Legend className="bg-role-main" label="Main" />
-          <Legend className="bg-role-training" label="Training" />
-          <Legend className="h-1 rounded-full bg-accent/25" label="Requested range" />
-          <span className="flex-1" />
-          <span>
-            {layer === "shifts"
-              ? "Drag along a row to paint. Start on a cell that already has the brush's role to erase."
-              : "Edits override the imported form for this term."}
-          </span>
-        </div>
-      </Panel>
+      {view === "slots" ? (
+        <SlotFiller context={context} checks={checks} />
+      ) : (
+        <Panel className="px-4 py-3.5">
+          <ReviewGrid
+            days={view === "day" ? [day] : WEEKDAYS}
+            people={visible}
+            rules={draft.rules}
+            checks={checks}
+            layer={layer}
+            nameOf={nameOf}
+            onCellDown={onCellDown}
+            onCellEnter={paint.enter}
+          />
+          <div className="flex flex-wrap items-center gap-x-[18px] gap-y-2 pt-3 text-xs text-muted-foreground">
+            <Legend className="bg-avail" label="Available" />
+            <Legend className="bg-role-lead" label="Lead" />
+            <Legend className="bg-role-main" label="Main" />
+            <Legend className="bg-role-training" label="Training" />
+            <Legend className="h-1 rounded-full bg-accent/25" label="Requested range" />
+            <span className="flex-1" />
+            <span>
+              {layer === "shifts"
+                ? "Drag along a row to paint. Start on a cell that already has the brush's role to erase."
+                : "Edits override the imported form for this term."}
+            </span>
+          </div>
+        </Panel>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
         <IssuesPanel context={context} checks={checks} />

@@ -1,13 +1,13 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { CalendarDays, TriangleAlert } from "lucide-react"
+import { CalendarDays, Star } from "lucide-react"
 
 import { Panel, StatCard } from "@/components/admin/schedule-builder/builder-ui"
-import { ROLE_BG } from "@/components/admin/schedule-builder/review-grid"
 import type { BuilderContext } from "@/components/admin/schedule-builder/schedule-builder"
+import { TeamsPublishPanel } from "@/components/admin/schedule-builder/teams-publish-panel"
 import { formatTermDate, type Weekday } from "@/components/admin/terms/term-types"
 import {
   AlertDialog,
@@ -23,7 +23,6 @@ import { scheduleDraftsApi, type ShiftRole } from "@/lib/api/schedule-drafts"
 import { queryKeys } from "@/lib/query-keys"
 import {
   DAY_SHORT,
-  ROLE_LABEL,
   WEEKDAYS,
   assignedSlots,
   availableHours,
@@ -35,23 +34,20 @@ import {
   slotRange,
   summarizeCells,
   toRuns,
+  type DraftChecks,
 } from "@/lib/schedule-builder/model"
 import { cn } from "@/lib/utils"
 
-const ROLE_ORDER: ShiftRole[] = ["L", "m", "t"]
+const GROUPS: { role: ShiftRole; label: string }[] = [
+  { role: "L", label: "Leads" },
+  { role: "m", label: "Main desk" },
+  { role: "t", label: "Training" },
+]
 
 export function StepPublish(context: Readonly<BuilderContext>) {
-  const { draft, people, nameOf, goTo, runPublish, flush, busy } = context
-  const [selected, setSelected] = useState<{ day: Weekday; hour: number }>({
-    day: "monday",
-    hour: Math.floor(draft.rules.desk_start_slot / 2),
-  })
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [justPublished, setJustPublished] = useState(false)
-
+  const { draft, people, nameOf, goTo, flush } = context
   const checks = useMemo(() => computeChecks(draft.people, draft.rules), [draft.people, draft.rules])
-  const hours = deskHours(draft.rules)
-  const minOnDesk = draft.rules.min_on_desk.enabled ? draft.rules.min_on_desk.value : 1
+  const noAvailability = people.filter((person) => availableHours(person) === 0).length
 
   // Re-compare whenever any shift changes; flush first so the server sees the latest edits.
   const signature = useMemo(
@@ -61,45 +57,14 @@ export function StepPublish(context: Readonly<BuilderContext>) {
         .join(";"),
     [draft.people],
   )
-  const { data: preview, isLoading: previewLoading, error: previewError } = useQuery({
+  const previewQuery = useQuery({
     queryKey: [...queryKeys.scheduleDrafts.preview(draft.id), signature],
     queryFn: async () => {
       await flush()
       return scheduleDraftsApi.publishPreview(draft.id)
     },
   })
-
-  const hourSlots = (hour: number) =>
-    [hour * 2, hour * 2 + 1].filter((slot) => slot >= draft.rules.desk_start_slot && slot < draft.rules.desk_end_slot)
-  const cellStats = (day: Weekday, hour: number) => {
-    const slots = hourSlots(hour)
-    return {
-      all: Math.min(...slots.map((slot) => checks.headcount(day, slot))),
-      leads: Math.min(...slots.map((slot) => checks.leads(day, slot))),
-    }
-  }
-
-  const onAtSelected = people
-    .map((person) => {
-      const slots = hourSlots(selected.hour).filter((slot) => roleAt(person, selected.day, slot))
-      if (slots.length === 0) return null
-      const role = roleAt(person, selected.day, slots[0])!
-      const run = toRuns(assignedSlots(person, selected.day)).find(([a, b]) => slots[0] >= a && slots[0] < b)!
-      return { person, role, run }
-    })
-    .filter((entry) => entry != null)
-  const selectedStats = cellStats(selected.day, selected.hour)
-  const noAvailability = people.filter((person) => availableHours(person) === 0).length
-
-  const publish = async () => {
-    setConfirmOpen(false)
-    if (await runPublish()) setJustPublished(true)
-  }
-
-  const term = preview?.term
-  const published = draft.status === "published"
-  // Publishing logs last, so any later entry means there are unpublished edits.
-  const upToDate = published && (draft.change_log[draft.change_log.length - 1]?.text.startsWith("Published") ?? false)
+  const teamsEnabled = previewQuery.data?.teams_sync_enabled ?? false
 
   return (
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
@@ -126,197 +91,24 @@ export function StepPublish(context: Readonly<BuilderContext>) {
           />
         </div>
 
-        <Panel className="flex flex-col gap-2.5 px-5 py-[18px]">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-base font-bold">Headcount by hour</span>
-            <span className="text-xs text-muted-foreground">
-              People on the desk each hour, leads underneath. Click an hour to see who.
-            </span>
-          </div>
-          <div className="grid grid-cols-[64px_repeat(5,minmax(0,1fr))] gap-1">
-            <span />
-            {WEEKDAYS.map((day) => (
-              <span key={day} className="text-center text-[13px] font-bold">
-                {DAY_SHORT[day]}
-              </span>
-            ))}
-            {hours.map((hour) => (
-              <div key={hour} className="contents">
-                <span className="self-center font-mono text-xs text-muted-foreground">{hourShort(hour)}</span>
-                {WEEKDAYS.map((day) => {
-                  const stats = cellStats(day, hour)
-                  const noLead = draft.rules.lead_every_slot.enabled && stats.leads === 0
-                  const thin = stats.all < minOnDesk
-                  const on = selected.day === day && selected.hour === hour
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setSelected({ day, hour })}
-                      title={`${DAY_SHORT[day]} ${hourShort(hour)}: ${stats.all} on desk, ${stats.leads} leads`}
-                      className={cn(
-                        "flex h-[42px] flex-col items-center justify-center gap-px rounded-[10px] border",
-                        noLead
-                          ? "border-destructive/30 bg-destructive/10"
-                          : thin
-                            ? "border-amber-500/30 bg-amber-500/15"
-                            : "border-transparent bg-accent/10",
-                        on && "outline-2 outline-offset-2 outline-accent",
-                      )}
-                    >
-                      <span className="font-mono text-base font-semibold">{stats.all}</span>
-                      <span
-                        className={cn(
-                          "text-[10px] font-bold",
-                          noLead ? "text-destructive" : "text-muted-foreground",
-                        )}
-                      >
-                        {noLead ? "no lead" : `${stats.leads} lead${stats.leads === 1 ? "" : "s"}`}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-2 flex flex-col gap-2.5 rounded-[14px] bg-muted/50 px-4 py-3.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <span className="font-mono text-[15px] font-semibold">
-                {DAY_SHORT[selected.day]} {hourShort(selected.hour)}
-              </span>
-              <span
-                className={cn(
-                  "text-[13px] font-bold",
-                  draft.rules.lead_every_slot.enabled && selectedStats.leads === 0
-                    ? "text-destructive"
-                    : selectedStats.all < minOnDesk
-                      ? "text-amber-700 dark:text-amber-300"
-                      : "text-accent",
-                )}
-              >
-                {selectedStats.all} on desk · {selectedStats.leads} {selectedStats.leads === 1 ? "lead" : "leads"}
-              </span>
-            </div>
-            {onAtSelected.length === 0 ? (
-              <span className="text-[13px] text-muted-foreground">Nobody is scheduled this hour.</span>
-            ) : (
-              ROLE_ORDER.map((role) => {
-                const group = onAtSelected.filter((entry) => entry.role === role)
-                if (group.length === 0) return null
-                return (
-                  <div key={role} className="grid gap-2.5 sm:grid-cols-[90px_minmax(0,1fr)]">
-                    <span className="pt-[5px] text-xs font-bold text-muted-foreground">{ROLE_LABEL[role]}</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {group.map(({ person, run }) => (
-                        <span
-                          key={person.student_assistant_id}
-                          className="flex h-7 items-center gap-1.5 rounded-full border border-border bg-card pr-2.5 pl-[5px] text-xs font-semibold"
-                        >
-                          <span className={cn("size-[18px] rounded-[5px]", ROLE_BG[role])} />
-                          {nameOf(person.student_assistant_id)}
-                          <span className="font-mono font-medium text-muted-foreground">{slotRange(run[0], run[1])}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </Panel>
+        <HeadcountByHour context={context} checks={checks} />
       </div>
 
       <div className="flex flex-col gap-3.5">
-        <Panel className="flex flex-col gap-3 px-5 py-[18px]">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-[9px] bg-role-training/15 text-role-training">
-              <CalendarDays className="size-[17px]" />
-            </span>
-            <span className="text-base font-bold">Publish to Schedules</span>
-          </div>
-
-          <div className="flex flex-col gap-2 text-[13px]">
-            <Row label="Term" value={term?.name ?? context.termName} />
-            <Row
-              label="Repeats weekly"
-              value={
-                term?.start_date && term.end_date
-                  ? `${formatTermDate(term.start_date)} – ${formatTermDate(term.end_date)}`
-                  : "Term dates not set"
-              }
-            />
-            <Row
-              label="Skips"
-              value={
-                term && term.skips.length > 0
-                  ? `${term.skips.map((skip) => formatTermDate(skip.date)).join(", ")} (from Terms)`
-                  : "None"
-              }
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5 rounded-[14px] bg-muted/50 px-3.5 py-3">
-            <span className="text-xs font-bold">Compared with Schedules now</span>
-            {previewLoading ? (
-              <span className="text-[13px] text-muted-foreground">Comparing...</span>
-            ) : previewError || !preview ? (
-              <span className="text-[13px] text-destructive">Couldn&apos;t compare with current schedules.</span>
-            ) : (
-              <>
-                <Diff label="New shifts" value={`+${preview.new_shifts}`} className="text-accent" />
-                <Diff label="Removed shifts" value={`−${preview.removed_shifts}`} className="text-destructive" />
-                <Diff label="Unchanged (entries stay linked)" value={String(preview.unchanged_shifts)} />
-                <Diff label="Students affected" value={String(preview.students_affected)} />
-              </>
-            )}
-          </div>
-
-          {preview?.teams_sync_enabled ? (
-            <div className="flex gap-2 rounded-xl bg-amber-500/15 px-3 py-2.5 text-xs leading-[1.45] text-amber-800 dark:text-amber-200">
-              <TriangleAlert className="mt-px size-4 shrink-0" />
-              <span>
-                Teams sync is on. The next sync replaces these shifts with what&apos;s in Teams Shifts for
-                anyone on the Teams roster, so enter the same schedule in Teams before it runs.
-              </span>
-            </div>
-          ) : null}
-
-          {justPublished || upToDate ? (
-            <div className="flex flex-col gap-0.5 rounded-[14px] bg-accent/15 px-3.5 py-3">
-              <span className="text-sm font-bold text-accent">Published to Schedules</span>
-              <span className="text-xs text-accent">
-                {checks.totalShifts} shifts saved for {context.termName}.{" "}
-                <Link href="/admin/schedules" className="font-semibold underline">
-                  View in Schedules
-                </Link>
-              </span>
-            </div>
-          ) : (
-            <button
-              type="button"
-              disabled={busy === "publish" || checks.totalShifts === 0}
-              onClick={() => setConfirmOpen(true)}
-              className="h-11 rounded-full bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {busy === "publish"
-                ? "Publishing..."
-                : published
-                  ? `Publish changes (${checks.totalShifts} shifts)`
-                  : `Publish ${checks.totalShifts} shifts`}
-            </button>
-          )}
-        </Panel>
+        {previewQuery.isLoading ? (
+          <Panel className="px-5 py-[18px] text-[13px] text-muted-foreground">Checking where to publish…</Panel>
+        ) : teamsEnabled ? (
+          <TeamsPublishPanel context={context} checks={checks} />
+        ) : (
+          <ClockedInPublishPanel context={context} checks={checks} preview={previewQuery.data} error={previewQuery.error} />
+        )}
 
         <Panel className="flex flex-col gap-2 px-5 py-4">
           <span className="text-sm font-bold">Still open</span>
           {checks.noLead.length === 0 && checks.outOfRange.length === 0 && noAvailability === 0 ? (
             <span className="text-[13px] text-muted-foreground">Nothing. Every hour has a lead and everyone is in range.</span>
           ) : null}
-          {checks.noLead.length > 0 ? (
-            <OpenItem tone="bad">No lead on {summarizeCells(checks.noLead, 4)}</OpenItem>
-          ) : null}
+          {checks.noLead.length > 0 ? <OpenItem tone="bad">No lead on {summarizeCells(checks.noLead, 4)}</OpenItem> : null}
           {checks.outOfRange.length > 0 ? (
             <OpenItem tone="warn">
               {checks.outOfRange
@@ -334,15 +126,260 @@ export function StepPublish(context: Readonly<BuilderContext>) {
           </button>
         </Panel>
       </div>
+    </div>
+  )
+}
 
+/** Shown per group in the "who's on" panel before collapsing the rest into "+N". */
+const GROUP_CAP: Record<ShiftRole, number> = { L: 3, m: 5, t: 3 }
+
+/** 14.4 headcount grid: people on desk per hour with ★ lead pills; the panel above shows everyone on the picked hour. */
+function HeadcountByHour({ context, checks }: Readonly<{ context: BuilderContext; checks: DraftChecks }>) {
+  const { draft, people, nameOf, students } = context
+  const hours = deskHours(draft.rules)
+  const [selected, setSelected] = useState<{ day: Weekday; hour: number }>({ day: "monday", hour: hours[0] ?? 8 })
+  const minOnDesk = draft.rules.min_on_desk.enabled ? draft.rules.min_on_desk.value : 1
+  const firstName = (studentId: number) => students.get(studentId)?.first_name?.trim() || nameOf(studentId)
+
+  const hourSlots = (hour: number) =>
+    [hour * 2, hour * 2 + 1].filter((slot) => slot >= draft.rules.desk_start_slot && slot < draft.rules.desk_end_slot)
+  const onDuring = (day: Weekday, hour: number) =>
+    people.flatMap((person) => {
+      const slot = hourSlots(hour).find((s) => roleAt(person, day, s))
+      if (slot == null) return []
+      const run = toRuns(assignedSlots(person, day)).find(([a, b]) => slot >= a && slot < b)!
+      return [{ person, role: roleAt(person, day, slot)!, run }]
+    })
+  const stats = (day: Weekday, hour: number) => {
+    const slots = hourSlots(hour)
+    const all = Math.min(...slots.map((slot) => checks.headcount(day, slot)))
+    const leadCount = Math.min(...slots.map((slot) => checks.leads(day, slot)))
+    return { all, leadCount, noLead: draft.rules.lead_every_slot.enabled && leadCount === 0, thin: all < minOnDesk }
+  }
+
+  const picked = stats(selected.day, selected.hour)
+  const pickedEntries = onDuring(selected.day, selected.hour)
+
+  return (
+    <Panel className="flex flex-col gap-2.5 px-5 py-[18px]">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-base font-bold">Headcount by hour</span>
+        <span className="text-xs text-muted-foreground">
+          People on the desk each hour. ★ pills are the leads on duty. Click an hour to see everyone.
+        </span>
+      </div>
+
+      <div className="grid h-[132px] gap-3.5 overflow-hidden rounded-[14px] border border-border bg-muted/40 px-4 py-3 md:grid-cols-[150px_minmax(0,1fr)_minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-sm font-semibold">
+            {DAY_SHORT[selected.day]} {hourShort(selected.hour)}
+          </span>
+          <span
+            className={cn(
+              "text-xs font-bold",
+              picked.noLead ? "text-destructive" : picked.thin ? "text-amber-700 dark:text-amber-300" : "text-accent",
+            )}
+          >
+            {picked.all} on desk · {picked.noLead ? "no lead" : `${picked.leadCount} lead${picked.leadCount === 1 ? "" : "s"}`}
+          </span>
+        </div>
+        {GROUPS.map(({ role, label }) => {
+          const all = pickedEntries.filter((entry) => entry.role === role)
+          const cap = GROUP_CAP[role]
+          const cut = all.length > cap
+          const shown = cut ? all.slice(0, cap - 1) : all
+          const rest = cut ? all.slice(cap - 1) : []
+          return (
+            <div key={role} className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+                {label} · {all.length}
+              </span>
+              <div className="flex flex-wrap gap-[5px] overflow-hidden">
+                {all.length === 0 ? <span className="flex h-6 items-center text-[13px] text-muted-foreground">—</span> : null}
+                {shown.map(({ person, run }) => (
+                  <span
+                    key={person.student_assistant_id}
+                    className={cn(
+                      "flex h-6 items-center gap-[5px] rounded-full border px-[9px] text-xs whitespace-nowrap",
+                      role === "L"
+                        ? "border-role-lead bg-role-lead font-bold text-role-foreground"
+                        : role === "t"
+                          ? "border-role-training/40 bg-card font-semibold"
+                          : "border-role-main/40 bg-card font-semibold",
+                    )}
+                  >
+                    {role === "L" ? <Star className="size-[9px] fill-amber-300 text-amber-300" /> : null}
+                    {nameOf(person.student_assistant_id)}
+                    <span className="font-mono font-medium opacity-70">{slotRange(run[0], run[1])}</span>
+                  </span>
+                ))}
+                {rest.length > 0 ? (
+                  <span
+                    title={rest.map(({ person, run }) => `${nameOf(person.student_assistant_id)} ${slotRange(run[0], run[1])}`).join(", ")}
+                    className="flex h-6 cursor-default items-center rounded-full border border-border bg-card px-[9px] text-xs font-bold"
+                  >
+                    +{rest.length}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="grid grid-cols-[64px_repeat(5,minmax(0,1fr))] gap-1">
+        <span />
+        {WEEKDAYS.map((day) => (
+          <span key={day} className="text-center text-[13px] font-bold">
+            {DAY_SHORT[day]}
+          </span>
+        ))}
+        {hours.map((hour) => (
+          <Fragment key={hour}>
+            <span className="self-center font-mono text-xs text-muted-foreground">{hourShort(hour)}</span>
+            {WEEKDAYS.map((day) => {
+              const { all, leadCount, noLead, thin } = stats(day, hour)
+              const leads = onDuring(day, hour).filter((entry) => entry.role === "L")
+              const on = selected.day === day && selected.hour === hour
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setSelected({ day, hour })}
+                  title={onDuring(day, hour).map(({ person }) => nameOf(person.student_assistant_id)).join(", ") || "Nobody on"}
+                  className={cn(
+                    "flex h-[42px] items-center justify-between gap-1.5 overflow-hidden rounded-[10px] border px-2",
+                    noLead
+                      ? "border-destructive/30 bg-destructive/10"
+                      : thin
+                        ? "border-amber-500/30 bg-amber-500/15"
+                        : "border-transparent bg-accent/10",
+                    on && "outline-[3px] outline-offset-2 outline-foreground",
+                  )}
+                >
+                  <span className="font-mono text-base font-semibold">{all}</span>
+                  <span className="flex min-w-0 gap-[3px] overflow-hidden">
+                    {noLead ? (
+                      <span className="flex h-[18px] items-center rounded-full border-[1.5px] border-destructive px-[7px] text-[10px] font-bold whitespace-nowrap text-destructive">
+                        No lead
+                      </span>
+                    ) : (
+                      <>
+                        {leads.slice(0, 1).map(({ person }) => (
+                          <span
+                            key={person.student_assistant_id}
+                            className="flex h-[18px] items-center gap-[3px] rounded-full bg-role-lead pr-[7px] pl-[5px] text-[10px] font-bold whitespace-nowrap text-role-foreground"
+                          >
+                            <Star className="size-2 fill-amber-300 text-amber-300" />
+                            {firstName(person.student_assistant_id)}
+                          </span>
+                        ))}
+                        {leads.length > 1 ? (
+                          <span className="flex h-[18px] items-center rounded-full bg-role-lead px-[6px] text-[10px] font-bold text-role-foreground">
+                            +{leads.length - 1}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </Panel>
+  )
+}
+
+/** Publishing into ClockedIn's own schedules, for setups without Teams Shifts. */
+function ClockedInPublishPanel({
+  context,
+  checks,
+  preview,
+  error,
+}: Readonly<{
+  context: BuilderContext
+  checks: DraftChecks
+  preview: Awaited<ReturnType<typeof scheduleDraftsApi.publishPreview>> | undefined
+  error: unknown
+}>) {
+  const { draft, runPublish, busy, termName } = context
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [justPublished, setJustPublished] = useState(false)
+  const term = preview?.term
+  const published = draft.status === "published"
+  // Publishing logs last, so any later entry means there are unpublished edits.
+  const upToDate = published && (draft.change_log[draft.change_log.length - 1]?.text.startsWith("Published") ?? false)
+
+  const publish = async () => {
+    setConfirmOpen(false)
+    if (await runPublish()) setJustPublished(true)
+  }
+
+  return (
+    <Panel className="flex flex-col gap-3 px-5 py-[18px]">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 items-center justify-center rounded-[9px] bg-role-training/15 text-role-training">
+          <CalendarDays className="size-[17px]" />
+        </span>
+        <span className="text-base font-bold">Publish to Schedules</span>
+      </div>
+      <div className="flex flex-col gap-2 text-[13px]">
+        <Row label="Term" value={term?.name ?? termName} />
+        <Row
+          label="Repeats weekly"
+          value={term?.start_date && term.end_date ? `${formatTermDate(term.start_date)} – ${formatTermDate(term.end_date)}` : "Term dates not set"}
+        />
+        <Row
+          label="Skips"
+          value={term && term.skips.length > 0 ? `${term.skips.map((skip) => formatTermDate(skip.date)).join(", ")} (from Terms)` : "None"}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5 rounded-[14px] bg-muted/50 px-3.5 py-3">
+        <span className="text-xs font-bold">Compared with Schedules now</span>
+        {!preview && !error ? (
+          <span className="text-[13px] text-muted-foreground">Comparing...</span>
+        ) : error || !preview ? (
+          <span className="text-[13px] text-destructive">Couldn&apos;t compare with current schedules.</span>
+        ) : (
+          <>
+            <Diff label="New shifts" value={`+${preview.new_shifts}`} className="text-accent" />
+            <Diff label="Removed shifts" value={`−${preview.removed_shifts}`} className="text-destructive" />
+            <Diff label="Unchanged (entries stay linked)" value={String(preview.unchanged_shifts)} />
+            <Diff label="Students affected" value={String(preview.students_affected)} />
+          </>
+        )}
+      </div>
+      {justPublished || upToDate ? (
+        <div className="flex flex-col gap-0.5 rounded-[14px] bg-accent/15 px-3.5 py-3">
+          <span className="text-sm font-bold text-accent">Published to Schedules</span>
+          <span className="text-xs text-accent">
+            {checks.totalShifts} shifts saved for {termName}.{" "}
+            <Link href="/admin/schedules" className="font-semibold underline">
+              View in Schedules
+            </Link>
+          </span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy === "publish" || checks.totalShifts === 0}
+          onClick={() => setConfirmOpen(true)}
+          className="h-11 rounded-full bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {busy === "publish" ? "Publishing..." : published ? `Publish changes (${checks.totalShifts} shifts)` : `Publish ${checks.totalShifts} shifts`}
+        </button>
+      )}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent className="border-border bg-card">
           <AlertDialogHeader>
             <AlertDialogTitle>Publish {checks.totalShifts} shifts?</AlertDialogTitle>
             <AlertDialogDescription>
-              This replaces each student&apos;s weekly schedule for {context.termName}
-              {preview ? ` (${preview.students_affected} students change)` : ""}. Shifts that don&apos;t
-              change keep their clock-in history linked.
+              This replaces each student&apos;s weekly schedule for {termName}
+              {preview ? ` (${preview.students_affected} students change)` : ""}. Shifts that don&apos;t change keep their
+              clock-in history linked.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -351,11 +388,11 @@ export function StepPublish(context: Readonly<BuilderContext>) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Panel>
   )
 }
 
-function Row({ label, value }: Readonly<{ label: string; value: string }>) {
+export function Row({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="flex justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
@@ -364,7 +401,7 @@ function Row({ label, value }: Readonly<{ label: string; value: string }>) {
   )
 }
 
-function Diff({ label, value, className }: Readonly<{ label: string; value: string; className?: string }>) {
+export function Diff({ label, value, className }: Readonly<{ label: string; value: string; className?: string }>) {
   return (
     <div className="flex justify-between text-[13px]">
       <span>{label}</span>

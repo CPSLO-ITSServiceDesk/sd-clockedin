@@ -11,6 +11,7 @@ import { assignmentsToRuns, generateDraft } from '../lib/scheduleBuilder/generat
 import {
   DEFAULT_RULES,
   WEEKDAYS,
+  assignedRoleRuns,
   assignedSlots,
   deskSlots,
   toRuns,
@@ -173,6 +174,14 @@ describe('generateDraft', () => {
     const roles = (p: DraftPerson) => new Set(WEEKDAYS.flatMap((day) => Object.values(p.assignments[day] ?? {})));
     expect([...roles(result[0])]).toEqual(['L']);
     expect([...roles(result[1])]).toEqual(['m']);
+  });
+
+  it('splits runs where the role changes, for Teams themes', () => {
+    expect(assignedRoleRuns({ tuesday: { '16': 'L', '17': 'L', '18': 't', '20': 't' } })).toEqual([
+      { day: 'tuesday', start: 16, end: 18, role: 'L' },
+      { day: 'tuesday', start: 18, end: 19, role: 't' },
+      { day: 'tuesday', start: 20, end: 21, role: 't' },
+    ]);
   });
 
   it('turns contiguous slots into one block per run', () => {

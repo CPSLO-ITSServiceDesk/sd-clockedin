@@ -294,6 +294,66 @@ export type Database = {
           },
         ]
       }
+      teams_schedule_publish: {
+        Row: {
+          academic_term_id: number
+          created_at: string
+          created_count: number
+          failed_count: number
+          from_date: string
+          id: number
+          kept_count: number
+          kind: string
+          removed_count: number
+          student_assistant_id: number | null
+          summary: string
+          to_date: string
+        }
+        Insert: {
+          academic_term_id: number
+          created_at?: string
+          created_count?: number
+          failed_count?: number
+          from_date: string
+          id?: number
+          kept_count?: number
+          kind: string
+          removed_count?: number
+          student_assistant_id?: number | null
+          summary?: string
+          to_date: string
+        }
+        Update: {
+          academic_term_id?: number
+          created_at?: string
+          created_count?: number
+          failed_count?: number
+          from_date?: string
+          id?: number
+          kept_count?: number
+          kind?: string
+          removed_count?: number
+          student_assistant_id?: number | null
+          summary?: string
+          to_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_schedule_publish_academic_term_id_fkey"
+            columns: ["academic_term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_term"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_schedule_publish_student_assistant_id_fkey"
+            columns: ["student_assistant_id"]
+            isOneToOne: false
+            referencedRelation: "student_assistant"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams_sync_status: {
         Row: {
           academic_term_id: number

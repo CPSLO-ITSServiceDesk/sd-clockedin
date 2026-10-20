@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { format, parseISO } from "date-fns"
-import { Clock, Download } from "lucide-react"
+import { Clock, Download, Star } from "lucide-react"
 
 import { Panel, Segmented, StatCard } from "@/components/admin/schedule-builder/builder-ui"
 import { weekdayLabel, type Weekday } from "@/components/admin/terms/term-types"
@@ -47,10 +47,12 @@ interface CurrentScheduleProps {
   /** Term picker, rendered in the header. */
   termPicker?: ReactNode
   primaryAction: { label: string; onClick: () => void; disabled?: boolean }
+  /** Opens 14.5 (change one person's shifts in Teams); falls back to the Schedules page. */
+  onChangeShifts?: () => void
 }
 
 /** 14.0 · read-only view of the term schedule that's live right now. */
-export function CurrentSchedule({ term, students, nameOf, draft, termPicker, primaryAction }: Readonly<CurrentScheduleProps>) {
+export function CurrentSchedule({ term, students, nameOf, draft, termPicker, primaryAction, onChangeShifts }: Readonly<CurrentScheduleProps>) {
   const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
     queryKey: queryKeys.schedules.all,
     queryFn: schedulesApi.list,
@@ -156,12 +158,22 @@ export function CurrentSchedule({ term, students, nameOf, draft, termPicker, pri
             <Download className="size-3.5" />
             Export CSV
           </button>
-          <Link
-            href={`/admin/schedules`}
-            className="flex h-[34px] items-center rounded-full border border-accent/30 bg-accent/10 px-3.5 text-[13px] font-bold text-accent hover:bg-accent/20"
-          >
-            Change shifts
-          </Link>
+          {onChangeShifts ? (
+            <button
+              type="button"
+              onClick={onChangeShifts}
+              className="flex h-[34px] items-center rounded-full border border-accent/30 bg-accent/10 px-3.5 text-[13px] font-bold text-accent hover:bg-accent/20"
+            >
+              Change shifts
+            </button>
+          ) : (
+            <Link
+              href="/admin/schedules"
+              className="flex h-[34px] items-center rounded-full border border-accent/30 bg-accent/10 px-3.5 text-[13px] font-bold text-accent hover:bg-accent/20"
+            >
+              Change shifts
+            </Link>
+          )}
           <button
             type="button"
             onClick={primaryAction.onClick}
@@ -287,6 +299,8 @@ function partial(shift: LiveShift, hour: number): string {
   return ""
 }
 
+type Density = "summary" | "full"
+
 function CalendarView({
   days,
   hours,
@@ -302,82 +316,218 @@ function CalendarView({
   nameOf: (_id: number) => string
   students: Map<number, StudentAssistant>
 }>) {
+  const [density, setDensity] = useState<Density>("summary")
+  const firstOpenDay = days.find((day) => !day.closedLabel)
+  const [selected, setSelected] = useState<{ date: string; hour: number } | null>(null)
+  const pick = selected ?? (firstOpenDay && hours.length ? { date: firstOpenDay.date, hour: hours[0] } : null)
+
+  const cellPeople = (day: LiveDay, hour: number) => {
+    const start = hour * 60
+    const on = onDeskDuring(day, start, start + 60)
+    const remote = day.shifts.filter((shift) => shift.remote && shift.start < start + 60 && shift.end > start)
+    return { on, remote, leads: on.filter((shift) => shift.role === "L") }
+  }
+
+  const selectedDay = pick ? days.find((day) => day.date === pick.date) : undefined
+  const detail = selectedDay && pick ? cellPeople(selectedDay, pick.hour) : null
+
   return (
-    <Panel className="overflow-x-auto px-4 py-3.5">
-      <div className="flex min-w-[900px] flex-col gap-1">
-        <div className="grid grid-cols-[64px_repeat(5,minmax(0,1fr))] gap-1.5 pb-1">
-          <span />
-          {days.map((day) => (
-            <div key={day.date} className="flex items-baseline justify-between">
-              <span className={cn("text-sm font-bold", day.closedLabel && "text-muted-foreground")}>
-                {weekdayLabel(day.weekday)}
-              </span>
-              <span className="font-mono text-[11px] text-muted-foreground">{dayDate(day.date)}</span>
+    <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <Panel className="overflow-x-auto px-4 py-3.5">
+        <div className="flex min-w-[860px] flex-col gap-1">
+          <div className="grid grid-cols-[64px_repeat(5,minmax(0,1fr))] gap-1.5 pb-1">
+            <span />
+            {days.map((day) => (
+              <div key={day.date} className="flex items-baseline justify-between">
+                <span className={cn("text-sm font-bold", day.closedLabel && "text-muted-foreground")}>
+                  {weekdayLabel(day.weekday)}
+                </span>
+                <span className="font-mono text-[11px] text-muted-foreground">{dayDate(day.date)}</span>
+              </div>
+            ))}
+          </div>
+          {hours.map((hour, row) => (
+            <div key={hour} className="grid grid-cols-[64px_repeat(5,minmax(0,1fr))] items-stretch gap-1.5 pt-1.5">
+              <span className="pt-1.5 font-mono text-xs text-muted-foreground">{hourShort(hour)}</span>
+              {days.map((day) => {
+                if (day.closedLabel) {
+                  return (
+                    <div
+                      key={day.date}
+                      className="min-h-[46px] rounded-[10px] bg-[repeating-linear-gradient(45deg,var(--muted)_0_6px,transparent_6px_12px)] px-2 py-1.5 text-[11px] font-bold text-muted-foreground"
+                    >
+                      {row === 0 ? "Closed" : ""}
+                    </div>
+                  )
+                }
+                const { on, remote, leads } = cellPeople(day, hour)
+                const noLead = on.length > 0 && leads.length === 0
+                const thin = on.length > 0 && on.length < minOnDesk
+                const isSelected = pick?.date === day.date && pick.hour === hour
+                const shown = [...on, ...remote]
+                  .filter(keep)
+                  .sort((a, b) => (a.role === b.role ? a.start - b.start : a.role === "L" ? -1 : 1))
+                return (
+                  <button
+                    key={day.date}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelected({ date: day.date, hour })}
+                    className={cn(
+                      "flex min-h-[46px] flex-col justify-center gap-[5px] rounded-[10px] border px-2 py-1.5 text-left",
+                      on.length === 0 && remote.length === 0
+                        ? "border-transparent bg-muted/40"
+                        : noLead
+                          ? "border-destructive/25 bg-destructive/10"
+                          : thin
+                            ? "border-amber-500/30 bg-amber-500/15"
+                            : "border-border/60 bg-muted/50",
+                      isSelected && "outline-2 outline-offset-1 outline-accent",
+                    )}
+                  >
+                    {density === "summary" ? (
+                      on.length > 0 || remote.length > 0 ? (
+                        <>
+                          <div className="flex flex-wrap gap-[3px]">
+                            {leads.filter(keep).map((shift) => (
+                              <span
+                                key={`${shift.studentId}-${shift.start}`}
+                                className="flex h-5 items-center gap-1 rounded-full bg-role-lead pr-2 pl-1.5 text-[11px] font-bold whitespace-nowrap text-role-foreground"
+                              >
+                                <Star className="size-[9px] fill-amber-300 text-amber-300" />
+                                {firstName(students, nameOf, shift.studentId)}
+                              </span>
+                            ))}
+                            {noLead ? (
+                              <span className="flex h-5 items-center rounded-full border-[1.5px] border-destructive px-2 text-[11px] font-bold text-destructive">
+                                No lead
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "font-mono text-[11px] font-semibold whitespace-nowrap",
+                                noLead ? "text-destructive" : thin ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground",
+                              )}
+                            >
+                              {on.length} on{remote.length ? ` +${remote.length} remote` : ""}
+                            </span>
+                            <div className="flex h-1 flex-1 gap-0.5">
+                              <div className="rounded-full bg-role-main/70" style={{ flex: Math.max(0, on.length - leads.length) }} />
+                              <div style={{ flex: Math.max(0, minOnDesk - on.length) }} />
+                            </div>
+                          </div>
+                        </>
+                      ) : null
+                    ) : (
+                      <div className="flex flex-wrap gap-[3px]">
+                        {shown.map((shift) => (
+                          <span
+                            key={`${shift.studentId}-${shift.start}`}
+                            title={`${nameOf(shift.studentId)} · ${ROLE_NAME[shift.role]} · ${compactRange(shift.start, shift.end)}${shift.remote ? " · remote" : ""}`}
+                            className={cn(
+                              "flex h-5 items-center rounded-md border px-[7px] text-[11px] whitespace-nowrap",
+                              shift.role === "L" && !shift.remote
+                                ? "border-role-lead bg-role-lead font-bold text-role-foreground"
+                                : shift.remote
+                                  ? "border-dashed border-muted-foreground/50 font-semibold text-muted-foreground"
+                                  : "border-border bg-card font-semibold",
+                            )}
+                          >
+                            {firstName(students, nameOf, shift.studentId)}
+                            <span className="font-mono font-medium opacity-80">{partial(shift, hour)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           ))}
+          <div className="flex flex-wrap items-center gap-4 pt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="flex h-4 items-center rounded-full bg-role-lead px-[7px] text-[10px] font-bold text-role-foreground">★ Lead</span>
+              Lead on duty
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-1 w-4 rounded-full bg-role-main/70" />
+              Main desk
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-4 rounded-[3px] border border-dashed border-muted-foreground/50" />
+              Remote
+            </span>
+            <span className="flex-1" />
+            <Segmented
+              options={[
+                { value: "summary", label: "Summary" },
+                { value: "full", label: "Everyone" },
+              ]}
+              value={density}
+              onChange={setDensity}
+            />
+          </div>
         </div>
-        {hours.map((hour, row) => (
-          <div key={hour} className="grid grid-cols-[64px_repeat(5,minmax(0,1fr))] items-stretch gap-1.5 border-t border-border/60 pt-1.5">
-            <span className="pt-1 font-mono text-xs text-muted-foreground">{hourShort(hour)}</span>
-            {days.map((day) => {
-              if (day.closedLabel) {
-                return (
-                  <div
-                    key={day.date}
-                    className="min-h-11 rounded-[10px] bg-[repeating-linear-gradient(45deg,var(--muted)_0_6px,transparent_6px_12px)] px-2 py-1.5 text-[11px] font-bold text-muted-foreground"
-                  >
-                    {row === 0 ? "Closed" : ""}
-                  </div>
-                )
-              }
-              const on = onDeskDuring(day, hour * 60, hour * 60 + 60)
-              const leads = on.filter((shift) => shift.role === "L").length
-              const remote = day.shifts.filter((shift) => shift.remote && shift.start < hour * 60 + 60 && shift.end > hour * 60)
-              const shown = [...on, ...remote].filter(keep).sort((a, b) => (a.role === b.role ? a.start - b.start : a.role === "L" ? -1 : 1))
-              const noLead = on.length > 0 && leads === 0
-              return (
-                <div
-                  key={day.date}
-                  className={cn(
-                    "flex min-h-11 flex-col gap-1 rounded-[10px] px-2 py-1.5",
-                    on.length === 0 ? "bg-muted/40" : noLead ? "bg-destructive/10" : on.length < minOnDesk ? "bg-amber-500/15" : "bg-muted/60",
-                  )}
-                >
-                  {on.length > 0 || remote.length > 0 ? (
+      </Panel>
+
+      <Panel className="flex flex-col gap-3 px-[18px] py-4 xl:sticky xl:top-6">
+        {pick && selectedDay && detail ? (
+          <>
+            <div className="flex flex-col gap-0.5">
+              <span className="font-mono text-base font-semibold">
+                {weekdayLabel(selectedDay.weekday)} {dayDate(selectedDay.date)} · {hourShort(pick.hour)}
+              </span>
+              <span
+                className={cn(
+                  "text-[13px] font-bold",
+                  detail.on.length > 0 && detail.leads.length === 0
+                    ? "text-destructive"
+                    : detail.on.length < minOnDesk
+                      ? "text-amber-700 dark:text-amber-300"
+                      : "text-accent",
+                )}
+              >
+                {detail.on.length} on desk ·{" "}
+                {detail.leads.length ? `${detail.leads.length} lead${detail.leads.length > 1 ? "s" : ""}` : "no lead"}
+              </span>
+            </div>
+            {(
+              [
+                ["Leads", detail.leads],
+                ["Main desk", detail.on.filter((shift) => shift.role !== "L")],
+                ["Remote", detail.remote],
+              ] as const
+            ).map(([label, list]) =>
+              list.length === 0 ? null : (
+                <div key={label} className="flex flex-col gap-[5px]">
+                  <span className="text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">{label}</span>
+                  {list.map((shift) => (
                     <div
+                      key={`${shift.studentId}-${shift.start}`}
                       className={cn(
-                        "flex justify-between text-[11px] font-bold",
-                        noLead ? "text-destructive" : on.length < minOnDesk ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground",
+                        "flex items-center gap-2 rounded-[10px] px-2.5 py-1.5",
+                        label === "Leads" ? "bg-role-lead text-role-foreground" : "bg-muted/60",
                       )}
                     >
-                      <span>{on.length} on</span>
-                      <span>{leads ? `${leads} lead${leads > 1 ? "s" : ""}` : "no lead"}</span>
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap gap-[3px]">
-                    {shown.map((shift) => (
-                      <span
-                        key={`${shift.studentId}-${shift.start}`}
-                        title={`${nameOf(shift.studentId)} · ${ROLE_NAME[shift.role]} · ${compactRange(shift.start, shift.end)}${shift.remote ? " · remote" : ""}`}
-                        className={cn(
-                          "flex h-5 items-center gap-1 rounded-md border bg-card pr-[7px] pl-1 text-[11px] font-semibold whitespace-nowrap",
-                          shift.remote ? "border-dashed border-muted-foreground/50 text-muted-foreground" : "border-border",
-                        )}
-                      >
-                        <span className={cn("size-2 rounded-[2px]", ROLE_SWATCH[shift.role])} />
-                        {firstName(students, nameOf, shift.studentId)}
-                        {shift.remote ? <span className="font-medium">remote</span> : null}
-                        <span className="font-mono font-medium text-amber-700 dark:text-amber-300">{partial(shift, hour)}</span>
+                      <span className={cn("flex-1 text-[13px]", label === "Leads" ? "font-bold" : "font-semibold")}>
+                        {nameOf(shift.studentId)}
                       </span>
-                    ))}
-                  </div>
+                      <span className="font-mono text-xs opacity-85">{compactRange(shift.start, shift.end)}</span>
+                    </div>
+                  ))}
                 </div>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-    </Panel>
+              ),
+            )}
+            {detail.on.length === 0 && detail.remote.length === 0 ? (
+              <span className="text-[13px] text-muted-foreground">Nobody is scheduled this hour.</span>
+            ) : null}
+          </>
+        ) : null}
+        <span className="text-xs text-muted-foreground">Click any hour in the calendar to see who&apos;s on.</span>
+      </Panel>
+    </div>
   )
 }
 

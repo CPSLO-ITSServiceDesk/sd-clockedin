@@ -31,7 +31,14 @@ export interface GraphApiClient {
   getCollection<T>(path: string, query?: GraphQuery): Promise<T[]>;
 }
 
-let cachedClient: GraphApiClient | null = null;
+/** Writes to Teams. Kept separate so read-only code (sync) can't write by accident. */
+export interface GraphWriteClient extends GraphApiClient {
+  post<T>(path: string, body: unknown): Promise<T>;
+  put(path: string, body: unknown): Promise<void>;
+  delete(path: string): Promise<void>;
+}
+
+let cachedClient: GraphWriteClient | null = null;
 
 export function isMicrosoftGraphEnabled(
   graph: MicrosoftGraphConfig = config.microsoftGraph,
@@ -40,12 +47,16 @@ export function isMicrosoftGraphEnabled(
 }
 
 export function getGraphClient(): GraphApiClient {
+  return getGraphWriteClient();
+}
+
+export function getGraphWriteClient(): GraphWriteClient {
   if (cachedClient) return cachedClient;
   cachedClient = createGraphApiClient(config.microsoftGraph);
   return cachedClient;
 }
 
-export function createGraphApiClient(graph: MicrosoftGraphConfig): GraphApiClient {
+export function createGraphApiClient(graph: MicrosoftGraphConfig): GraphWriteClient {
   if (!graph.enabled || !graph.tenantId || !graph.clientId || !graph.clientSecret) {
     throw new Error(GRAPH_NOT_CONFIGURED_MESSAGE);
   }
@@ -79,18 +90,42 @@ function applyQuery(request: GraphRequest, query?: GraphQuery): GraphRequest {
   return next;
 }
 
-function wrapGraphError(err: unknown, path: string): Error {
+function wrapGraphError(err: unknown, path: string, method = 'GET'): Error {
   if (err instanceof GraphError) {
-    return new Error(`Microsoft Graph ${err.statusCode} GET ${path}: ${err.message}`);
+    return new Error(`Microsoft Graph ${err.statusCode} ${method} ${path}: ${err.message}`);
   }
   if (err instanceof Error) {
-    return new Error(`Microsoft Graph GET ${path}: ${err.message}`);
+    return new Error(`Microsoft Graph ${method} ${path}: ${err.message}`);
   }
-  return new Error(`Microsoft Graph GET ${path} failed`);
+  return new Error(`Microsoft Graph ${method} ${path} failed`);
 }
 
-function wrapGraphClient(client: Client): GraphApiClient {
+function wrapGraphClient(client: Client): GraphWriteClient {
   return {
+    async post<T>(path: string, body: unknown): Promise<T> {
+      try {
+        return (await client.api(path).post(body)) as T;
+      } catch (err) {
+        throw wrapGraphError(err, path, 'POST');
+      }
+    },
+
+    async put(path: string, body: unknown): Promise<void> {
+      try {
+        await client.api(path).put(body);
+      } catch (err) {
+        throw wrapGraphError(err, path, 'PUT');
+      }
+    },
+
+    async delete(path: string): Promise<void> {
+      try {
+        await client.api(path).delete();
+      } catch (err) {
+        throw wrapGraphError(err, path, 'DELETE');
+      }
+    },
+
     async get<T>(path: string, query?: GraphQuery): Promise<T> {
       try {
         const request = applyQuery(client.api(path), query);

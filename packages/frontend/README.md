@@ -24,22 +24,26 @@ packages/frontend/
 │   ├── display/            # Full-screen wall display
 │   ├── auth/callback/      # Supabase OAuth callback
 │   ├── admin/              # Admin routes (auth required)
-│   │   ├── page.tsx        # Dashboard
-│   │   ├── terms/
-│   │   ├── students/
-│   │   ├── employees/
-│   │   ├── schedules/
+│   │   ├── page.tsx        # Dashboard (today's timeline, attention rail, time off)
 │   │   ├── shifts/
-│   │   ├── studentrecords/
+│   │   ├── students/       # Roster + edit panel
+│   │   ├── terms/
+│   │   ├── schedules/      # Team week editor
+│   │   │   └── new/        # Schedule builder (current schedule → import → rules → review → publish)
 │   │   ├── timesheet-verification/
-│   │   ├── shift-normalization/
-│   │   ├── analytics/      # term, students, group-schedule
+│   │   ├── shift-normalization/  # Link clock-ins, fix odd clock-outs
 │   │   ├── access/
+│   │   ├── studentrecords/       # Per-student punctuality + time entries
+│   │   ├── analytics/      # term, students, hourly-staffing (not in the sidebar)
+│   │   ├── employees/
 │   │   └── settings/
 │   ├── layout.tsx          # Root layout (providers)
 │   └── globals.css
 ├── components/             # Reusable UI (shadcn/ui) and feature components
-│   ├── admin/              # Admin-specific components
+│   ├── admin/              # Admin feature components, one folder per page
+│   │   └── schedule-builder/  # Wizard steps, review grid, current-schedule view
+│   ├── kiosk/              # Kiosk board and clock in/out
+│   ├── display/            # Wall display
 │   └── providers/          # QueryProvider, ThemeProvider
 ├── hooks/                  # Custom React hooks
 ├── lib/
@@ -47,7 +51,8 @@ packages/frontend/
 │   ├── auth/               # Admin authorization helpers
 │   ├── supabase/           # Browser/server Supabase clients, session middleware
 │   ├── schedules/          # Schedule persistence and date-range utilities
-│   ├── shifts/             # Today-shifts and dashboard stats
+│   ├── schedule-builder/   # Draft model, live checks, current-schedule week builder
+│   ├── shifts/             # Today-shifts, kiosk/display boards ("Out today"), dashboard timeline
 │   ├── query-keys.ts       # Centralized React Query keys
 │   └── format-time.ts
 ├── proxy.ts                # Session refresh (Next.js proxy middleware)
@@ -66,7 +71,7 @@ packages/frontend/
 - Custom hooks in `hooks/` directory encapsulate query logic
 
 ### API Communication
-- All API requests go through the typed `apiFetch` wrapper in `lib/api/client.ts`
+- All API requests go through the typed `apiFetch` wrapper in `lib/api/client.ts`; file uploads use `apiUpload` from the same file
 - Automatic JSON serialization/deserialization
 - Consistent error handling transforming API errors to thrown exceptions
 - Resource-specific modules in `lib/api/` (e.g., `terms.ts`, `scheduleBlocks.ts`, `timesheet.ts`, `shift-normalization.ts`)
@@ -81,9 +86,31 @@ packages/frontend/
 ### UI Components
 - Reusable components in `components/ui/` (shadcn/ui)
 - Admin feature components in `components/admin/`
-- Kiosk components: `live-clock`, `clock-modal`, `clocked-in-table`, `expected-arrivals-table`
+- Kiosk (`components/kiosk/`) and wall display (`components/display/`) boards: who's here, who's next, and "Out today". "Out today" lists every time off overlapping today with when the person is off ("All day" only when the day is fully covered, otherwise e.g. "10:00 – 11:00 AM"); the wall display doesn't highlight late arrivals.
 - Analytics: KPI cards, punctuality charts, hourly headcount, late leaderboards
-- Timesheet verification and shift normalization managers under `components/admin/`
+- Timesheet verification and shift normalization managers under `components/admin/`. Shift normalization includes an "Odd clock-outs" section that sets selected entries to the scheduled shift end.
+
+### Schedule Builder (`/admin/schedules/new`)
+- Opens on **Schedules home**:
+  - pick a term, then manage what's live or build a new schedule
+  - **All terms** lists each term's draft step / live / ended status, with Resume, Open, or Copy as starting point
+- **Current schedule** (read-only) for the term:
+  - term weeks with holidays and swap days applied
+  - Calendar and By person views
+  - CSV export
+- **Import**: upload the Microsoft Forms availability export, or paint availability by hand; match responses that aren't on the roster
+- **Guidelines**: desk hours, minimum on desk, lead every hour, shift length, requested hours, weekly budget; notes from the form beside each person's hours
+- **Review**:
+  - week grid, single day, or **Slots** (pick an hour: who's on, who's available, ranked by how far they are from their hours)
+  - paint Lead / Main / Training, or switch to the Availability layer
+  - live checks and a change log
+- **Publish**: headcount by hour, comparison with current schedules, then publish to the term's schedules
+- Drafts autosave (debounced) to `schedule_draft` through `/api/schedule-drafts`
+
+### Styling Tokens
+- Colors are CSS variables in `app/globals.css` (light and `.dark`), exposed to Tailwind with `@theme inline`
+- Use semantic classes (`bg-card`, `text-muted-foreground`, `bg-accent/15`, …) rather than hex values
+- The schedule builder adds `bg-role-lead`, `bg-role-main`, `bg-role-training` and `bg-avail`
 
 ## Development
 
@@ -112,6 +139,8 @@ pnpm --filter frontend build
 # Start production server
 pnpm --filter frontend start
 ```
+
+Don't run a production build while `next dev` is running: both use `.next/`, and the dev server can keep serving stale CSS (new Tailwind classes and variables missing) until restarted. To check changes without building, run `pnpm --filter frontend exec tsc --noEmit -p .` and `pnpm --filter frontend lint`.
 
 ### Linting
 ```bash
@@ -176,13 +205,18 @@ The GitHub `production` Environment also requires a non-secret `FRONTEND_URL` va
 
 ### Analytics Features
 - Term analytics dashboard (`/admin/analytics/term`)
-- Per-student analytics (`/admin/analytics/students`)
-- Group schedule view (`/admin/analytics/group-schedule`)
+- Per-student analytics (`/admin/analytics/students`) and Student Records (`/admin/studentrecords`)
+- Hourly staffing (`/admin/analytics/hourly-staffing`, not linked in the sidebar)
 - Punctuality KPIs, late leaderboards, weekday/slot charts, hourly headcount with location filtering
 
 ### Timesheet & Normalization
-- Timesheet verification grid (`/admin/timesheet-verification`) — hours-by-day review
-- Shift normalization (`/admin/shift-normalization`) — match orphaned entries to schedule blocks
+- Timesheet verification (`/admin/timesheet-verification`) — monthly hours per student, with month sign-off
+- Shift normalization (`/admin/shift-normalization`) — match orphaned entries to schedule blocks, and set odd clock-outs (never clocked out, still clocked in well after the shift, auto clocked out, next day, long after the shift) to the scheduled shift end
+
+### Time Off
+- Comes from Teams via the backend's `GET /api/shifts/today`
+- Time off covering a whole shift shows as time off all day; partial time off trims the shift to the hours still worked
+- `todayTimeOff` (everything overlapping today) feeds "Out today"; `upcomingTimeOff` feeds the dashboard's upcoming time off card
 
 ## Architecture Guidelines
 
@@ -244,7 +278,7 @@ The GitHub `production` Environment also requires a non-secret `FRONTEND_URL` va
 5. Add new route in `app/` directory for analytics pages (e.g., `app/admin/analytics/page.tsx`)
 6. Create visualization components in `components/admin/analytics/` using Recharts or similar
 7. Add utility functions for data processing in `lib/` if needed
-8. Update sidebar navigation in `components/admin/layout/app-sidebar.tsx` to include new links
+8. Update sidebar navigation in `components/admin/layout/app-sidebar.tsx` to include new links (items highlight on their sub-pages too; the most specific match wins)
 
 ## Testing
 
@@ -258,13 +292,16 @@ Currently, there are no tests in the frontend package. When adding tests, consid
 ## Database Schema Overview (as used by frontend)
 
 The frontend interacts with these backend resources through the API:
-- `academic_term`: School terms/semesters
+- `academic_term`: School terms/semesters (with vacation and swap days)
 - `student_assistant`: Student worker information
 - `schedules`: Work schedules for students
 - `schedule_blocks`: Individual shift blocks within schedules
 - `time_entry`: Clock-in/clock-out records
 - `admins`: System administrators
-- `import`: Batch import tracking
+- `student_time_off`: Teams time off (through today's shifts)
+- `teams_sync_status`: Last Teams sync
+- `timesheet_verification`: Verified months
+- `schedule_draft`: Schedule builder drafts
 
 **Analytics-specific data:**
 - The frontend leverages aggregated data and computed fields from the above tables for analytics

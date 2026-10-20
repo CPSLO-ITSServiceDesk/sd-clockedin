@@ -106,10 +106,14 @@ export const scheduleDraftsApi = {
   latestForTerm: (termId: number) =>
     apiFetch<ScheduleDraft | null>(`/schedule-drafts?academic_term_id=${termId}`),
 
-  create: (termId: number) =>
+  /** Latest draft of every term that has one. */
+  listLatest: () => apiFetch<ScheduleDraft[]>("/schedule-drafts"),
+
+  /** Start a draft; `copyFromTermId` seeds it with that term's weekly shifts. */
+  create: (termId: number, copyFromTermId?: number) =>
     apiFetch<ScheduleDraft>("/schedule-drafts", {
       method: "POST",
-      body: JSON.stringify({ academic_term_id: termId }),
+      body: JSON.stringify({ academic_term_id: termId, copy_from_term_id: copyFromTermId ?? null }),
     }),
 
   update: (id: number, patch: ScheduleDraftPatch) =>

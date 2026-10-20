@@ -41,7 +41,16 @@ export const queryKeys = {
   scheduleDrafts: {
     all: ["schedule-drafts"] as const,
     byTerm: (termId: number) => ["schedule-drafts", "term", termId] as const,
+    latestPerTerm: ["schedule-drafts", "latest-per-term"] as const,
     preview: (draftId: number) => ["schedule-drafts", draftId, "publish-preview"] as const,
+  },
+  teamsPublish: {
+    all: ["teams-publish"] as const,
+    history: (termId: number) => ["teams-publish", "history", termId] as const,
+    draftPreview: (draftId: number, from: string, to: string) =>
+      ["teams-publish", "draft", draftId, from, to] as const,
+    pattern: (termId: number, studentId: number, week: string) =>
+      ["teams-publish", "pattern", termId, studentId, week] as const,
   },
   teamsSync: {
     all: ["teams-sync"] as const,

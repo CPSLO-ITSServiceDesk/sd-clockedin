@@ -12,6 +12,7 @@ import shiftNormalizationRoutes from './shiftNormalization';
 import timesheetRoutes from './timesheet';
 import adminRoutes from './admins';
 import scheduleDraftRoutes from './scheduleDrafts';
+import teamsPublishRoutes from './teamsPublish';
 
 const router = Router();
 
@@ -49,6 +50,7 @@ router.use('/normalization', shiftNormalizationRoutes);
 router.use('/timesheet', timesheetRoutes);
 router.use('/admins', adminRoutes);
 router.use('/schedule-drafts', scheduleDraftRoutes);
+router.use('/teams-publish', teamsPublishRoutes);
 
 /** Mounts all API routes under the /api prefix. */
 export function registerRoutes(app: Application): void {

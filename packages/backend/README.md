@@ -214,6 +214,7 @@ SQL migrations live in `supabase/migrations/`, with a rollback for each in `supa
 | `20261002110000_teams_sync_status` | `teams_sync_status` |
 | `20261016100000_timesheet_verification` | `timesheet_verification` |
 | `20261019100000_schedule_draft` | `schedule_draft` (schedule builder) |
+| `20261019120000_teams_schedule_publish` | `teams_schedule_publish` (history of sends to Teams) |
 
 Features backed by a newer table check for it at runtime. Timesheet verification and the schedule builder report "not set up yet" instead of failing until their migration is applied.
 
@@ -349,6 +350,13 @@ All routes are mounted under `/api`.
 - `POST /terms/:termId/apply` — Link the given time entries to blocks
 - `POST /terms/:termId/clock-outs` — Set the given entries' clock-out to their shift's scheduled end (recomputed server-side; stale ones are skipped)
 
+### Teams Publish (`/teams-publish`)
+Sends to Teams Shifts as **drafts**: new shifts are created unshared, unwanted shared shifts are staged for deletion, and unwanted unshared drafts are deleted. Students see nothing until a manager shares the schedule in Teams. Requires the Graph `Schedule.ReadWrite.All` application permission.
+- `POST /drafts/:draftId/preview` / `POST /drafts/:draftId/publish` — Body `{ from_date, to_date }`. Lays the draft's weekly pattern over those weeks (inside the term, skipping vacations, running swap days) and diffs it against Teams for the people the draft covers.
+- `GET /students/:studentId/pattern?academic_term_id=&week=` — A person's weekly shifts as they are in Teams (that week, or the latest of the previous four with shifts)
+- `POST /students/:studentId/preview` / `POST /students/:studentId/publish` — Body `{ academic_term_id, from_date, to_date, shifts: [{ day, start_time, end_time, role }] }`; changes only that person's shifts in those weeks
+- `GET /terms/:termId/history` — Recent sends (Versions)
+
 ### Schedule Drafts (`/schedule-drafts`)
 - `GET /?academic_term_id=` — Latest draft for a term (or null)
 - `POST /` — Start a draft for a term (seeded with active students)
@@ -371,6 +379,7 @@ The Supabase database contains these tables:
 - `teams_sync_status`: Last Teams sync result per term
 - `timesheet_verification`: Verified months per student
 - `schedule_draft`: Schedule builder drafts
+- `teams_schedule_publish`: History of sends to Teams
 
 ## Adding New Features
 

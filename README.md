@@ -8,7 +8,10 @@ The backend can synchronize the roster, weekly schedules, and time off directly 
 
 - Sync runs **hourly** for the active term, right after an active term is saved, and on demand (`POST /api/teams-sync/sync-now`).
 - Only members of the configured scheduling group (`TEAMS_SCHEDULING_GROUP`, default "Service Desk") are synced, and only **shared** (published) shifts and time off. Pending time-off requests aren't synced; an approved request appears once its time off is on the schedule.
-- The integration is read-only: nothing in the app writes back to Teams.
+- Sync only reads from Teams. The schedule builder can **send** shifts to Teams Shifts:
+  - a whole new term schedule, or one person's change, for the weeks you choose
+  - always as **drafts**, which a manager shares from Teams
+  - ClockedIn picks shared shifts up on the next sync
 
 To enable Teams integration, configure the Microsoft Graph environment variables in your backend `.env` file (see Environment variables below).
 

@@ -25,12 +25,15 @@ const idParam = param('id').isInt({ min: 1 }).withMessage('id must be a positive
  * /schedule-drafts:
  *   get:
  *     tags: [Schedule Builder]
- *     summary: Latest schedule draft for a term
- *     description: Returns null when the term has no draft yet. Active students missing from the draft are added.
+ *     summary: Latest schedule draft for a term, or for every term
+ *     description: >
+ *       With academic_term_id, returns that term's latest draft (or null);
+ *       active students missing from it are added. Without it, returns the
+ *       latest draft of every term that has one (Schedules home).
  *     parameters:
  *       - in: query
  *         name: academic_term_id
- *         required: true
+ *         required: false
  *         schema: { type: integer }
  *     responses:
  *       200: { description: The draft, or null }
@@ -47,12 +50,15 @@ const idParam = param('id').isInt({ min: 1 }).withMessage('id must be a positive
  *             required: [academic_term_id]
  *             properties:
  *               academic_term_id: { type: integer }
+ *               copy_from_term_id:
+ *                 type: integer
+ *                 description: Seed shifts from this term's weekly schedules (as a starting point)
  *     responses:
  *       201: { description: The new draft, seeded with every active student }
  */
 router.get(
   '/',
-  query('academic_term_id').isInt({ min: 1 }).withMessage('academic_term_id is required'),
+  query('academic_term_id').optional().isInt({ min: 1 }).withMessage('academic_term_id must be a positive integer'),
   validate,
   scheduleDraftController.getLatest,
 );
@@ -60,6 +66,7 @@ router.get(
 router.post(
   '/',
   body('academic_term_id').isInt({ min: 1 }).withMessage('academic_term_id is required'),
+  body('copy_from_term_id').optional({ values: 'null' }).isInt({ min: 1 }),
   validate,
   scheduleDraftController.create,
 );

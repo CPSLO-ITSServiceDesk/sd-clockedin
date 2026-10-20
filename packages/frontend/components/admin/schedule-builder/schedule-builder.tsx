@@ -8,12 +8,24 @@ import { Check, Clock } from "lucide-react"
 import { toast } from "sonner"
 
 import { Panel } from "@/components/admin/schedule-builder/builder-ui"
+import { ChangeShifts } from "@/components/admin/schedule-builder/change-shifts"
+import { SchedulesHome } from "@/components/admin/schedule-builder/schedules-home"
 import { CurrentSchedule } from "@/components/admin/schedule-builder/current-schedule"
 import { StepGuidelines } from "@/components/admin/schedule-builder/step-guidelines"
 import { StepImport } from "@/components/admin/schedule-builder/step-import"
 import { StepPublish } from "@/components/admin/schedule-builder/step-publish"
 import { StepReview } from "@/components/admin/schedule-builder/step-review"
 import { sortTermsByActiveStatus } from "@/components/admin/terms/term-types"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
@@ -30,7 +42,7 @@ import {
   type ScheduleDraft,
 } from "@/lib/api/schedule-drafts"
 import { studentAssistantsApi, type StudentAssistant } from "@/lib/api/student-assistants"
-import { termsApi } from "@/lib/api/terms"
+import { termsApi, type Term } from "@/lib/api/terms"
 import { queryKeys } from "@/lib/query-keys"
 import { GROUP_ORDER } from "@/lib/schedule-builder/model"
 import { cn } from "@/lib/utils"
@@ -40,6 +52,7 @@ const AUTOSAVE_MS = 800
 
 export interface BuilderContext {
   draft: ScheduleDraft
+  term: Term
   termName: string
   students: Map<number, StudentAssistant>
   /** People sorted by group, then first name. */
@@ -53,6 +66,8 @@ export interface BuilderContext {
   runPublish: () => Promise<boolean>
   /** Wait for pending edits to reach the server. */
   flush: () => Promise<void>
+  /** Re-read the draft from the server after a change made there (e.g. a send to Teams). */
+  reload: () => Promise<void>
   busy: "import" | "generate" | "publish" | null
 }
 
@@ -75,7 +90,10 @@ export function ScheduleBuilder() {
   })
 
   const termParam = Number(searchParams.get("term"))
+  // Set together with the working draft when switching terms, so they never disagree for a render.
+  const [termChoice, setTermChoice] = useState<number | null>(null)
   const termId =
+    termChoice ??
     (Number.isInteger(termParam) && termParam > 0 ? termParam : null) ??
     terms.find((term) => term.is_active)?.id ??
     terms[0]?.id ??
@@ -95,8 +113,8 @@ export function ScheduleBuilder() {
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved")
   const [busy, setBusy] = useState<BuilderContext["busy"]>(null)
   const [starting, setStarting] = useState(false)
-  /** null = default: show the current schedule unless a draft is in progress. */
-  const [showCurrent, setShowCurrent] = useState<boolean | null>(null)
+  /** null = Schedules home (14). */
+  const [view, setView] = useState<"home" | "current" | "draft" | "change" | null>(null)
 
   const workRef = useRef(work)
   workRef.current = work
@@ -105,8 +123,9 @@ export function ScheduleBuilder() {
   const saveChain = useRef<Promise<void>>(Promise.resolve())
 
   useEffect(() => {
-    if (draftQuery.data && draftQuery.data.id !== workRef.current?.id) setWork(draftQuery.data)
-  }, [draftQuery.data])
+    const loaded = draftQuery.data
+    if (loaded && loaded.academic_term_id === termId && loaded.id !== workRef.current?.id) setWork(loaded)
+  }, [draftQuery.data, termId])
 
   const save = useCallback(() => {
     saveChain.current = saveChain.current.then(async () => {
@@ -212,13 +231,37 @@ export function ScheduleBuilder() {
     [work?.people, nameOf],
   )
 
-  const startDraft = async () => {
-    if (!termId) return
+  /** Switch term (and view) at once; the term's draft loads into the working copy. */
+  const selectTerm = async (nextTermId: number, nextView: typeof view = view) => {
+    if (nextTermId !== termId) {
+      await flush()
+      setWork(null)
+      setTermChoice(nextTermId)
+      router.replace(`/admin/schedules/new?term=${nextTermId}`, { scroll: false })
+    }
+    setView(nextView)
+  }
+
+  /** Resume the term's draft in progress, or start one (optionally copying another term's shifts). */
+  const buildSchedule = async (targetTermId: number, copyFromTermId?: number) => {
     setStarting(true)
     try {
-      const created = await scheduleDraftsApi.create(termId)
-      replaceWork(created)
-      setShowCurrent(false)
+      await flush()
+      const existing =
+        copyFromTermId != null
+          ? null
+          : targetTermId === termId && workRef.current
+            ? workRef.current
+            : await scheduleDraftsApi.latestForTerm(targetTermId)
+      const draft =
+        existing?.status === "draft" ? existing : await scheduleDraftsApi.create(targetTermId, copyFromTermId)
+      if (targetTermId !== termId) {
+        setTermChoice(targetTermId)
+        router.replace(`/admin/schedules/new?term=${targetTermId}`, { scroll: false })
+      }
+      replaceWork(draft)
+      setView("draft")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.scheduleDrafts.latestPerTerm })
     } catch (err) {
       toast.error(errorMessage(err))
     } finally {
@@ -226,16 +269,76 @@ export function ScheduleBuilder() {
     }
   }
 
-  const changeTerm = (nextTermId: number) => {
-    setWork(null)
-    setShowCurrent(null)
-    router.replace(`/admin/schedules/new?term=${nextTermId}`, { scroll: false })
+  const startDraft = () => (termId ? buildSchedule(termId) : Promise.resolve())
+
+  const changeTerm = (nextTermId: number) => void selectTerm(nextTermId)
+
+  const goHome = async () => {
+    await flush()
+    setView("home")
+    void queryClient.invalidateQueries({ queryKey: queryKeys.scheduleDrafts.latestPerTerm })
   }
 
-  const saveAndExit = async () => {
-    await flush()
-    router.push("/admin/schedules")
+  const saveAndExit = goHome
+
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleDraft | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  /** Delete a draft. Live schedules and anything already sent to Teams aren't touched. */
+  const deleteDraft = async (draft: ScheduleDraft) => {
+    setDeleting(true)
+    try {
+      if (workRef.current?.id === draft.id) {
+        // Drop pending edits so an autosave can't land on the deleted draft.
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = null
+        dirty.current = false
+        await saveChain.current
+      }
+      await scheduleDraftsApi.remove(draft.id)
+      if (workRef.current?.id === draft.id) {
+        setWork(null)
+        setSaveState("saved")
+      }
+      queryClient.removeQueries({ queryKey: queryKeys.scheduleDrafts.byTerm(draft.academic_term_id) })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.scheduleDrafts.all })
+      setView("home")
+      toast.success("Draft deleted")
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
   }
+
+  const deleteDialog = (
+    <AlertDialog open={deleteTarget != null} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
+      <AlertDialogContent className="border-border bg-card">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {deleteTarget
+              ? `The ${terms.find((entry) => entry.id === deleteTarget.academic_term_id)?.name ?? "term"} draft, its imported availability, rules and change log are deleted. Live schedules and anything already sent to Teams stay as they are. This can't be undone.`
+              : ""}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={deleting}
+            onClick={(event) => {
+              event.preventDefault()
+              if (deleteTarget) void deleteDraft(deleteTarget)
+            }}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {deleting ? "Deleting…" : "Delete draft"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 
   if (termsLoading || studentsLoading || (termId != null && draftQuery.isLoading)) {
     return <p className="text-sm text-muted-foreground">Loading schedule builder...</p>
@@ -280,21 +383,61 @@ export function ScheduleBuilder() {
     </Select>
   )
 
-  // 14.0: start from what's live. A published draft also lands here until it's reopened.
-  const viewingCurrent = showCurrent ?? work?.status === "published"
-  if (!work || viewingCurrent) {
+  if (view == null || view === "home") {
+    return (
+      <>
+        <SchedulesHome
+          terms={terms}
+          selectedTermId={termId}
+          onSelectTerm={(id) => void selectTerm(id, "home")}
+          onOpenCurrent={(id) => void selectTerm(id, "current")}
+          onBuild={buildSchedule}
+          onDeleteDraft={setDeleteTarget}
+          starting={starting}
+        />
+        {deleteDialog}
+      </>
+    )
+  }
+
+  // 14.5 and 14.0: what's live.
+  if (view === "change") {
+    return (
+      <ChangeShifts
+        term={term}
+        students={students}
+        nameOf={nameOf}
+        draft={work}
+        onBack={() => setView("current")}
+      />
+    )
+  }
+
+  if (!work || view === "current") {
     return (
       <CurrentSchedule
         term={term}
         students={students}
         nameOf={nameOf}
         draft={work}
-        termPicker={termPicker}
+        termPicker={
+          <>
+            <button
+              type="button"
+              onClick={() => void goHome()}
+              className="h-[34px] rounded-full border border-border bg-card px-3.5 text-[13px] font-semibold hover:bg-muted"
+            >
+              Schedules home
+            </button>
+            {termPicker}
+          </>
+        }
+        onChangeShifts={() => setView("change")}
         primaryAction={
           work
             ? {
                 label: work.status === "published" ? "Edit term schedule" : "Continue draft",
-                onClick: () => setShowCurrent(false),
+                onClick: () => setView("draft"),
               }
             : {
                 label: starting ? "Starting..." : "New term schedule",
@@ -308,6 +451,7 @@ export function ScheduleBuilder() {
 
   const context: BuilderContext = {
     draft: work,
+    term,
     termName,
     students,
     people,
@@ -331,6 +475,11 @@ export function ScheduleBuilder() {
       return ok
     },
     flush,
+    reload: async () => {
+      await flush()
+      const fresh = await scheduleDraftsApi.latestForTerm(work.academic_term_id)
+      if (fresh) replaceWork(fresh)
+    },
     busy,
   }
 
@@ -396,11 +545,20 @@ export function ScheduleBuilder() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowCurrent(true)}
+            onClick={() => setView("current")}
             className="h-[34px] rounded-full border border-border bg-card px-3.5 text-[13px] font-semibold hover:bg-muted"
           >
             Current schedule
           </button>
+          {work.status === "draft" ? (
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(work)}
+              className="h-[34px] rounded-full px-3 text-[13px] font-semibold text-destructive hover:bg-destructive/10"
+            >
+              Delete draft
+            </button>
+          ) : null}
         <button
           type="button"
           onClick={saveAndExit}
@@ -415,6 +573,7 @@ export function ScheduleBuilder() {
       {work.step === 2 ? <StepGuidelines {...context} /> : null}
       {work.step === 3 ? <StepReview {...context} /> : null}
       {work.step === 4 ? <StepPublish {...context} /> : null}
+      {deleteDialog}
     </div>
   )
 }

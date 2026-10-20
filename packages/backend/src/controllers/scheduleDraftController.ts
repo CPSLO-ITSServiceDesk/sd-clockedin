@@ -4,6 +4,11 @@ import { scheduleDraftService } from '../services/scheduleDraftService';
 export const scheduleDraftController = {
   async getLatest(req: Request, res: Response, next: NextFunction) {
     try {
+      // Without a term, list the latest draft of every term (Schedules home).
+      if (req.query.academic_term_id == null) {
+        res.json({ success: true, data: await scheduleDraftService.listLatestPerTerm() });
+        return;
+      }
       const draft = await scheduleDraftService.getLatestForTerm(Number(req.query.academic_term_id));
       res.json({ success: true, data: draft });
     } catch (err) {
@@ -22,7 +27,11 @@ export const scheduleDraftController = {
 
   async create(req: Request, res: Response, next: NextFunction) {
     try {
-      const draft = await scheduleDraftService.create(Number(req.body.academic_term_id));
+      const copyFrom = req.body.copy_from_term_id;
+      const draft = await scheduleDraftService.create(
+        Number(req.body.academic_term_id),
+        copyFrom == null ? undefined : Number(copyFrom),
+      );
       res.status(201).json({ success: true, data: draft });
     } catch (err) {
       next(err);

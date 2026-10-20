@@ -115,6 +115,27 @@ export function toRuns(slots: number[]): [number, number][] {
   return runs;
 }
 
+/**
+ * Contiguous runs of assigned slots that share a role, so a Lead hour followed
+ * by Training becomes two shifts. Slots are half hours (end exclusive).
+ */
+export function assignedRoleRuns(
+  assignments: DayAssignments,
+): { day: Weekday; start: number; end: number; role: ShiftRole }[] {
+  const runs: { day: Weekday; start: number; end: number; role: ShiftRole }[] = [];
+  for (const day of WEEKDAYS) {
+    const slots = Object.entries(assignments[day] ?? {})
+      .map(([slot, role]) => [Number(slot), role] as const)
+      .sort((a, b) => a[0] - b[0]);
+    for (const [slot, role] of slots) {
+      const last = runs[runs.length - 1];
+      if (last && last.day === day && last.end === slot && last.role === role) last.end = slot + 1;
+      else runs.push({ day, start: slot, end: slot + 1, role });
+    }
+  }
+  return runs;
+}
+
 /** Merge stored rules over the defaults so older drafts pick up new rule keys. */
 export function normalizeRules(value: unknown): DraftRules {
   const raw = (value && typeof value === 'object' ? value : {}) as Partial<DraftRules>;

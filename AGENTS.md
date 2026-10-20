@@ -145,7 +145,14 @@ pnpm --filter frontend exec next cache clear
    - Only members of the `TEAMS_SCHEDULING_GROUP` scheduling group are synced, and only **shared** (published) shifts and time off. Pending/declined time-off *requests* are not synced; an approved request shows up once its time off is in the schedule.
    - Time off outside the term's dates isn't stored
    - Writes blocks through `replaceScheduleBlocks`, which keeps time entries linked (see Schedule Management Flow)
-   - The Graph client is read-only (`get`/`getCollection`); nothing in the app writes to Teams
+   - Sync only reads. Writes go through `getGraphWriteClient()` (`post`/`put`/`delete`) and are used only by the schedule builder's Teams publish (`teamsPublishService`, `/api/teams-publish`). It sends **drafts**:
+     - new shifts are `draftShift` only
+     - unwanted shared shifts are staged for deletion (`stageForDeletion`)
+     - unwanted unshared drafts are deleted
+     - Nothing reaches students until a manager shares the schedule in Teams; ClockedIn picks shared shifts up on the next sync.
+     - Themes: green = in person (Lead/Main), purple = Training, blue = remote (what sync reads back).
+   - The planner (`src/lib/teamsShiftPlan.ts`) expands a weekly pattern over the chosen weeks (skipping vacations, running swap days) and diffs it against Teams by user + exact start/end. Unchanged shifts are kept.
+   - Sync collapses each student's Teams shifts to **one block per weekday** (most common start/end; `teamsShiftCollapse.ts`, asserted in its tests). Split shifts on the same weekday keep only one block in ClockedIn, so 14.5 reads a person's real pattern from Teams (`GET /api/teams-publish/students/:id/pattern`), not from ClockedIn.
 
 4. **Database Interaction**:
    - Direct Supabase client usage throughout services
@@ -222,6 +229,7 @@ The Supabase database contains these tables:
 - `teams_sync_status`: Last Teams sync result per term
 - `timesheet_verification`: Months an admin marked a student's timesheet verified
 - `schedule_draft`: Schedule builder drafts (rules, people with availability and assignments, unmatched form responses, change log) as JSONB
+- `teams_schedule_publish`: History of schedule-builder sends to Teams (term or one person, date range, counts)
 
 Migrations live in `packages/backend/supabase/migrations/` (forward) and `supabase/down/` (rollback), named `<timestamp>_<name>.sql`. Each file's header lists its revision, the revision it depends on, and how to apply it (Supabase SQL editor or `supabase db query --linked -f <file>`); they're applied by hand, not pushed automatically. After adding one, update `src/types/database.types.ts` (run `gen:types`, or hand-edit to match if you can't connect).
 
@@ -237,8 +245,14 @@ Migrations live in `packages/backend/supabase/migrations/` (forward) and `supaba
   - set desk rules and generate a rule-based draft
   - review/paint it
   - publish it to `schedules`/`schedule_blocks`
-  - The page opens on a read-only "current schedule" view of the live term.
-  - Publishing doesn't write to Teams; with Teams sync on, the next sync overwrites published blocks for anyone on the Teams roster.
+  - The page opens on **Schedules home**:
+    - pick a term, then open its read-only "current schedule" (14.0) or start/resume a draft
+    - an All terms list shows each term's status: draft step, live, ended
+    - an ended term can be copied as a starting point: `POST /api/schedule-drafts` with `copy_from_term_id` seeds assignments from that term's blocks
+    - `GET /api/schedule-drafts` without a term lists the latest draft per term
+  - Review has three views: Week, Day, and Slots (14.3c: pick an hour, see who's on and who's available, ranked by distance from their requested hours).
+  - With Teams configured, step 4 sends the schedule to Teams Shifts as drafts for weeks you pick (`/api/teams-publish/drafts/:id/*`). Without Teams, it publishes to `schedules`/`schedule_blocks` (with Teams sync on, the next sync would overwrite those).
+  - "Change shifts" (14.5) edits one person's weekly shifts and sends that to Teams as a draft for chosen weeks (`/api/teams-publish/students/:id/*`). Each send is recorded in `teams_schedule_publish` (Versions).
 - Microsoft Teams Shifts integration synchronizes roster, schedule templates, and time off data
 
 ### Key Integration Points
