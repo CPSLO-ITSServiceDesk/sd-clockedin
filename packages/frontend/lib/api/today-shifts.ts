@@ -30,6 +30,8 @@ export interface TodayShiftsResponse {
   shifts: TodayShift[]
   remoteOnlyStudentIds: number[]
   timeOffShifts?: TodayTimeOffShift[]
+  /** The time-off part of shifts still in `shifts`; `startTime`/`endTime` are the hours off. */
+  partialTimeOff?: TodayTimeOffShift[]
   upcomingTimeOff?: UpcomingTimeOff[]
   /** Every time off overlapping today, including ones that already ended. */
   todayTimeOff?: UpcomingTimeOff[]

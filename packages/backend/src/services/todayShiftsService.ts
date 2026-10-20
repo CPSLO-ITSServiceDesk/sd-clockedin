@@ -7,6 +7,7 @@ import {
   isCampusVacationOnDate,
   isTimeOffCoveringInstant,
   timeOffForShift,
+  timeOffPiecesForShift,
   type TimeOffInterval,
 } from '../lib/timeOffCoverage';
 import { computeRemoteShiftStatus, computeShiftStatus, getClockInDate, type ShiftStatus, toLocalDateString } from '../lib/shiftStatus';
@@ -66,6 +67,8 @@ export interface TodayShiftsResult {
   shifts: TodayShift[];
   remoteOnlyStudentIds: number[];
   timeOffShifts: TodayTimeOffShift[];
+  /** The time-off part of shifts still in `shifts` (trimmed); `startTime`/`endTime` are the hours off. */
+  partialTimeOff: TodayTimeOffShift[];
   upcomingTimeOff: UpcomingTimeOff[];
   /** Every time off overlapping today (past, current or later), soonest first. */
   todayTimeOff: UpcomingTimeOff[];
@@ -303,6 +306,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
       shifts: buildUnscheduledShifts(todaysTimeEntries, studentAssistantMap),
       remoteOnlyStudentIds: [],
       timeOffShifts: [],
+      partialTimeOff: [],
       upcomingTimeOff,
       todayTimeOff,
     };
@@ -359,6 +363,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
   }
 
   const timeOffShifts: TodayTimeOffShift[] = [];
+  const partialTimeOff: TodayTimeOffShift[] = [];
 
   const scheduledShifts: TodayShift[] = todaysBlocks.flatMap((block) => {
     if (block.is_remote && !includeRemote) return [];
@@ -407,9 +412,36 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
       return [];
     }
 
+    const { startTime, endTime } = resolved;
+    const blockStart = block.start_time ?? '00:00';
+    const blockEnd = block.end_time ?? '00:00';
+    if (startTime !== blockStart || endTime !== blockEnd) {
+      const pieces = timeOffPiecesForShift(
+        studentTimeOff,
+        schedule.student_assistant_id,
+        todayDate,
+        timeToMinutes(blockStart),
+        timeToMinutes(blockEnd),
+      );
+      for (const piece of pieces) {
+        partialTimeOff.push({
+          scheduleBlockId: block.id,
+          studentAssistantId: schedule.student_assistant_id,
+          firstName: studentAssistant.first_name ?? '',
+          lastName: studentAssistant.last_name ?? '',
+          role: formatStudentRole(studentAssistant.position),
+          startTime: minutesToTime(piece.startMinutes),
+          endTime: minutesToTime(piece.endMinutes),
+          isRemote: block.is_remote ?? false,
+          timeOffStartsAt: piece.timeOff.starts_at,
+          timeOffEndsAt: piece.timeOff.ends_at,
+          timeOffReason: piece.timeOff.time_off_reason ?? null,
+        });
+      }
+    }
+
     const timeEntryKey = `${block.id}-${schedule.student_assistant_id}`;
     const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
-    const { startTime, endTime } = resolved;
 
     return [{
       scheduleBlockId: block.id,
@@ -438,6 +470,7 @@ export function assembleTodayShifts(input: AssembleTodayShiftsInput): TodayShift
     shifts: [...scheduledShifts, ...unscheduledShifts],
     remoteOnlyStudentIds,
     timeOffShifts: timeOffShifts.sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    partialTimeOff: partialTimeOff.sort((a, b) => a.startTime.localeCompare(b.startTime)),
     upcomingTimeOff,
     todayTimeOff,
   };

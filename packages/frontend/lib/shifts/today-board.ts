@@ -48,6 +48,8 @@ export interface UpNextEntry {
 export interface OutTodayEntry {
   studentAssistantId: number
   name: string
+  firstName: string
+  lastName: string
   initials: string
   window: string
   reason: string | null
@@ -174,8 +176,8 @@ export function formatTimeOffToday(startsAt: string, endsAt: string, now: Date =
 /**
  * One entry per student off today, with when: "All day", "10:00 – 11:00 AM",
  * "Until 1:00 PM"... Lists time off that already ended today too, so short
- * time off stays visible all day. Falls back to `timeOffShifts` for responses
- * from before `todayTimeOff` existed.
+ * time off stays visible all day. Includes remote staff. Falls back to
+ * `timeOffShifts` for responses from before `todayTimeOff` existed.
  */
 export function buildOutToday(
   todayTimeOff: UpcomingTimeOff[],
@@ -213,6 +215,8 @@ export function buildOutToday(
         entry: {
           studentAssistantId: first.studentAssistantId,
           name: formatShiftName(first),
+          firstName: first.firstName,
+          lastName: first.lastName,
           initials: getShiftInitials(first),
           window: labels.includes("All day") ? "All day" : labels.join(", "),
           reason: first.reason,

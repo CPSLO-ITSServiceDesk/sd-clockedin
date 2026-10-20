@@ -123,6 +123,17 @@
 }
 
 @theme inline {
+  /* /display "Out today": the list is rendered twice, so -50% loops seamlessly. */
+  --animate-out-today-scroll: out-today-scroll 14s linear infinite;
+  @keyframes out-today-scroll {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
   --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 

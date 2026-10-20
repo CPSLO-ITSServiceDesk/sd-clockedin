@@ -98,9 +98,9 @@ function shiftSegment(shift: TodayShift, nowMinutes: number): TimelineSegment {
   }
 }
 
-function timeOffSegment(shift: TodayTimeOffShift): TimelineSegment {
+function timeOffSegment(shift: TodayTimeOffShift, partial = false): TimelineSegment {
   return {
-    key: `off-${shift.scheduleBlockId}`,
+    key: partial ? `off-${shift.scheduleBlockId}-${shift.startTime}` : `off-${shift.scheduleBlockId}`,
     scheduled: {
       start: toOrgWallClockMinutes(shift.startTime),
       end: toOrgWallClockMinutes(shift.endTime),
@@ -113,13 +113,15 @@ function timeOffSegment(shift: TodayTimeOffShift): TimelineSegment {
 }
 
 /**
- * One row per student, combining scheduled shifts and time-off blocks.
- * Sorted by earliest start time, then first name.
+ * One row per student, combining scheduled shifts, time-off blocks and the
+ * time-off hours of partly covered shifts. Sorted by earliest start time,
+ * then first name.
  */
 export function buildTimelineRows(
   shifts: TodayShift[],
   timeOffShifts: TodayTimeOffShift[],
   nowMinutes: number,
+  partialTimeOff: TodayTimeOffShift[] = [],
 ): TimelineRow[] {
   const rows = new Map<number, TimelineRow & { remoteFlags: boolean[] }>()
 
@@ -156,6 +158,13 @@ export function buildTimelineRows(
     )
   }
 
+  for (const piece of partialTimeOff) {
+    const row = rowFor(piece)
+    const segment = timeOffSegment(piece, true)
+    row.segments.push(segment)
+    row.sortKey = Math.min(row.sortKey, segment.scheduled?.start ?? row.sortKey)
+  }
+
   for (const shift of timeOffShifts) {
     const row = rowFor(shift)
     const segment = timeOffSegment(shift)
@@ -177,14 +186,18 @@ export function buildTimelineRows(
     )
 }
 
-/** Widen the default 8 AM – 5 PM window to fit any segment outside it. */
+/**
+ * Widen the default 8 AM – 5 PM window to fit any scheduled segment outside it.
+ * Clock punches don't widen it (an early 7:56 clock-in would add a 7 AM
+ * column); bars clip to the edge. Unscheduled walk-ins still count.
+ */
 export function getTimelineRange(rows: TimelineRow[]): TimelineRange {
   let startHour = TIMELINE_DEFAULT_START_HOUR
   let endHour = TIMELINE_DEFAULT_END_HOUR
 
   for (const row of rows) {
     for (const segment of row.segments) {
-      for (const span of [segment.scheduled, segment.worked]) {
+      for (const span of [segment.scheduled ?? segment.worked]) {
         if (!span || Number.isNaN(span.start) || Number.isNaN(span.end)) continue
         startHour = Math.min(startHour, Math.floor(span.start / 60))
         endHour = Math.max(endHour, Math.ceil(span.end / 60))
@@ -213,7 +226,8 @@ export function formatTimeOffWhen(entry: UpcomingTimeOff, now: Date = new Date()
   const startDate = getOrgLocalDateString(new Date(entry.startsAt))
   // ends_at is exclusive; an all-day block ends at the next midnight.
   const lastDate = getOrgLocalDateString(new Date(Date.parse(entry.endsAt) - 1))
-  const startsBeforeToday = startDate <= today
+  const startsBeforeToday =
+    startDate < today || (startDate === today && toOrgWallClockMinutes(entry.startsAt) === 0)
   const endsMinutes = toOrgWallClockMinutes(entry.endsAt)
   const endsAtMidnight = endsMinutes === 0
 
@@ -235,6 +249,24 @@ export function formatTimeOffWhen(entry: UpcomingTimeOff, now: Date = new Date()
 
   const endLabel = formatOrgShortDate(new Date(Date.parse(entry.endsAt) - 1).toISOString())
   return `${startsBeforeToday ? "Today" : startLabel} – ${endLabel}`
+}
+
+/**
+ * Today's time off (including any that already ended, as the kiosk and
+ * /display list it) followed by upcoming time off, each window once.
+ */
+export function mergeDashboardTimeOff(
+  todayTimeOff: UpcomingTimeOff[],
+  upcomingTimeOff: UpcomingTimeOff[],
+): UpcomingTimeOff[] {
+  const byWindow = new Map<string, UpcomingTimeOff>()
+  for (const entry of [...todayTimeOff, ...upcomingTimeOff]) {
+    const key = `${entry.studentAssistantId}|${entry.startsAt}|${entry.endsAt}`
+    if (!byWindow.has(key)) byWindow.set(key, entry)
+  }
+  return [...byWindow.values()].sort(
+    (a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt) || a.firstName.localeCompare(b.firstName),
+  )
 }
 
 export function isTimeOffActive(entry: UpcomingTimeOff, now: Date = new Date()): boolean {

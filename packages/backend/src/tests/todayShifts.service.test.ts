@@ -250,6 +250,18 @@ describe('assembleTodayShifts', () => {
     expect(result.timeOffShifts).toEqual([]);
   });
 
+  it('reports the time-off hours of a trimmed shift in partialTimeOff, to the whole minute', () => {
+    const result = assemble({
+      // Teams stamps time off a few seconds past the minute.
+      studentTimeOff: [{ ...mondayOff(11, 12), starts_at: '2026-06-22T18:00:58.000Z' }],
+    });
+
+    expect(alex(result)).toMatchObject({ startTime: '09:00', endTime: '11:00' });
+    expect(result.partialTimeOff).toEqual([
+      expect.objectContaining({ studentAssistantId: 100, startTime: '11:00', endTime: '12:00' }),
+    ]);
+  });
+
   it('starts the shift when time off at its start ends, and shows time off during it', () => {
     const during = assemble({ studentTimeOff: [mondayOff(9, 10)] }); // 9:30 AM
     expect(alex(during)).toBeUndefined();
@@ -277,6 +289,23 @@ describe('assembleTodayShifts', () => {
       ['Blair', '2026-06-22T19:00:00.000Z'],
     ]);
     expect(result.upcomingTimeOff.map((entry) => entry.startsAt)).toEqual(['2026-06-23T16:00:00.000Z']);
+  });
+
+  it('includes remote staff time off for the wall display', () => {
+    const remoteBlocks = mondayBlocks.map((block) => (block.id === 20 ? { ...block, is_remote: true } : block));
+    const result = assemble({
+      includeRemote: true,
+      scheduleBlocks: remoteBlocks,
+      studentTimeOff: [allDayMondayTimeOff],
+    });
+
+    expect(result.todayTimeOff.map((entry) => entry.studentAssistantId)).toEqual([100]);
+    expect(result.timeOffShifts).toEqual([
+      expect.objectContaining({ studentAssistantId: 100, isRemote: true }),
+    ]);
+    // Without remote shifts requested, their time off is still listed for the day.
+    expect(assemble({ scheduleBlocks: remoteBlocks, studentTimeOff: [allDayMondayTimeOff] }).todayTimeOff)
+      .toHaveLength(1);
   });
 
   it('reports blocks omitted for time off in timeOffShifts', () => {

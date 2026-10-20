@@ -1,6 +1,6 @@
 "use client"
 
-import { useSyncExternalStore, type ReactNode } from "react"
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react"
 
 import { useNow } from "@/hooks/use-now"
 import { useActiveTermTeamsSyncStatus } from "@/hooks/use-teams-sync"
@@ -12,6 +12,7 @@ import {
   buildOutToday,
   buildUpNext,
   buildWorkingTiles,
+  type OutTodayEntry,
   type WorkingTile,
 } from "@/lib/shifts/today-board"
 import { cn } from "@/lib/utils"
@@ -37,7 +38,9 @@ const SYNC_STATUS_REFRESH_MS = 5 * 60_000
 const HERE_ROWS = 4
 const HERE_MAX = HERE_ROWS * 2
 const ARRIVING_MAX = 4
-const OUT_TODAY_MAX = 4
+/** Rows "Out today" shows at once (rows are h-[46px], the viewport h-[276px]); longer lists scroll on a loop. */
+const OUT_TODAY_ROWS = 6
+const OUT_TODAY_SECONDS_PER_ROW = 3.5
 
 // The ambient display is brand-colored in both themes.
 const COLORS = {
@@ -45,6 +48,66 @@ const COLORS = {
   muted: "text-[#B9D3C5]",
   gold: "text-[#E8B64A]",
   track: "bg-[#2C5E49]",
+}
+
+/** "10:00 AM – 12:00 PM" → "10 AM – 12 PM", so the name fits beside it. */
+function compactWindow(window: string): string {
+  return window.replace(/:00(?=\s?(?:[AP]M|–))/gi, "")
+}
+
+function formatFirstNameLastInitial({ firstName, lastName }: Pick<OutTodayEntry, "firstName" | "lastName">): string {
+  const initial = lastName.trim().charAt(0)
+  return initial ? `${firstName} ${initial.toUpperCase()}.` : firstName
+}
+
+function OutTodayRow({ entry }: Readonly<{ entry: OutTodayEntry }>) {
+  return (
+    <div className="flex h-[46px] min-w-0 items-center justify-between gap-4">
+      <span className="truncate text-[28px] font-semibold text-[#1F3A63]">{formatFirstNameLastInitial(entry)}</span>
+      <span className="shrink-0 text-xl text-[#2B4C7E]">{compactWindow(entry.window)}</span>
+    </div>
+  )
+}
+
+/**
+ * Up to OUT_TODAY_ROWS people fit; longer lists scroll upward on a seamless
+ * loop (the list is rendered twice) so everyone off today gets shown. With
+ * reduced motion it stays still and counts the rest instead.
+ */
+function OutTodayList({ entries }: Readonly<{ entries: OutTodayEntry[] }>) {
+  if (entries.length <= OUT_TODAY_ROWS) {
+    return (
+      <div>
+        {entries.map((entry) => (
+          <OutTodayRow key={entry.studentAssistantId} entry={entry} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="h-[276px] overflow-hidden">
+        {/* Duration scales with the list so every length scrolls at the same speed. */}
+        <div
+          className="animate-out-today-scroll [animation-duration:var(--out-today-duration)] motion-reduce:animate-none"
+          style={{ "--out-today-duration": `${entries.length * OUT_TODAY_SECONDS_PER_ROW}s` } as CSSProperties}
+        >
+          {entries.map((entry) => (
+            <OutTodayRow key={entry.studentAssistantId} entry={entry} />
+          ))}
+          <div aria-hidden>
+            {entries.map((entry) => (
+              <OutTodayRow key={entry.studentAssistantId} entry={entry} />
+            ))}
+          </div>
+        </div>
+      </div>
+      <span className="hidden text-xl text-[#2B4C7E] motion-reduce:block">
+        +{entries.length - OUT_TODAY_ROWS} more
+      </span>
+    </>
+  )
 }
 
 function subscribeResize(onChange: () => void): () => void {
@@ -153,7 +216,7 @@ export function WallDisplay() {
   const ready = Boolean(mountedNow) && !isLoading
   const tiles = mountedNow ? buildWorkingTiles(shifts, now) : []
   const arriving = mountedNow ? buildUpNext(shifts, now).slice(0, ARRIVING_MAX) : []
-  const outToday = mountedNow ? buildOutToday(todayTimeOff, timeOffShifts, now).slice(0, OUT_TODAY_MAX) : []
+  const outToday = mountedNow ? buildOutToday(todayTimeOff, timeOffShifts, now) : []
   const clock = formatClock(now)
 
   const currentHour = Math.floor(getOrgLocalMinutes(now) / 60)
@@ -291,12 +354,7 @@ export function WallDisplay() {
           {outToday.length > 0 ? (
             <section className="flex flex-col gap-3.5 self-start rounded-[20px] bg-[#E8EFF8] px-6 py-5">
               <span className="text-[22px] font-bold uppercase tracking-[0.12em] text-[#1F3A63]">Out today</span>
-              {outToday.map((entry) => (
-                <div key={entry.studentAssistantId} className="flex min-w-0 items-baseline justify-between gap-4">
-                  <span className="truncate text-[28px] font-semibold text-[#1F3A63]">{entry.name}</span>
-                  <span className="shrink-0 text-xl text-[#2B4C7E]">{entry.window}</span>
-                </div>
-              ))}
+              <OutTodayList entries={outToday} />
             </section>
           ) : (
             <div />

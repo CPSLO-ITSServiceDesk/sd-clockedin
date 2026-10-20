@@ -188,10 +188,11 @@ export function TimeOffCard({
       aside={<span className="text-xs text-muted-foreground">from Teams Shifts</span>}
     >
       {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No time off in the next two weeks.</p>
+        <p className="text-sm text-muted-foreground">No time off today or in the next two weeks.</p>
       ) : (
         entries.map((entry) => {
           const active = isTimeOffActive(entry, now)
+          const ended = Date.parse(entry.endsAt) <= now.getTime()
           return (
             <div
               key={`${entry.studentAssistantId}-${entry.startsAt}`}
@@ -215,7 +216,7 @@ export function TimeOffCard({
                     : "bg-muted text-muted-foreground",
                 )}
               >
-                {active ? "Now" : "Upcoming"}
+                {active ? "Now" : ended ? "Ended" : "Upcoming"}
               </span>
             </div>
           )

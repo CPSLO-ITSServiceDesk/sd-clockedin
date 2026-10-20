@@ -18,7 +18,9 @@ import { computeDashboardKpis } from "@/lib/shifts/dashboard-stats"
 import {
   buildTimelineRows,
   getTimelineRange,
+  mergeDashboardTimeOff,
 } from "@/lib/shifts/dashboard-timeline"
+import { buildOutToday } from "@/lib/shifts/today-board"
 import { cn } from "@/lib/utils"
 
 const NOW_TICK_MS = 30_000
@@ -48,18 +50,23 @@ export function AdminDashboard() {
   const mountedNow = useNow(NOW_TICK_MS)
   const now = useMemo(() => mountedNow ?? new Date(), [mountedNow])
   const nowMinutes = getOrgLocalMinutes(now)
-  const { shifts, timeOffShifts, upcomingTimeOff, isLoading, error } = useTodayShiftList({
+  const { shifts, timeOffShifts, partialTimeOff, upcomingTimeOff, todayTimeOff, isLoading, error } = useTodayShiftList({
     includeRemote: true,
   })
   const { data: syncStatus } = useActiveTermTeamsSyncStatus()
 
   const rows = useMemo(
-    () => buildTimelineRows(shifts, timeOffShifts, nowMinutes),
-    [shifts, timeOffShifts, nowMinutes],
+    () => buildTimelineRows(shifts, timeOffShifts, nowMinutes, partialTimeOff),
+    [shifts, timeOffShifts, nowMinutes, partialTimeOff],
   )
   const range = useMemo(() => getTimelineRange(rows), [rows])
   const kpis = computeDashboardKpis(shifts, now)
-  const timeOffCount = new Set(timeOffShifts.map((shift) => shift.studentAssistantId)).size
+  // Same count as the kiosk and /display "Out today": everyone off at any point today.
+  const timeOffCount = buildOutToday(todayTimeOff, timeOffShifts, now).length
+  const timeOffEntries = useMemo(
+    () => mergeDashboardTimeOff(todayTimeOff, upcomingTimeOff),
+    [todayTimeOff, upcomingTimeOff],
+  )
   const attention = buildAttentionItems(shifts, syncStatus, nowMinutes)
 
   const stats = [
@@ -109,7 +116,7 @@ export function AdminDashboard() {
       </div>
       <div className="flex flex-col gap-4">
         <NeedsAttentionCard items={attention} isLoading={isLoading} />
-        <TimeOffCard entries={upcomingTimeOff} now={now} />
+        <TimeOffCard entries={timeOffEntries} now={now} />
       </div>
     </div>
   )

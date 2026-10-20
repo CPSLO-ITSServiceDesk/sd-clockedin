@@ -121,6 +121,7 @@ export function timeOffForShift<T extends TimeOffInterval>(
     });
   }
 
+  // Teams stamps time off a few seconds past the minute (15:00:58), so round down.
   const minuteMs = 60_000;
   const longest = pieces
     .filter(([a, b]) => b - a >= minuteMs)
@@ -130,9 +131,46 @@ export function timeOffForShift<T extends TimeOffInterval>(
     timeOff: overlapping[0].row,
     remaining: longest
       ? [
-          startMinutes + Math.round((longest[0] - shiftStart) / minuteMs),
-          startMinutes + Math.round((longest[1] - shiftStart) / minuteMs),
+          startMinutes + Math.floor((longest[0] - shiftStart) / minuteMs),
+          startMinutes + Math.floor((longest[1] - shiftStart) / minuteMs),
         ]
       : null,
   };
+}
+
+export interface ShiftTimeOffPiece<T extends TimeOffInterval> {
+  timeOff: T;
+  /** Org-local minutes since midnight (end exclusive), clipped to the shift. */
+  startMinutes: number;
+  endMinutes: number;
+}
+
+/**
+ * The parts of one shift on an org-local date that time off covers, one per
+ * overlapping time off, earliest first (8–11 with 10–11 off gives 10–11).
+ */
+export function timeOffPiecesForShift<T extends TimeOffInterval>(
+  rows: T[],
+  studentAssistantId: number,
+  dateStr: string,
+  startMinutes: number,
+  endMinutes: number,
+): ShiftTimeOffPiece<T>[] {
+  const shiftStart = getOrgLocalInstant(dateStr, Math.floor(startMinutes / 60), startMinutes % 60).getTime();
+  const shiftEnd = getOrgLocalInstant(dateStr, Math.floor(endMinutes / 60), endMinutes % 60).getTime();
+  const minuteMs = 60_000;
+
+  return rows
+    .filter((row) => row.student_assistant_id === studentAssistantId)
+    .flatMap((row) => {
+      const start = Math.max(Date.parse(row.starts_at), shiftStart);
+      const end = Math.min(Date.parse(row.ends_at), shiftEnd);
+      if (Number.isNaN(start) || Number.isNaN(end) || end - start < minuteMs) return [];
+      return [{
+        timeOff: row,
+        startMinutes: startMinutes + Math.floor((start - shiftStart) / minuteMs),
+        endMinutes: startMinutes + Math.floor((end - shiftStart) / minuteMs),
+      }];
+    })
+    .sort((a, b) => a.startMinutes - b.startMinutes);
 }
