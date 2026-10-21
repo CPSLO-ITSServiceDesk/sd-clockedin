@@ -50,6 +50,18 @@ export const schedulesService = {
     return data;
   },
 
+  /** Get schedules for a specific term (for shift board). */
+  async getByTerm(academicTermId: number): Promise<Schedule[]> {
+    const { data, error } = await supabase
+      .from('schedules')
+      .select('*')
+      .eq('academic_term_id', academicTermId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
   async create(payload: ScheduleInsert): Promise<Schedule> {
     const { data, error } = await supabase
       .from('schedules')

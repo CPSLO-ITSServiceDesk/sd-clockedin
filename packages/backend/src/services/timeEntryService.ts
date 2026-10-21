@@ -1,6 +1,6 @@
 import { resolveNearestBlock } from '../lib/resolveNearestBlock';
 import { isDateInEffectiveScheduleRange } from '../lib/scheduleDateRange';
-import { getOrgLocalDateString } from '../lib/orgTime';
+import { getOrgLocalDateString, getOrgLocalInstant } from '../lib/orgTime';
 import {
   addLocalDays,
   getClockInDate,
@@ -117,6 +117,69 @@ export const timeEntryService = {
     return data ?? [];
   },
 
+  /** Entries for a specific student on a specific date (org-local). */
+  async getByStudentAndDate(
+    studentAssistantId: number,
+    dateStr: string,
+  ): Promise<TimeEntry[]> {
+    const startIso = getOrgLocalInstant(dateStr, 0, 0).toISOString();
+    const endIso = getOrgLocalInstant(dateStr, 23, 59).toISOString();
+
+    const { data, error } = await supabase
+      .from('time_entry')
+      .select('*')
+      .eq('student_assistant_id', studentAssistantId)
+      .gte('clock_in', startIso)
+      .lt('clock_in', endIso)
+      .order('clock_in');
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
+  /** Entries for a specific student on a specific date with optional block filter. */
+  async getByStudentDateAndBlock(
+    studentAssistantId: number,
+    dateStr: string,
+    scheduleBlockId?: number,
+  ): Promise<TimeEntry[]> {
+    const startIso = getOrgLocalInstant(dateStr, 0, 0).toISOString();
+    const endIso = getOrgLocalInstant(dateStr, 23, 59).toISOString();
+
+    let query = supabase
+      .from('time_entry')
+      .select('*')
+      .eq('student_assistant_id', studentAssistantId)
+      .gte('clock_in', startIso)
+      .lt('clock_in', endIso)
+      .order('clock_in');
+
+    if (scheduleBlockId != null) {
+      query = query.eq('schedule_block_id', scheduleBlockId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
+  /** Today's entries for the shift board (org-local date). */
+  async getTodaysEntries(dateStr: string): Promise<TimeEntry[]> {
+    const startIso = getOrgLocalInstant(dateStr, 0, 0).toISOString();
+    const endIso = getOrgLocalInstant(dateStr, 23, 59).toISOString();
+
+    const { data, error } = await supabase
+      .from('time_entry')
+      .select('*')
+      .gte('clock_in', startIso)
+      .lt('clock_in', endIso)
+      .order('clock_in', { ascending: false });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
   async getAllOpen(): Promise<TimeEntry[]> {
     const { data, error } = await supabase
       .from('time_entry')
@@ -186,50 +249,46 @@ export const timeEntryService = {
 
     const todayDay = getTodayDay(now);
     const todayDate = getTodayDateString(now);
-    const [schedules, scheduleBlocks, timeEntries, terms] = await Promise.all([
-      schedulesService.getAll(),
-      scheduleBlocksService.getAll(),
-      this.getAll(),
-      termService.getAll(),
-    ]);
 
-    const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
-    const termMap = new Map(terms.map((term) => [term.id, term]));
+    if (!todayDay) {
+      // Weekend - no scheduled blocks, create unscheduled entry
+      const timeEntry = await this.create({
+        schedule_block_id: null,
+        student_assistant_id,
+        clock_in: clock_in ?? new Date().toISOString(),
+      });
+      return { timeEntry, matchedBlock: null };
+    }
 
-    const studentScheduleIds = new Set(
-      schedules
-        .filter((schedule) => schedule.student_assistant_id === student_assistant_id)
-        .map((schedule) => schedule.id),
+    // Get active term
+    const activeTerm = await termService.getActive();
+    if (!activeTerm) {
+      throw new HttpError(400, 'No active academic term');
+    }
+
+    // Get student's schedule for the active term
+    const studentSchedule = await schedulesService.getByStudentAndTerm(student_assistant_id, activeTerm.id);
+    if (!studentSchedule) {
+      // No schedule for this term, create unscheduled entry
+      const timeEntry = await this.create({
+        schedule_block_id: null,
+        student_assistant_id,
+        clock_in: clock_in ?? new Date().toISOString(),
+      });
+      return { timeEntry, matchedBlock: null };
+    }
+
+    // Get today's blocks for this student's schedule
+    const studentBlocks = await scheduleBlocksService.getByScheduleId(studentSchedule.id);
+    const todaysBlocks = studentBlocks.filter((block) => block.days === todayDay);
+
+    // Check if date is in effective schedule range
+    const effectiveBlocks = todaysBlocks.filter((block) =>
+      isDateInEffectiveScheduleRange(todayDate, studentSchedule, activeTerm),
     );
 
-    const todaysBlocks = todayDay
-      ? scheduleBlocks.filter((block) => {
-          if (
-            block.days !== todayDay ||
-            block.schedule_id == null ||
-            !studentScheduleIds.has(block.schedule_id)
-          ) {
-            return false;
-          }
-
-          const schedule = scheduleMap.get(block.schedule_id);
-          if (!schedule) return false;
-
-          const term =
-            schedule.academic_term_id != null
-              ? termMap.get(schedule.academic_term_id)
-              : undefined;
-          if (!term) return true;
-
-          return isDateInEffectiveScheduleRange(todayDate, schedule, term);
-        })
-      : [];
-
-    const todaysTimeEntries = timeEntries.filter(
-      (entry) =>
-        getClockInDate(entry.clock_in) === todayDate &&
-        entry.student_assistant_id === student_assistant_id,
-    );
+    // Get today's time entries for this student
+    const todaysTimeEntries = await this.getByStudentAndDate(student_assistant_id, todayDate);
 
     const timeEntryMap = new Map<string, TimeEntry>();
     for (const entry of todaysTimeEntries) {
@@ -237,7 +296,7 @@ export const timeEntryService = {
       timeEntryMap.set(key, entry);
     }
 
-    const candidates = todaysBlocks.map((block) => {
+    const candidates = effectiveBlocks.map((block) => {
       const timeEntryKey = `${block.id}-${student_assistant_id}`;
       const timeEntry = timeEntryMap.get(timeEntryKey) ?? null;
       return {

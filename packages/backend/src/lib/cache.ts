@@ -12,21 +12,30 @@ export async function withCache<T>(
   ttlSeconds: number,
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (!isRedisEnabled) return fn();
+  if (!isRedisEnabled) {
+    console.log(`[CACHE] DISABLED - calling fn directly for ${key}`);
+    return fn();
+  }
 
+  console.log(`[CACHE] GET ${key}`);
   try {
     const cached = await redis!.get<T>(key);
-    if (cached !== null && cached !== undefined) return cached;
+    if (cached !== null && cached !== undefined) {
+      console.log(`[CACHE] HIT ${key}`);
+      return cached;
+    }
+    console.log(`[CACHE] MISS ${key}`);
   } catch (err) {
-    console.error(`Redis GET failed for key "${key}":`, err);
+    console.error(`[CACHE] Redis GET error for ${key}:`, err);
   }
 
   const fresh = await fn();
 
   try {
     await redis!.set(key, fresh, { ex: ttlSeconds });
+    console.log(`[CACHE] SET ${key} (TTL: ${ttlSeconds}s)`);
   } catch (err) {
-    console.error(`Redis SET failed for key "${key}":`, err);
+    console.error(`[CACHE] Redis SET error for ${key}:`, err);
   }
 
   return fresh;
@@ -34,11 +43,16 @@ export async function withCache<T>(
 
 /** Best-effort cache invalidation; failures are logged, never thrown. */
 export async function invalidateCache(...keys: string[]): Promise<void> {
-  if (!isRedisEnabled || keys.length === 0) return;
+  if (!isRedisEnabled || keys.length === 0) {
+    console.log(`[CACHE] INVALIDATE skipped (disabled or no keys):`, keys);
+    return;
+  }
 
+  console.log(`[CACHE] INVALIDATE ${keys.join(', ')}`);
   try {
     await redis!.del(...keys);
+    console.log(`[CACHE] INVALIDATED ${keys.join(', ')}`);
   } catch (err) {
-    console.error(`Redis DEL failed for key(s) "${keys.join(', ')}":`, err);
+    console.error(`[CACHE] Redis DEL error for ${keys.join(', ')}:`, err);
   }
 }

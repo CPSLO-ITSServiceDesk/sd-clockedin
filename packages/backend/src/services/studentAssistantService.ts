@@ -72,6 +72,18 @@ export const studentAssistantService = {
     return data ?? [];
   },
 
+  /** Get only active students (for shift board). */
+  async getActive(): Promise<StudentAssistant[]> {
+    const { data, error } = await supabase
+      .from('student_assistant')
+      .select('*')
+      .eq('is_active', true)
+      .order('first_name', { ascending: true });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
   // create a new student assistant
   async create(payload: StudentAssistantInsert): Promise<StudentAssistant> {
     const { data, error } = await supabase

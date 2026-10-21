@@ -1,5 +1,6 @@
 import { clearScheduleBlockReferences } from '../lib/clearScheduleBlockReferences';
 import { invalidateTodayShiftsCacheForNow } from '../lib/todayShiftsCache';
+import { getOrgDayOfWeek, getOrgLocalInstant } from '../lib/orgTime';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
@@ -99,5 +100,31 @@ export const scheduleBlocksService = {
 
     if (error) throw new HttpError(500, error.message);
     return data ?? [];
+  },
+
+  /** Get blocks for a specific day of the week (org timezone). */
+  async getByDay(day: Database['public']['Enums']['days']): Promise<ScheduleBlock[]> {
+    const { data, error } = await supabase
+      .from('schedule_blocks')
+      .select('*')
+      .eq('days', day)
+      .order('start_time', { ascending: true });
+
+    if (error) throw new HttpError(500, error.message);
+    return data ?? [];
+  },
+
+  /** Get today's blocks for the shift board. */
+  async getTodaysBlocks(): Promise<ScheduleBlock[]> {
+    const day = getOrgDayOfWeek(new Date());
+    if (day === 0 || day === 6) return [];
+    const days: Database['public']['Enums']['days'][] = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+    ];
+    return this.getByDay(days[day - 1]);
   },
 };

@@ -12,6 +12,12 @@ node_modules/
 .next/
 out/
 
+# Build outputs
+dist/
+packages/backend/dist/
+packages/frontend/.next/
+packages/frontend/out/
+
 # Cache
 .cache/
 .parcel-cache/

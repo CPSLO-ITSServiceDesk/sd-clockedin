@@ -3,7 +3,9 @@ import { toLocalDateString } from './shiftStatus';
 
 // Short enough that the 30s frontend poll never serves data older than one
 // cycle, but long enough to absorb bursts from multiple concurrent viewers.
-const TODAY_SHIFTS_CACHE_TTL_SECONDS = 15;
+// 60s TTL means the cache is hit on every other poll (30s interval), reducing
+// compute load by ~50% vs 15s TTL.
+const TODAY_SHIFTS_CACHE_TTL_SECONDS = 60;
 
 function todayShiftsCacheKey(date: string, includeRemote: boolean): string {
   return `today-shifts:${date}:${includeRemote ? '1' : '0'}`;

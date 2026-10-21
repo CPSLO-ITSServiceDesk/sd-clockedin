@@ -481,28 +481,37 @@ async function computeTodayShifts(
   todayDate: string,
   includeRemote: boolean,
 ): Promise<TodayShiftsResult> {
-  const [schedules, scheduleBlocks, studentAssistants, timeEntries, terms] =
-    await Promise.all([
-      schedulesService.getAll(),
-      scheduleBlocksService.getAll(),
-      studentAssistantService.getAll(),
-      timeEntryService.getAll(),
-      termService.getAll(),
-    ]);
+  // Get active term only (one query instead of all terms)
+  const activeTerm = await termService.getActive();
 
-  const studentTimeOff = (
-    await Promise.all(terms.map((term) => studentTimeOffService.listByTerm(term.id)))
-  ).flat();
+  // Get today's blocks only (one query instead of all blocks)
+  const todaysBlocks = await scheduleBlocksService.getTodaysBlocks();
+
+  // Get active students only (one query instead of all students)
+  const activeStudents = await studentAssistantService.getActive();
+
+  // Get today's time entries only (filtered by date instead of all entries)
+  const todaysTimeEntries = await timeEntryService.getTodaysEntries(todayDate);
+
+  // Get schedules for the active term only
+  const termSchedules = activeTerm
+    ? await schedulesService.getByTerm(activeTerm.id)
+    : [];
+
+  // Get time off for the active term only (one query instead of N queries)
+  const studentTimeOff = activeTerm
+    ? await studentTimeOffService.listByTerm(activeTerm.id)
+    : [];
 
   return assembleTodayShifts({
     now,
     todayDate,
     includeRemote,
-    schedules,
-    scheduleBlocks,
-    studentAssistants,
-    timeEntries,
-    terms,
+    schedules: termSchedules,
+    scheduleBlocks: todaysBlocks,
+    studentAssistants: activeStudents,
+    timeEntries: todaysTimeEntries,
+    terms: activeTerm ? [activeTerm] : [],
     studentTimeOff,
   });
 }
