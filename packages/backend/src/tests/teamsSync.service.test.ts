@@ -1,7 +1,8 @@
 import cron from 'node-cron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { scheduleTeamsSync } from '../jobs/teamsSync';
+import { scheduleTeamsSync, TEAMS_SYNC_CRON } from '../jobs/teamsSync';
 import * as microsoftGraph from '../lib/microsoftGraph';
+import { ORG_TIMEZONE } from '../lib/orgTime';
 import { HttpError } from '../middleware/errorHandler';
 import {
   teamsSyncService,
@@ -415,6 +416,18 @@ describe('teamsSyncService', () => {
 
     expect(() => scheduleTeamsSync()).not.toThrow();
     expect(scheduleSpy).not.toHaveBeenCalled();
+  });
+
+  it('schedules one sync at the start of each weekday desk hour', () => {
+    vi.spyOn(microsoftGraph, 'isMicrosoftGraphEnabled').mockReturnValue(true);
+    const scheduleSpy = vi.spyOn(cron, 'schedule').mockReturnValue(undefined as never);
+
+    scheduleTeamsSync();
+
+    expect(TEAMS_SYNC_CRON).toBe('0 8-16 * * 1-5');
+    expect(scheduleSpy).toHaveBeenCalledWith(TEAMS_SYNC_CRON, expect.any(Function), {
+      timezone: ORG_TIMEZONE,
+    });
   });
 
   it('persists an error status when the adapter throws', async () => {

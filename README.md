@@ -6,7 +6,7 @@ Time management for student assistants — clock in/out at the kiosk, manage sch
 
 The backend can synchronize the roster, weekly schedules, and time off directly from Microsoft Teams Shifts via Microsoft Graph API, so schedules don't have to be imported from spreadsheets.
 
-- Sync runs **hourly** for the active term, right after an active term is saved, and on demand (`POST /api/teams-sync/sync-now`).
+- Sync runs **once an hour on weekdays from 8:00 through 16:00** (org timezone) for the active term, right after an active term is saved, and on demand (`POST /api/teams-sync/sync-now`).
 - Only members of the configured scheduling group (`TEAMS_SCHEDULING_GROUP`, default "Service Desk") are synced, and only **shared** (published) shifts and time off. Pending time-off requests aren't synced; an approved request appears once its time off is on the schedule.
 - Sync only reads from Teams. The schedule builder can **send** shifts to Teams Shifts:
   - a whole new term schedule, or one person's change, for the weeks you choose

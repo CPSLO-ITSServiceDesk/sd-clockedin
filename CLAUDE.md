@@ -141,7 +141,7 @@ pnpm --filter frontend exec next cache clear
 3. **Microsoft Teams Integration** (Optional):
    - Synchronizes roster, schedule templates, and time off from Teams Shifts via Microsoft Graph API
    - Uses dedicated services: teamsSyncService, teamsSyncStatusService, studentTimeOffService
-   - Runs hourly (`src/jobs/teamsSync.ts`, cron `0 * * * *`) for the active term, after an active term is saved, and on demand via `POST /api/teams-sync/sync-now`
+   - Runs once an hour on weekdays from 8:00 through 16:00 in `ORG_TIMEZONE` (`src/jobs/teamsSync.ts`, cron `0 8-16 * * 1-5`) for the active term, after an active term is saved, and on demand via `POST /api/teams-sync/sync-now`
    - Only members of the `TEAMS_SCHEDULING_GROUP` scheduling group are synced, and only **shared** (published) shifts and time off. Pending/declined time-off *requests* are not synced; an approved request shows up once its time off is in the schedule.
    - Time off outside the term's dates isn't stored
    - Writes blocks through `replaceScheduleBlocks`, which keeps time entries linked (see Schedule Management Flow)

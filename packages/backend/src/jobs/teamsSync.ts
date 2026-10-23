@@ -29,19 +29,24 @@ export function triggerTeamsSyncForTerm(
   });
 }
 
+/**
+ * Once at the start of each hour the desk is open: weekdays 8:00–16:00.
+ * The grid closes at 17:00, so the 4:00 run is the last one of the day.
+ */
+export const TEAMS_SYNC_CRON = '0 8-16 * * 1-5';
+
 export function scheduleTeamsSync(): void {
   if (!isMicrosoftGraphEnabled()) {
     console.log('Teams sync: disabled (Microsoft Graph not configured)');
     return;
   }
 
-  const cronExpr = '0 * * * *';
-  if (!cron.validate(cronExpr)) {
-    throw new Error(`Invalid Teams sync cron expression: ${cronExpr}`);
+  if (!cron.validate(TEAMS_SYNC_CRON)) {
+    throw new Error(`Invalid Teams sync cron expression: ${TEAMS_SYNC_CRON}`);
   }
 
   cron.schedule(
-    cronExpr,
+    TEAMS_SYNC_CRON,
     () => {
       runTeamsSync().catch((err) => {
         console.error('Teams sync failed:', err);
@@ -50,5 +55,7 @@ export function scheduleTeamsSync(): void {
     { timezone: ORG_TIMEZONE },
   );
 
-  console.log(`Teams sync scheduled hourly in ${ORG_TIMEZONE}`);
+  console.log(
+    `Teams sync scheduled weekdays 8:00–16:00 on the hour in ${ORG_TIMEZONE}`,
+  );
 }

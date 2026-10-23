@@ -35,7 +35,7 @@ packages/backend/
 │   │   ├── teamsShiftsAdapter.ts, teamsShiftCollapse.ts, microsoftGraph.ts  # Teams Shifts
 │   │   ├── timesheetMonth.ts              # Monthly timesheet rollups
 │   │   └── todayShiftsCache.ts, redis.ts  # Optional Redis cache
-│   ├── jobs/              # autoClockOut.ts (daily), teamsSync.ts (hourly)
+│   ├── jobs/              # autoClockOut.ts (daily), teamsSync.ts (weekdays 8:00–16:00)
 │   ├── middleware/        # errorHandler.ts, validate.ts
 │   ├── scripts/           # check-connection.ts, run-auto-clock-out.ts
 │   ├── types/             # database.types.ts (generated from Supabase)
@@ -76,7 +76,7 @@ packages/backend/
 
 ### Scheduled Jobs
 - Auto clock-out runs **once daily** at `AUTO_CLOCK_OUT_TIME` in `ORG_TIMEZONE` and closes every entry still open at that time (including stale ones from earlier days)
-- Teams sync runs **hourly** (`0 * * * *`) for the active term when Microsoft Graph is configured
+- Teams sync runs **once an hour on weekdays from 8:00 through 16:00** (`0 8-16 * * 1-5`, org timezone) for the active term when Microsoft Graph is configured
 - Configurable via `AUTO_CLOCK_OUT_ENABLED` and `AUTO_CLOCK_OUT_TIME`
 
 ### Security
@@ -228,7 +228,7 @@ The backend includes automated cron jobs for routine tasks:
 
 **Teams Sync Job**
 - Located in `src/jobs/teamsSync.ts`
-- Runs hourly for the active term when the Microsoft Graph variables are set
+- Runs once an hour on weekdays from 8:00 through 16:00 (org timezone) for the active term when the Microsoft Graph variables are set
 - Also runs after an active term is saved and via `POST /api/teams-sync/sync-now`
 
 To run the auto clock-out job manually:
