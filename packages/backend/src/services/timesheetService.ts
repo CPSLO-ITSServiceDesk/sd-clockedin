@@ -1,3 +1,4 @@
+import { withTimesheetMonthCache } from '../lib/derivedReadsCache';
 import { supabase } from '../lib/supabase';
 import {
   buildMonthTimesheets,
@@ -42,7 +43,7 @@ function shiftDate(date: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-async function loadMonth(month: string, studentAssistantId?: number) {
+async function computeMonth(month: string): Promise<StudentMonthTimesheet[]> {
   const { start, end } = monthBounds(month);
   // Pad a day each side so org-timezone edges are covered; the builder filters by org-local date.
   const fromIso = `${shiftDate(start, -1)}T00:00:00Z`;
@@ -56,11 +57,19 @@ async function loadMonth(month: string, studentAssistantId?: number) {
     studentTimeOffService.listOverlapping(fromIso, toIso),
   ]);
 
-  return buildMonthTimesheets(
-    month,
-    { terms, schedules, scheduleBlocks, timeEntries, timeOff },
-    { studentAssistantId },
+  return Array.from(
+    buildMonthTimesheets(month, { terms, schedules, scheduleBlocks, timeEntries, timeOff }).values(),
   );
+}
+
+async function loadMonth(month: string, studentAssistantId?: number) {
+  const sheets = await withTimesheetMonthCache(month, () => computeMonth(month));
+  const map = new Map<number, StudentMonthTimesheet>();
+  for (const sheet of sheets) {
+    if (studentAssistantId != null && sheet.studentAssistantId !== studentAssistantId) continue;
+    map.set(sheet.studentAssistantId, sheet);
+  }
+  return map;
 }
 
 async function listVerifications(

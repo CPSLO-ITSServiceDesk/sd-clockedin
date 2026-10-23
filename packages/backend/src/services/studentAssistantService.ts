@@ -1,3 +1,4 @@
+import { invalidateLiveReads } from '../lib/derivedReadsCache';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
@@ -186,5 +187,6 @@ export const studentAssistantService = {
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateLiveReads();
   },
 };

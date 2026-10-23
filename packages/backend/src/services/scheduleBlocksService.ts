@@ -1,5 +1,5 @@
 import { clearScheduleBlockReferences } from '../lib/clearScheduleBlockReferences';
-import { invalidateTodayShiftsCacheForNow } from '../lib/todayShiftsCache';
+import { invalidateLiveReads } from '../lib/derivedReadsCache';
 import { getOrgDayOfWeek, getOrgLocalInstant } from '../lib/orgTime';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
@@ -45,7 +45,7 @@ export const scheduleBlocksService = {
       .single();
 
     if (error) throw new HttpError(500, error.message);
-    await invalidateTodayShiftsCacheForNow();
+    await invalidateLiveReads();
     return data;
   },
 
@@ -61,7 +61,7 @@ export const scheduleBlocksService = {
       if (error.code === NO_ROWS) return null;
       throw new HttpError(500, error.message);
     }
-    await invalidateTodayShiftsCacheForNow();
+    await invalidateLiveReads();
     return data;
   },
 
@@ -74,7 +74,7 @@ export const scheduleBlocksService = {
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
-    await invalidateTodayShiftsCacheForNow();
+    await invalidateLiveReads();
   },
 
   async removeMany(ids: number[]): Promise<void> {
@@ -88,7 +88,7 @@ export const scheduleBlocksService = {
       .in('id', ids);
 
     if (error) throw new HttpError(500, error.message);
-    await invalidateTodayShiftsCacheForNow();
+    await invalidateLiveReads();
   },
 
   async getByScheduleId(schedule_id: number): Promise<ScheduleBlock[]> {

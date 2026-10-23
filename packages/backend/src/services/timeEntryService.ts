@@ -13,7 +13,7 @@ import { scheduleBlocksService } from './scheduleBlocksService';
 import { schedulesService } from './schedulesService';
 import { studentAssistantService } from './studentAssistantService';
 import { termService } from './termService';
-import { invalidateTodayShiftsCache } from '../lib/todayShiftsCache';
+import { invalidateLiveReads } from '../lib/derivedReadsCache';
 import { getTodayDateString, getTodayDay } from './todayShiftsService';
 
 type TimeEntry = Database['public']['Tables']['time_entry']['Row'];
@@ -199,7 +199,7 @@ export const timeEntryService = {
       .single();
 
     if (error) throw new HttpError(500, error.message);
-    await invalidateTodayShiftsCache(resolveEntryDate(data.clock_in));
+    await invalidateLiveReads(resolveEntryDate(data.clock_in));
     return data;
   },
 
@@ -215,7 +215,7 @@ export const timeEntryService = {
       if (error.code === NO_ROWS) return null;
       throw new HttpError(500, error.message);
     }
-    await invalidateTodayShiftsCache(resolveEntryDate(data.clock_in));
+    await invalidateLiveReads(resolveEntryDate(data.clock_in));
     return data;
   },
 
@@ -228,7 +228,7 @@ export const timeEntryService = {
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
-    await invalidateTodayShiftsCache(resolveEntryDate(existing?.clock_in));
+    await invalidateLiveReads(resolveEntryDate(existing?.clock_in));
   },
 
   async clockIn(
@@ -399,7 +399,7 @@ export const timeEntryService = {
 
     const entryIds = (data ?? []).map((row) => row.id);
     if (entryIds.length > 0) {
-      await invalidateTodayShiftsCache(today);
+      await invalidateLiveReads(today);
     }
 
     return {

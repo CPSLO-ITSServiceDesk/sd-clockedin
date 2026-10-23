@@ -1,3 +1,4 @@
+import { invalidateLiveReads } from '../lib/derivedReadsCache';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
@@ -106,6 +107,7 @@ export const studentTimeOffService = {
       payloads.map((row) => row.teams_time_off_id),
     );
 
+    await invalidateLiveReads();
     return upserted;
   },
 };

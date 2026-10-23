@@ -41,6 +41,53 @@ export async function withCache<T>(
   return fresh;
 }
 
+function asGeneration(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return 0;
+}
+
+/**
+ * Reads a monotonic generation, then caches `fn` under the key for that
+ * generation. Bumping the generation orphans every key that includes it, so
+ * callers don't have to know which ids were cached.
+ *
+ * When the generation can't be read, `fn` still runs and the result is not
+ * stored — a write under a guessed generation could outlive the next bump.
+ */
+export async function withVersionedCache<T>(
+  generationKey: string,
+  cacheKey: (generation: number) => string,
+  ttlSeconds: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!isRedisEnabled) return fn();
+
+  let generation: number;
+  try {
+    generation = asGeneration(await redis!.get(generationKey));
+  } catch (err) {
+    console.error(`[CACHE] Redis GET error for ${generationKey}:`, err);
+    return fn();
+  }
+
+  return withCache(cacheKey(generation), ttlSeconds, fn);
+}
+
+/** Best-effort generation bump; failures are logged, never thrown. */
+export async function bumpCacheGeneration(generationKey: string): Promise<void> {
+  if (!isRedisEnabled) return;
+
+  try {
+    await redis!.incr(generationKey);
+    console.log(`[CACHE] BUMP ${generationKey}`);
+  } catch (err) {
+    console.error(`[CACHE] Redis INCR error for ${generationKey}:`, err);
+  }
+}
+
 /** Best-effort cache invalidation; failures are logged, never thrown. */
 export async function invalidateCache(...keys: string[]): Promise<void> {
   if (!isRedisEnabled || keys.length === 0) {

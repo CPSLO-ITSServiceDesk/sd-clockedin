@@ -1,3 +1,4 @@
+import { invalidateLiveReads } from '../lib/derivedReadsCache';
 import { supabase } from '../lib/supabase';
 import { HttpError } from '../middleware/errorHandler';
 import type { Database } from '../types/database.types';
@@ -75,6 +76,7 @@ export const termService = {
       if (error.code === NO_ROWS) return null;
       throw new HttpError(500, error.message);
     }
+    await invalidateLiveReads();
     return data;
   },
 
@@ -123,5 +125,6 @@ export const termService = {
       .eq('id', id);
 
     if (error) throw new HttpError(500, error.message);
+    await invalidateLiveReads();
   },
 };
