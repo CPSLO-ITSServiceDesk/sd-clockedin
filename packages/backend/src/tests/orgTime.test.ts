@@ -3,6 +3,7 @@ import {
   getOrgDayOfWeek,
   getOrgLocalCutoffInstant,
   getOrgLocalDateString,
+  getOrgLocalInstant,
   getOrgLocalMinutes,
   isAtOrAfterOrgLocalTime,
 } from '../lib/orgTime';
@@ -33,6 +34,20 @@ describe('isAtOrAfterOrgLocalTime', () => {
   it('is due at 5 PM PST and not an hour earlier', () => {
     expect(isAtOrAfterOrgLocalTime(new Date('2026-01-16T01:00:00.000Z'), 17, 0)).toBe(true);
     expect(isAtOrAfterOrgLocalTime(new Date('2026-01-16T00:00:00.000Z'), 17, 0)).toBe(false);
+  });
+});
+
+describe('getOrgLocalInstant', () => {
+  it('returns 8:00 AM PDT', () => {
+    expect(getOrgLocalInstant('2026-06-25', 8, 0).toISOString()).toBe('2026-06-25T15:00:00.000Z');
+  });
+
+  it('returns the earlier instant when a fall-back hour happens twice', () => {
+    expect(getOrgLocalInstant('2026-11-01', 1, 30).toISOString()).toBe('2026-11-01T08:30:00.000Z');
+  });
+
+  it('throws for a wall time skipped by the spring-forward gap', () => {
+    expect(() => getOrgLocalInstant('2026-03-08', 2, 30)).toThrow(/Could not resolve/);
   });
 });
 

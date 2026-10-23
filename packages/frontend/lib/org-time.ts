@@ -5,96 +5,132 @@
 export const ORG_TIMEZONE =
   process.env.NEXT_PUBLIC_ORG_TIMEZONE ?? "America/Los_Angeles"
 
-function getPart(parts: Intl.DateTimeFormatPart[], type: string): string {
-  return parts.find((part) => part.type === type)?.value ?? ""
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+}
+
+/** One formatter for the page. Constructing Intl.DateTimeFormat is the expensive part. */
+const orgFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: ORG_TIMEZONE,
+  weekday: "short",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+})
+
+type OrgParts = {
+  year: string
+  month: string
+  day: string
+  hour: string
+  minute: string
+  second: string
+  weekday: string
+}
+
+function readOrgParts(instant: Date): OrgParts {
+  const parts: OrgParts = {
+    year: "",
+    month: "",
+    day: "",
+    hour: "",
+    minute: "",
+    second: "",
+    weekday: "",
+  }
+  for (const part of orgFormatter.formatToParts(instant)) {
+    if (
+      part.type === "year" ||
+      part.type === "month" ||
+      part.type === "day" ||
+      part.type === "hour" ||
+      part.type === "minute" ||
+      part.type === "second" ||
+      part.type === "weekday"
+    ) {
+      parts[part.type] = part.value
+    }
+  }
+  return parts
+}
+
+/** Milliseconds to add to a UTC instant to reach the org wall clock, expressed as UTC. */
+function orgOffsetMs(instantMs: number): number {
+  const parts = readOrgParts(new Date(instantMs))
+  const wallAsUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  )
+  return wallAsUtc - (instantMs - (instantMs % 1000))
 }
 
 /** Minutes since midnight in the organization timezone. */
 export function getOrgLocalMinutes(now: Date = new Date()): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: ORG_TIMEZONE,
-    hour: "numeric",
-    minute: "numeric",
-    hourCycle: "h23",
-  }).formatToParts(now)
-
-  const hour = Number(getPart(parts, "hour"))
-  const minute = Number(getPart(parts, "minute"))
-  return hour * 60 + minute
+  const parts = readOrgParts(now)
+  return Number(parts.hour) * 60 + Number(parts.minute)
 }
 
 /** YYYY-MM-DD calendar date in the organization timezone. */
 export function getOrgLocalDateString(now: Date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: ORG_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now)
-
-  return `${getPart(parts, "year")}-${getPart(parts, "month")}-${getPart(parts, "day")}`
+  const parts = readOrgParts(now)
+  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 /** JS day index (0=Sunday … 6=Saturday) in the organization timezone. */
 export function getOrgDayOfWeek(now: Date = new Date()): number {
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: ORG_TIMEZONE,
-    weekday: "short",
-  }).format(now)
-
-  const map: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  }
-
-  return map[weekday] ?? 0
+  return WEEKDAY_INDEX[readOrgParts(now).weekday] ?? 0
 }
+
+const instantCache = new Map<string, number>()
+const INSTANT_CACHE_LIMIT = 4096
 
 /**
  * UTC instant for a wall-clock time on an org-local calendar day (YYYY-MM-DD).
+ * Keep in sync with backend getOrgLocalInstant. The offset is read twice so a
+ * daylight-saving transition still lands on the earlier instant. A wall time
+ * that does not exist (the spring-forward gap) throws.
  */
 export function getOrgLocalInstant(
   dateStr: string,
   hour: number = 0,
   minute: number = 0,
 ): Date {
-  const targetMinutes = hour * 60 + minute
-  const [y, m, d] = dateStr.split("-").map(Number)
-  let low = Date.UTC(y, m - 1, d - 1, 0, 0, 0)
-  let high = Date.UTC(y, m - 1, d + 1, 23, 59, 59)
+  const key = `${dateStr}|${hour}|${minute}`
+  const cached = instantCache.get(key)
+  if (cached !== undefined) return new Date(cached)
 
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2)
-    const candidate = new Date(mid)
-    const candidateDate = getOrgLocalDateString(candidate)
-    const candidateMinutes = getOrgLocalMinutes(candidate)
+  const [year, month, day] = dateStr.split("-").map(Number)
+  const guess = Date.UTC(year, month - 1, day, hour, minute, 0, 0)
+  const firstOffset = orgOffsetMs(guess)
+  let instantMs = guess - firstOffset
+  const secondOffset = orgOffsetMs(instantMs)
+  if (secondOffset !== firstOffset) instantMs = guess - secondOffset
 
-    const isBefore =
-      candidateDate < dateStr ||
-      (candidateDate === dateStr && candidateMinutes < targetMinutes)
-
-    if (isBefore) {
-      low = mid + 1
-    } else {
-      high = mid
-    }
-  }
-
-  const result = new Date(low)
-  if (
-    getOrgLocalDateString(result) !== dateStr ||
-    getOrgLocalMinutes(result) !== targetMinutes
-  ) {
+  const result = new Date(instantMs)
+  const parts = readOrgParts(result)
+  const resolvedMinutes = Number(parts.hour) * 60 + Number(parts.minute)
+  if (`${parts.year}-${parts.month}-${parts.day}` !== dateStr || resolvedMinutes !== hour * 60 + minute) {
     throw new Error(
       `Could not resolve org-local instant for ${dateStr} ${hour}:${String(minute).padStart(2, "0")} in ${ORG_TIMEZONE}`,
     )
   }
 
+  if (instantCache.size >= INSTANT_CACHE_LIMIT) instantCache.clear()
+  instantCache.set(key, instantMs)
   return result
 }
 
