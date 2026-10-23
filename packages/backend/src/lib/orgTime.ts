@@ -97,6 +97,11 @@ export function getOrgLocalInstant(
   return result;
 }
 
+/** True when org-local wall time is at or after hour:minute. */
+export function isAtOrAfterOrgLocalTime(now: Date, hour: number, minute: number): boolean {
+  return getOrgLocalMinutes(now) >= hour * 60 + minute;
+}
+
 /**
  * UTC instant for a wall-clock time on the org-local calendar day of `now`.
  */

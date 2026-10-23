@@ -41,6 +41,7 @@ const definition: OAS3Definition = {
       description: 'Pull roster, weekly templates, and time off from Teams Shifts',
     },
     { name: 'Admins', description: 'System administrators' },
+    { name: 'Jobs', description: 'Scheduled jobs invoked by Vercel Cron' },
   ],
   components: { schemas, responses },
 };

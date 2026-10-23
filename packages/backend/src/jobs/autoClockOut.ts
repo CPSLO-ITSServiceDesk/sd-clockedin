@@ -1,9 +1,9 @@
 import cron from 'node-cron';
 import { config } from '../config/environment';
 import { getOrgLocalCutoffInstant, ORG_TIMEZONE } from '../lib/orgTime';
-import { timeEntryService } from '../services/timeEntryService';
+import { timeEntryService, type AutoClockOutResult } from '../services/timeEntryService';
 
-export async function runAutoClockOut(now: Date = new Date()): Promise<void> {
+export async function runAutoClockOut(now: Date = new Date()): Promise<AutoClockOutResult> {
   const { hour, minute } = config.autoClockOut;
   const cutoff = getOrgLocalCutoffInstant(now, hour, minute);
   const result = await timeEntryService.autoClockOutOpen(cutoff.toISOString(), now);
@@ -16,6 +16,7 @@ export async function runAutoClockOut(now: Date = new Date()): Promise<void> {
     parts.push(`skipped ${result.skippedCount}`);
   }
   console.log(parts.join(', '));
+  return result;
 }
 
 export function scheduleAutoClockOut(): void {

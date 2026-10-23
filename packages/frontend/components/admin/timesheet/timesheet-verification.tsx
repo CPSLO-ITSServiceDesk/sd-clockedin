@@ -10,10 +10,9 @@ import { formatStudentName } from "@/components/admin/mock-students"
 import { TimesheetCalendar } from "@/components/admin/timesheet/timesheet-calendar"
 import { TimesheetDayPanel } from "@/components/admin/timesheet/timesheet-day-panel"
 import { useAdminSession } from "@/hooks/use-admin-session"
-import { useStudentSelection } from "@/hooks/use-student-selection"
-import { getAvatarToneClass } from "@/lib/avatar-tones"
-import type { ScheduleStudent } from "@/lib/api/schedule-mappers"
+import { useStudentSelection, type RoleFilter } from "@/hooks/use-student-selection"
 import { timesheetApi, type StudentMonthSummary } from "@/lib/api/timesheet"
+import { getStudentInitials } from "@/lib/students/student-utils"
 import { getOrgLocalDateString } from "@/lib/org-time"
 import { queryKeys } from "@/lib/query-keys"
 import {
@@ -32,6 +31,12 @@ const BASE_PATH = "/admin/timesheet-verification"
 /** Month differences at or above this are highlighted. */
 const DIFF_HIGHLIGHT_HOURS = 0.5
 
+const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "lead", label: "Leads" },
+  { value: "assistant", label: "Assistants" },
+]
+
 const TAG_CLASSES: Record<StudentTag["tone"], string> = {
   verified: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   issues: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
@@ -39,8 +44,11 @@ const TAG_CLASSES: Record<StudentTag["tone"], string> = {
   empty: "bg-muted text-muted-foreground",
 }
 
-function initials(student: ScheduleStudent): string {
-  return `${student.first_name[0] ?? ""}${student.last_name[0] ?? ""}`.toUpperCase()
+const DOT_CLASSES: Record<StudentTag["tone"], string> = {
+  verified: "bg-[var(--status-online)]",
+  issues: "bg-[var(--status-pending)]",
+  ready: "bg-foreground",
+  empty: "bg-border",
 }
 
 function Tag({ tag, className }: Readonly<{ tag: StudentTag; className?: string }>) {
@@ -68,6 +76,8 @@ export function TimesheetVerification() {
     selectedStudent,
     searchQuery,
     setSearchQuery,
+    roleFilter,
+    setRoleFilter,
     filteredStudents,
     selectStudent,
   } = useStudentSelection({ basePath: BASE_PATH })
@@ -158,14 +168,14 @@ export function TimesheetVerification() {
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-[28px] font-bold tracking-[-0.02em]">Timesheet verification</h1>
           <p className="text-sm text-muted-foreground">
             {formatMonthLabel(month)} · {verifiedCount} of {activeStudents.length} verified
           </p>
         </div>
-        <div className="flex h-[38px] items-center gap-1 self-start rounded-full border border-border bg-card px-1.5 md:self-auto">
+        <div className="flex h-[38px] items-center gap-1 rounded-full border border-border bg-card px-1.5">
           <button
             type="button"
             onClick={() => changeMonth(-1)}
@@ -192,75 +202,110 @@ export function TimesheetVerification() {
         </p>
       ) : null}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-card p-3.5">
-          <label className="flex h-[38px] items-center gap-2 rounded-full border border-border bg-muted/50 px-3">
-            <Search className="size-3.5 text-muted-foreground" />
+      <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <section className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-card p-3.5 lg:sticky lg:top-6">
+          <label className="flex h-9 items-center gap-2 rounded-full border border-border bg-muted/40 px-3">
+            <Search className="size-3.5 text-muted-foreground" strokeWidth={2.25} />
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search students"
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
             />
           </label>
-          <div className="flex max-h-[640px] flex-col gap-0.5 overflow-y-auto">
+          <div className="grid auto-cols-fr grid-flow-col gap-[3px] rounded-full bg-muted p-[3px]">
+            {ROLE_FILTERS.map((option) => {
+              const on = option.value === roleFilter
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setRoleFilter(option.value)}
+                  className={cn(
+                    "h-7 rounded-full px-2 text-xs font-bold transition-colors",
+                    on
+                      ? "bg-card text-accent shadow-[0_1px_3px_rgba(20,22,28,0.12)]"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex max-h-[560px] flex-col gap-0.5 overflow-y-auto">
             {studentsLoading ? (
-              <p className="px-2.5 py-4 text-sm text-muted-foreground">Loading students...</p>
+              <p className="py-8 text-center text-[13px] text-muted-foreground">Loading students...</p>
             ) : filteredStudents.length === 0 ? (
-              <p className="px-2.5 py-4 text-sm text-muted-foreground">No students match.</p>
+              <p className="py-8 text-center text-[13px] text-muted-foreground">No students found</p>
             ) : (
               filteredStudents.map((student) => {
                 const studentSummary = summaries.get(student.id)
                 const selected = student.id === selectedStudent?.id
+                const tag = summaryQuery.isLoading ? null : studentTag(studentSummary)
                 return (
                   <button
                     key={student.id}
                     type="button"
+                    aria-pressed={selected}
                     onClick={() => selectStudent(student)}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
+                      "flex h-[38px] shrink-0 items-center gap-2.5 rounded-xl px-2.5 text-left",
                       selected ? "bg-accent/10" : "hover:bg-muted",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex size-[30px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
-                        selected ? "bg-accent text-accent-foreground" : getAvatarToneClass(student.id),
+                        "size-[7px] shrink-0 rounded-full",
+                        tag ? DOT_CLASSES[tag.tone] : "bg-border",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate text-sm",
+                        selected ? "font-bold text-accent" : "font-medium",
                       )}
                     >
-                      {initials(student)}
+                      {formatStudentName(student)}
                     </span>
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm font-semibold">{formatStudentName(student)}</span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {studentSummary
-                          ? `${formatHours(studentSummary.workedHours)} / ${formatHours(studentSummary.scheduledHours)}h`
-                          : summaryQuery.isLoading
-                            ? "…"
-                            : "0.0 / 0.0h"}
-                      </span>
-                    </span>
-                    {summaryQuery.isLoading ? null : <Tag tag={studentTag(studentSummary)} />}
+                    {tag ? <Tag tag={tag} /> : null}
                   </button>
                 )
               })
             )}
           </div>
-        </aside>
+        </section>
 
-        <section className="flex min-w-0 flex-col gap-[18px] rounded-[20px] border border-border bg-card px-6 py-[22px]">
+        <section className="flex min-w-0 flex-col overflow-hidden rounded-[20px] border border-border bg-card">
           {!selectedStudent ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">
+            <p className="px-[22px] py-16 text-center text-sm text-muted-foreground">
               Pick a student to compare their hours with their schedule.
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="text-[22px] font-bold tracking-[-0.01em]">
-                    {formatStudentName(selectedStudent)}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 px-[22px] py-[18px]">
+                <div className="flex min-w-0 items-center gap-3.5">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-[15px] font-bold text-primary-foreground">
+                    {getStudentInitials(selectedStudent)}
                   </span>
-                  {summary ? <Tag tag={studentTag(summary)} className="px-2.5 py-[3px] text-xs" /> : null}
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="truncate text-xl font-bold tracking-[-0.01em]">
+                        {formatStudentName(selectedStudent)}
+                      </span>
+                      {summary ? <Tag tag={studentTag(summary)} className="px-2.5 py-[3px] text-xs" /> : null}
+                    </div>
+                    <span className="text-[13px] text-muted-foreground">
+                      {summary?.verification
+                        ? `Verified${summary.verification.verifiedBy ? ` by ${summary.verification.verifiedBy}` : ""} on ${new Date(
+                            summary.verification.verifiedAt,
+                          ).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                        : summary
+                          ? `${formatHours(summary.workedHours)}h worked · ${formatHours(summary.scheduledHours)}h scheduled`
+                          : "Loading hours..."}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -280,52 +325,45 @@ export function TimesheetVerification() {
                   {verifyLabel}
                 </button>
               </div>
-              {summary?.verification ? (
-                <p className="-mt-3 text-xs text-muted-foreground">
-                  Verified{summary.verification.verifiedBy ? ` by ${summary.verification.verifiedBy}` : ""} on{" "}
-                  {new Date(summary.verification.verifiedAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </p>
-              ) : null}
 
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-                {stats.map((stat) => (
-                  <div key={stat.label} className={cn("flex flex-col gap-0.5 rounded-[14px] px-3.5 py-3", stat.className)}>
-                    <span className="font-mono text-2xl font-semibold">{stat.value}</span>
-                    <span className="text-xs">{stat.label}</span>
-                  </div>
-                ))}
-              </div>
+              <div className="flex min-w-0 flex-col gap-[18px] px-6 py-[22px]">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+                  {stats.map((stat) => (
+                    <div key={stat.label} className={cn("flex flex-col gap-0.5 rounded-[14px] px-3.5 py-3", stat.className)}>
+                      <span className="font-mono text-2xl font-semibold">{stat.value}</span>
+                      <span className="text-xs">{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
 
-              {studentQuery.isLoading ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">Loading timesheet...</p>
-              ) : studentQuery.error ? (
-                <p className="py-12 text-center text-sm text-destructive">Couldn&apos;t load this timesheet.</p>
-              ) : sheet ? (
-                <>
-                  <TimesheetCalendar
-                    month={month}
-                    days={sheet.days}
-                    selectedDate={selectedDate}
-                    onSelectDate={(date) => setDayChoice({ key: selectionKey, date })}
-                  />
-                  {selectedDate ? (
-                    <TimesheetDayPanel
-                      key={`${selectionKey}-${selectedDate}`}
-                      studentId={selectedStudent.id}
-                      date={selectedDate}
-                      day={sheet.days.find((day) => day.date === selectedDate)}
-                      onChanged={refresh}
+                {studentQuery.isLoading ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">Loading timesheet...</p>
+                ) : studentQuery.error ? (
+                  <p className="py-12 text-center text-sm text-destructive">Couldn&apos;t load this timesheet.</p>
+                ) : sheet ? (
+                  <>
+                    <TimesheetCalendar
+                      month={month}
+                      days={sheet.days}
+                      selectedDate={selectedDate}
+                      onSelectDate={(date) => setDayChoice({ key: selectionKey, date })}
                     />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Nothing scheduled or worked this month. Click a day to add an entry.
-                    </p>
-                  )}
-                </>
-              ) : null}
+                    {selectedDate ? (
+                      <TimesheetDayPanel
+                        key={`${selectionKey}-${selectedDate}`}
+                        studentId={selectedStudent.id}
+                        date={selectedDate}
+                        day={sheet.days.find((day) => day.date === selectedDate)}
+                        onChanged={refresh}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nothing scheduled or worked this month. Click a day to add an entry.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </div>
             </>
           )}
         </section>

@@ -4,6 +4,7 @@ import {
   getOrgLocalCutoffInstant,
   getOrgLocalDateString,
   getOrgLocalMinutes,
+  isAtOrAfterOrgLocalTime,
 } from '../lib/orgTime';
 
 describe('orgTime', () => {
@@ -20,6 +21,18 @@ describe('orgTime', () => {
 
   it('uses organization timezone for weekday', () => {
     expect(getOrgDayOfWeek(pacificMorning)).toBe(4);
+  });
+});
+
+describe('isAtOrAfterOrgLocalTime', () => {
+  it('is due at 5 PM PDT and not an hour earlier', () => {
+    expect(isAtOrAfterOrgLocalTime(new Date('2026-06-26T00:00:00.000Z'), 17, 0)).toBe(true);
+    expect(isAtOrAfterOrgLocalTime(new Date('2026-06-25T23:00:00.000Z'), 17, 0)).toBe(false);
+  });
+
+  it('is due at 5 PM PST and not an hour earlier', () => {
+    expect(isAtOrAfterOrgLocalTime(new Date('2026-01-16T01:00:00.000Z'), 17, 0)).toBe(true);
+    expect(isAtOrAfterOrgLocalTime(new Date('2026-01-16T00:00:00.000Z'), 17, 0)).toBe(false);
   });
 });
 

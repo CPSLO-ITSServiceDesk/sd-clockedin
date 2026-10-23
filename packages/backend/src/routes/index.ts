@@ -13,6 +13,7 @@ import timesheetRoutes from './timesheet';
 import adminRoutes from './admins';
 import scheduleDraftRoutes from './scheduleDrafts';
 import teamsPublishRoutes from './teamsPublish';
+import jobsRoutes from './jobs';
 
 const router = Router();
 
@@ -51,6 +52,7 @@ router.use('/timesheet', timesheetRoutes);
 router.use('/admins', adminRoutes);
 router.use('/schedule-drafts', scheduleDraftRoutes);
 router.use('/teams-publish', teamsPublishRoutes);
+router.use('/jobs', jobsRoutes);
 
 /** Mounts all API routes under the /api prefix. */
 export function registerRoutes(app: Application): void {

@@ -126,26 +126,31 @@ export function ShiftNormalizationManager() {
       value: preview ? preview.summary.totalUnscheduled : "—",
       label: "Unlinked clock-ins",
       hint: "not tied to a shift",
-      className: "",
+      className: "bg-muted",
     },
-    { value: preview ? views.length : "—", label: "Suggested matches", hint: "close to a scheduled shift", className: "text-accent" },
+    {
+      value: preview ? views.length : "—",
+      label: "Suggested matches",
+      hint: "close to a scheduled shift",
+      className: "bg-accent/15 text-accent",
+    },
     {
       value: preview ? unmatched.length : "—",
       label: "No match",
       hint: "need a manual fix",
-      className: "text-amber-700 dark:text-amber-300",
+      className: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
     },
     {
       value: preview ? clockOutFixes.length : "—",
       label: "Odd clock-outs",
       hint: "can be set to shift end",
-      className: "text-amber-700 dark:text-amber-300",
+      className: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
     },
   ]
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-[28px] font-bold tracking-[-0.02em]">Shift normalization</h1>
           <p className="text-sm text-muted-foreground">
@@ -160,7 +165,7 @@ export function ShiftNormalizationManager() {
               setBanner(null)
             }}
           >
-            <SelectTrigger className="h-[38px] w-[190px] rounded-full bg-card">
+            <SelectTrigger className="h-[38px] w-[190px] rounded-full bg-card font-bold">
               <SelectValue placeholder="Select term" />
             </SelectTrigger>
             <SelectContent>
@@ -206,15 +211,10 @@ export function ShiftNormalizationManager() {
 
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="flex items-baseline gap-3 rounded-2xl border border-border bg-card px-4 py-3.5"
-          >
-            <span className={cn("font-mono text-[28px] font-semibold", kpi.className)}>{kpi.value}</span>
-            <span className="flex flex-col">
-              <span className="text-sm font-bold">{kpi.label}</span>
-              <span className="text-xs text-muted-foreground">{kpi.hint}</span>
-            </span>
+          <div key={kpi.label} className={cn("flex flex-col gap-0.5 rounded-[14px] px-3.5 py-3", kpi.className)}>
+            <span className="font-mono text-2xl font-semibold tabular-nums">{kpi.value}</span>
+            <span className="text-xs font-semibold">{kpi.label}</span>
+            <span className="text-xs opacity-80">{kpi.hint}</span>
           </div>
         ))}
       </div>

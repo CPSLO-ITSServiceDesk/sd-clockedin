@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/jobs/auto-clock-out",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/jobs/auto-clock-out",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}
